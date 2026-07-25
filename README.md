@@ -3,6 +3,12 @@ I cloned the thorium repository and have been vibecodin the fuck out of it so th
 
 # Example Images
 ![](./screenshots/Screenshot_20260725_011246.png)
+![](./screenshots/Screenshot_20260725_011309.png)
+![](./screenshots/Screenshot_20260725_011340.png)
+![](./screenshots/Screenshot_20260725_011434.png
+![](./screenshots/Screenshot_20260725_011446.png)
+![](./screenshots/Screenshot_20260725_011514.png)
+![](./screenshots/Screenshot_20260725_011536.png)
 
 # Planned Features
 ## Progress Tracking
