@@ -1,6 +1,8 @@
 # ***Disclaimer***
 I cloned the thorium repository and have been vibecodin the fuck out of it so that the reader and library page behave the way I want them to. I can not promise that this is a stable, secure, or well engineered app, but I can say that I test every feature I try to have Claude make so that it functions at the least. If you happen to try this personal project, bug reports would be nice.
 
+# Example Images
+![[./screenshots/Screenshot_20260725_011246.png]]
 
 # Planned Features
 ## Progress Tracking
@@ -25,7 +27,6 @@ I cloned the thorium repository and have been vibecodin the fuck out of it so th
 	- Display the 1024 character "pages" calculated by readium and the pages based on the current viewport settings
 - The settings menu should have fields for the readium server url, publications directory, and the userdata folder
 - Note and etc. access outside the book
-- ![[Pasted image 20260719094350.png]]
 ## Reader Functions
 - Thorium already has a lot of features out of the box but I would like to add some
 	- ~~Allow setting the margin, and font size manually~~
