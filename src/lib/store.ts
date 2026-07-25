@@ -1,19 +1,28 @@
 import { ThDockingKeys } from "@/preferences/models";
 
-import { configureStore, Reducer } from "@reduxjs/toolkit";
+import { combineReducers, configureStore, Reducer } from "@reduxjs/toolkit";
 
 import readerReducer, { ReaderReducerState } from "@/lib/readerReducer";
 import settingsReducer, { SettingsReducerState } from "@/lib/settingsReducer";
 import themeReducer, { ThemeReducerState } from "@/lib/themeReducer";
 import actionsReducer, { ActionsReducerState, ActionStateObject } from "@/lib/actionsReducer";
 import publicationReducer, { PublicationReducerState } from "./publicationReducer";
+import annotationsReducer, { AnnotationsReducerState } from "./annotationsReducer";
+import readingTimeReducer, { ReadingTimeReducerState } from "./readingTimeReducer";
 import preferencesReducer, { PreferencesReducerState } from "./preferencesReducer";
 import globalPreferencesReducer, { GlobalPreferencesReducerState } from "./globalPreferencesReducer";
 import webPubSettingsReducer, { WebPubSettingsReducerState } from "./webPubSettingsReducer";
 import audioSettingsReducer, { AudioSettingsState } from "./audioSettingsReducer";
 import playerReducer, { PlayerReducerState } from "./playerReducer";
+import imageOverlayReducer, { ImageOverlayState } from "./imageOverlayReducer";
+
+import { fetchSettingsFromServer, saveSettingsToServer } from "@/lib/userData/settingsApi";
 
 import debounce from "debounce";
+
+// CLAUDE-ADDED: Action type used to merge server-loaded settings into the store from outside any
+// single slice -- see hydrateFromServer() and the rootReducer wrapper in makeStore() below.
+export const HYDRATE_FROM_SERVER = "@@userData/hydrateFromServer";
 
 interface ExternalReducerConfig {
   reducer: any;
@@ -27,11 +36,14 @@ export type RootState = {
   theming: ThemeReducerState;
   actions: ActionsReducerState;
   publication: PublicationReducerState;
+  annotations: AnnotationsReducerState;
+  readingTime: ReadingTimeReducerState;
   preferences: PreferencesReducerState;
   globalPreferences: GlobalPreferencesReducerState;
   webPubSettings: WebPubSettingsReducerState;
   audioSettings: AudioSettingsState;
   player: PlayerReducerState;
+  imageOverlay: ImageOverlayState;
   [key: string]: any; // For external reducers
 };
 
@@ -215,33 +227,51 @@ const loadState = (storageKey: string = DEFAULT_STORAGE_KEY) => {
   }
 };
 
+// CLAUDE-ADDED: Extracted out of saveState so the exact same "which reducers count as settings"
+// logic can also be sent to the server, instead of duplicating the field list.
+const buildPersistedState = (state: any, externalReducers: Record<string, ExternalReducerConfig> = {}) => {
+  const stateToPersist: any = {};
+
+  // Internal reducers to persist
+  if (state.actions) stateToPersist.actions = state.actions;
+  if (state.settings) stateToPersist.settings = state.settings;
+  if (state.theming) stateToPersist.theming = state.theming;
+  if (state.preferences) stateToPersist.preferences = state.preferences;
+  if (state.globalPreferences) stateToPersist.globalPreferences = state.globalPreferences;
+  if (state.webPubSettings) stateToPersist.webPubSettings = state.webPubSettings;
+  if (state.audioSettings) stateToPersist.audioSettings = state.audioSettings;
+
+  // External reducers to persist
+  Object.entries(externalReducers).forEach(([key, config]) => {
+    if (config.persist && state[key] !== undefined) {
+      stateToPersist[key] = state[key];
+    }
+  });
+
+  return stateToPersist;
+};
+
 const saveState = (state: any, storageKey?: string, externalReducers: Record<string, ExternalReducerConfig> = {}) => {
   try {
     const resolvedKey = storageKey || DEFAULT_STORAGE_KEY;
-    
-    // Only persist the state of reducers that are marked for persistence
-    const stateToPersist: any = {};
-    
-    // Internal reducers to persist
-    if (state.actions) stateToPersist.actions = state.actions;
-    if (state.settings) stateToPersist.settings = state.settings;
-    if (state.theming) stateToPersist.theming = state.theming;
-    if (state.preferences) stateToPersist.preferences = state.preferences;
-    if (state.globalPreferences) stateToPersist.globalPreferences = state.globalPreferences;
-    if (state.webPubSettings) stateToPersist.webPubSettings = state.webPubSettings;
-    if (state.audioSettings) stateToPersist.audioSettings = state.audioSettings;
-    
-    // External reducers to persist
-    Object.entries(externalReducers).forEach(([key, config]) => {
-      if (config.persist && state[key] !== undefined) {
-        stateToPersist[key] = state[key];
-      }
-    });
-    
-    const serializedState = JSON.stringify(stateToPersist);
-    localStorage.setItem(resolvedKey, serializedState);
+    const stateToPersist = buildPersistedState(state, externalReducers);
+
+    localStorage.setItem(resolvedKey, JSON.stringify(stateToPersist));
+    // CLAUDE-ADDED: localStorage remains the instant synchronous boot path (see makeStore); the
+    // server copy becomes authoritative across devices/reinstalls once hydrateFromServer picks it up.
+    saveSettingsToServer(stateToPersist);
   } catch (err) {
     console.error(err);
+  }
+};
+
+// CLAUDE-ADDED: Fetches the server-persisted settings blob and merges it into the store via
+// HYDRATE_FROM_SERVER. Fire-and-forget from ThStoreProvider on mount -- the store already rendered
+// from the synchronous localStorage-seeded state, this just reconciles shortly after.
+export const hydrateFromServer = async (store: { dispatch: (action: { type: string; payload: unknown }) => void }) => {
+  const settings = await fetchSettingsFromServer();
+  if (settings) {
+    store.dispatch({ type: HYDRATE_FROM_SERVER, payload: settings });
   }
 };
 
@@ -253,11 +283,14 @@ export const makeStore = (storageKey?: string, externalReducers: Record<string, 
     theming: themeReducer,
     actions: actionsReducer,
     publication: publicationReducer,
+    annotations: annotationsReducer,
+    readingTime: readingTimeReducer,
     preferences: preferencesReducer,
     globalPreferences: globalPreferencesReducer,
     webPubSettings: webPubSettingsReducer,
     audioSettings: audioSettingsReducer,
     player: playerReducer,
+    imageOverlay: imageOverlayReducer,
     ...Object.entries(externalReducers).reduce((acc, [key, config]) => ({
       ...acc,
       [key]: config.reducer
@@ -285,8 +318,19 @@ export const makeStore = (storageKey?: string, externalReducers: Record<string, 
     }, {})
   };
 
+  // CLAUDE-ADDED: combineReducers is called explicitly (rather than handing configureStore the map
+  // object directly) so HYDRATE_FROM_SERVER can be intercepted here and merged across every slice at
+  // once, instead of having to teach each individual slice reducer about it.
+  const appReducer = combineReducers(combinedReducers) as unknown as Reducer<RootState>;
+  const rootReducer: Reducer<RootState> = (state, action) => {
+    if (action.type === HYDRATE_FROM_SERVER && state) {
+      state = { ...state, ...(action as unknown as { payload: Partial<RootState> }).payload };
+    }
+    return appReducer(state, action);
+  };
+
   const store = configureStore({
-    reducer: combinedReducers as unknown as Reducer<RootState>,
+    reducer: rootReducer,
     preloadedState,
   });
 

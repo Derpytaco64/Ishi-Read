@@ -121,6 +121,7 @@ export type ThSettingsKeyTypes<K extends CustomizableKeys = DefaultKeys> = {
   [ThSettingsKeys.fontFamily]: ThFontFamilyPref;
   [ThSettingsKeys.letterSpacing]: ThSettingsRangePrefRequired;
   [ThSettingsKeys.lineHeight]: ThSettingsRadioPref<Exclude<ThLineHeightOptions, ThLineHeightOptions.publisher>>;
+  [ThSettingsKeys.marginHorizontal]: ThSettingsRangePrefRequired;
   [ThSettingsKeys.paragraphIndent]: ThSettingsRangePrefRequired;
   [ThSettingsKeys.paragraphSpacing]: ThSettingsRangePrefRequired;
   [ThSettingsKeys.wordSpacing]: ThSettingsRangePrefRequired;

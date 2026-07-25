@@ -1,3 +1,14 @@
+/* CLAUDE-ADDED: This is the portal target the docked action panel renders into (inside a
+   react-resizable-panels Panel). Without an explicit width/min-width/overflow here, a child that's wider
+   than its allotted panel width (e.g. a fixed-px content wrapper) can force this box past the Panel's
+   own size instead of being clipped by it -- min-width:0 is the standard flexbox-child fix for that. */
+.panelContainer {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
 .dockerWrapper {
   margin-inline-start: auto;
   margin-inline-end: calc(var(--th-icon-size, 24px) * (1 / 4) * -1); /* Optical alingment */

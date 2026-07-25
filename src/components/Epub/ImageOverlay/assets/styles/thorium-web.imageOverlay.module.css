@@ -1,0 +1,136 @@
+/* CLAUDE-ADDED: Above the reader's own header/footer hover zones (z-index:1000, see
+   thorium-web.reader.app.module.css) -- those sit in the same (unestablished) stacking context as this
+   fixed overlay since neither the app root nor <body> creates one, so 20 wasn't enough to cover them.
+   Background is fully opaque, not a near-opaque rgba -- confirmed by direct testing (headed and
+   headless, Chromium and WebKit) that a semi-transparent background here lets the reader's own header
+   (which gets its own compositor layer from its transform/box-shadow transition) bleed through despite
+   correct DOM stacking order/z-index; a fully opaque background doesn't hit that compositing path. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background-color: #000;
+}
+
+.dialog {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  will-change: transform;
+  cursor: grab;
+}
+
+.image[data-dragging="true"] {
+  cursor: grabbing;
+}
+
+.toolbar {
+  position: absolute;
+  top: var(--th-layout-spacing);
+  inset-inline-start: var(--th-layout-spacing);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--th-layout-spacing) / 2);
+  color: #fff;
+}
+
+.toolbar svg {
+  fill: currentColor;
+  width: var(--th-icon-size, 24px);
+  height: var(--th-icon-size, 24px);
+}
+
+.toolbarButton {
+  box-sizing: border-box;
+  padding: calc(var(--th-icon-size, 24px) * (1/4));
+  border-radius: var(--th-layout-radius);
+  line-height: 0;
+  color: inherit;
+}
+
+.toolbarButton[data-hovered],
+.toolbarButton[data-pressed] {
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.toolbarButton[data-focus-visible] {
+  outline: 2px solid var(--th-theme-focus);
+}
+
+.zoomWrapper {
+  position: relative;
+}
+
+.zoomPanel {
+  position: absolute;
+  top: calc(100% + calc(var(--th-layout-spacing) / 2));
+  inset-inline-start: 0;
+  display: flex;
+  justify-content: center;
+  padding: var(--th-layout-spacing) calc(var(--th-layout-spacing) / 2);
+  background-color: rgba(0, 0, 0, 0.7);
+  border-radius: var(--th-layout-radius);
+}
+
+.zoomSlider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--th-layout-spacing) / 2);
+}
+
+.zoomSlider[data-orientation="vertical"] {
+  height: 140px;
+}
+
+.zoomOutput {
+  font-size: 0.75rem;
+  color: #fff;
+}
+
+.zoomTrack {
+  position: relative;
+  border-radius: 2px;
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+.zoomTrack[data-orientation="vertical"] {
+  width: 4px;
+  height: 100%;
+}
+
+.zoomThumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: #fff;
+}
+
+.zoomThumb[data-orientation="vertical"] {
+  left: 50%;
+  transform: translate(-50%, 50%);
+}
+
+.zoomThumb[data-focus-visible] {
+  outline: 2px solid var(--th-theme-focus);
+}

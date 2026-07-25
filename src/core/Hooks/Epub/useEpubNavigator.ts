@@ -8,6 +8,8 @@ import {
   Publication
 } from "@readium/shared";
 import {
+  Decoration,
+  DecorationObserver,
   EpubNavigator,
   EpubNavigatorListeners,
   EpubPreferences,
@@ -180,6 +182,20 @@ export const useEpubNavigator = () => {
     return getScriptMode(metadata);
   }, []);
 
+  // CLAUDE-ADDED: Thin wrappers around EpubNavigator's DecorableNavigator API, used to render
+  // highlights/notes and to detect taps on them (see StatefulReader.tsx's annotations decoration sync).
+  const applyDecorations = useCallback((decorations: Decoration[], group: string) => {
+    navigatorInstance?.applyDecorations(decorations, group);
+  }, []);
+
+  const registerDecorationObserver = useCallback((group: string, observer: DecorationObserver) => {
+    navigatorInstance?.registerDecorationObserver(group, observer);
+  }, []);
+
+  const unregisterDecorationObserver = useCallback((observer: DecorationObserver) => {
+    navigatorInstance?.unregisterDecorationObserver(observer);
+  }, []);
+
   return { 
     EpubNavigatorLoad, 
     EpubNavigatorDestroy, 
@@ -203,5 +219,8 @@ export const useEpubNavigator = () => {
     submitPreferences,
     getCframes,
     getScriptMode: currentScriptMode,
+    applyDecorations,
+    registerDecorationObserver,
+    unregisterDecorationObserver,
   }
 }

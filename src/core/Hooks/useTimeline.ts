@@ -313,7 +313,8 @@ export const useTimeline = ({
       ? publication.toc.items
       : publication.readingOrder?.items || [];
     const publicationTitle = publication?.metadata.title.getTranslation("en");
-    setTocTree(buildTocTree(tocItems, idGenerator, positionsList, publicationTitle));
+    const readingOrderHrefs = new Set(publication.readingOrder?.items.map((item) => item.href) || []);
+    setTocTree(buildTocTree(tocItems, idGenerator, positionsList, publicationTitle, readingOrderHrefs));
     setTimelineItems(buildTimelineItems());
   }, [publication, positionsList, buildTimelineItems]);
 

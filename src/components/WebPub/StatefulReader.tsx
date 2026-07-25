@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo, useLayoutEffect } from "react";
+import { useState, useRef, useCallback, useMemo, useLayoutEffect, useEffect } from "react";
 
 import readerStyles from "../assets/styles/thorium-web.reader.app.module.css";
 
@@ -69,6 +69,7 @@ import {
 import { toggleActionOpen, dockAction } from "@/lib/actionsReducer";
 
 import classNames from "classnames";
+import debounce from "debounce";
 import { createDefaultPlugin } from "../Plugins/helpers/createDefaultPlugin";
 import { getReaderClassNames } from "../Helpers/getReaderClassNames";
 import { resolveContentProtectionConfig } from "@/preferences/models/protection";
@@ -164,6 +165,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   const dispatch = useAppDispatch();
   const getFocusedDockableKey = useFocusedDockableKey();
   const profile = useAppSelector(state => state.reader.profile);
+  const actionsState = useAppSelector(state => profile ? state.actions.keys[profile] : undefined);
   const keyboardPeripherals = useWebPubKeyboardPeripherals();
 
   const onFsChange = useCallback((isFullscreen: boolean) => {
@@ -234,10 +236,34 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
 
   const { zoomIn, zoomOut } = useZoomCallbacks(webPubNavigator);
 
+  // CLAUDE-ADDED: Escape exits back to the backLink href, but only when no transient overlay
+  // (Toc, Settings, JumpToPosition...) is open -- that Escape press just closes it instead
+  const backLinkHref = preferences.theming.header?.backLink?.href;
+  const exitReader = useCallback(() => {
+    if (!backLinkHref) return;
+
+    const hasOpenOverlay = Object.values(actionsState ?? {}).some(
+      (action) => action?.isOpen && (!action.docking || action.docking === ThDockingKeys.transient)
+    );
+    if (hasOpenOverlay) return;
+
+    window.location.href = backLinkHref;
+  }, [backLinkHref, actionsState]);
+
+  // CLAUDE-ADDED: positionChanged previously called setLocalData on every single event with no
+  // debounce at all -- fine for a synchronous localStorage write, but expensive once it's a network
+  // call (see StatefulReader.tsx's Epub counterpart for the same fix).
+  const debouncedSavePosition = useMemo(
+    () => debounce((locator: Locator) => setLocalData(locator), 250),
+    [setLocalData]
+  );
+
+  useEffect(() => () => debouncedSavePosition.clear(), [debouncedSavePosition]);
+
   const listeners: WebPubNavigatorListeners = useMemo(() => ({
     frameLoaded: async function (_wnd: Window): Promise<void> {},
     positionChanged: async function (locator: Locator): Promise<void> {
-      setLocalData(locator);
+      debouncedSavePosition(locator);
 
       if (canGoBackward()) {
         dispatch(setPublicationStart(false));
@@ -281,8 +307,9 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
     contextMenu: function (_data: ContextMenuEvent): void {},
     peripheral: function (data): void {
       switch (data.type) {
-        case NavPeripheralType.zoomIn:  zoomIn();  break;
-        case NavPeripheralType.zoomOut: zoomOut(); break;
+        case NavPeripheralType.zoomIn:     zoomIn();     break;
+        case NavPeripheralType.zoomOut:    zoomOut();    break;
+        case NavPeripheralType.exitReader: exitReader(); break;
         default: {
           const actionKey = fromActionPeripheralType(data.type);
 
@@ -307,7 +334,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
         }
       }
     },
-  }), [setLocalData, canGoBackward, canGoForward, dispatch, toggleIsImmersive, zoomIn, zoomOut, profile, handleFullscreen, getFocusedDockableKey]);
+  }), [debouncedSavePosition, canGoBackward, canGoForward, dispatch, toggleIsImmersive, zoomIn, zoomOut, exitReader, profile, handleFullscreen, getFocusedDockableKey]);
 
   const initialPosition = useMemo(() => getLocalData(), [getLocalData]);
 

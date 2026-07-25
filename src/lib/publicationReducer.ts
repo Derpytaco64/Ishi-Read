@@ -5,6 +5,9 @@ import { ThemeTokens } from "@/preferences/hooks/useTheming";
 import { ScriptMode } from "@readium/navigator";
 import { UnstableTimeline } from "@/core/Hooks/useTimeline";
 import { TocItem, toEntryRef } from "@/helpers/buildTocTree";
+import { ExactPageCountData } from "@/helpers/exactPageLocator";
+
+export type { ExactPageCountData } from "@/helpers/exactPageLocator";
 
 export interface AdjacentTimelineItem {
   title: string;
@@ -26,6 +29,7 @@ export interface PublicationReducerState {
     next: AdjacentTimelineItem | null;
   };
   coverTheme?: ThemeTokens;
+  exactPageCount?: ExactPageCountData;
 }
 
 const initialState: PublicationReducerState = {
@@ -40,6 +44,7 @@ const initialState: PublicationReducerState = {
   unstableTimeline: undefined,
   adjacentTimelineItems: { previous: null, next: null },
   coverTheme: undefined,
+  exactPageCount: undefined,
 }
 
 export const publicationSlice = createSlice({
@@ -104,6 +109,9 @@ export const publicationSlice = createSlice({
       } else {
         state.unstableTimeline.toc = { tree: undefined, currentEntry: entry };
       }
+    },
+    setExactPageCount: (state, action: { payload: ExactPageCountData }) => {
+      state.exactPageCount = action.payload;
     }
   }
 });
@@ -123,6 +131,7 @@ export const {
   setTocEntry,
   setAdjacentTimelineItems,
   setCoverTheme,
+  setExactPageCount,
 } = publicationSlice.actions;
 
 export default publicationSlice.reducer;

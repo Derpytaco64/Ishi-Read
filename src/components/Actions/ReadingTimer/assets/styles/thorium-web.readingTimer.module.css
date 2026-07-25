@@ -1,0 +1,347 @@
+/* CLAUDE-ADDED: Mirrors the audio player's SleepTimer badge (icon + small live-updating label pinned
+   under it) rather than widening the button to fit a full "H:MM:SS" readout -- keeps this action visually
+   consistent with the compact icon-only siblings in the header bar instead of introducing a new shape. */
+
+.button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  outline: none;
+}
+
+.button[data-focus-visible] {
+  outline: 2px solid var(--th-theme-focus);
+}
+
+.button:has(.label) {
+  padding-bottom: calc(var(--th-icon-size, 24px) * (2/3));
+}
+
+.label {
+  position: absolute;
+  bottom: calc(var(--th-icon-size, 24px) * (1/4));
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  line-height: 1;
+  font-size: calc(var(--th-icon-size, 24px) * (5/12));
+  font-variant-numeric: tabular-nums;
+  font-weight: bold;
+}
+
+/* Panel (popover/docked/bottomSheet target) -- left empty, deliberately, like JumpToPosition's own
+   .wrapper: relies on the sheet's own default popover width instead of forcing one, since a fixed
+   !important width fighting a responsive sheet is exactly what caused the annotations panel overflow. */
+.wrapper {}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--th-layout-spacing);
+}
+
+.panelTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--th-layout-spacing) / 2);
+}
+
+.panelTab {
+  border: 2px solid transparent;
+  border-radius: var(--th-layout-radius);
+  background: transparent;
+  color: var(--th-theme-text);
+  padding: calc(var(--th-layout-spacing) / 4) calc(var(--th-layout-spacing) / 2);
+  cursor: pointer;
+}
+
+.panelTab[data-selected] {
+  border-color: var(--th-theme-subdue);
+}
+
+.panelTab:hover,
+.panelTab:focus-visible {
+  background-color: var(--th-theme-hover);
+  color: var(--th-theme-onHover);
+  outline: none;
+}
+
+.bigTime {
+  font-size: 2em;
+  font-variant-numeric: tabular-nums;
+  font-weight: bold;
+  text-align: center;
+}
+
+.speedUnit {
+  margin-left: calc(var(--th-layout-spacing) / 4);
+  font-size: 0.4em;
+  font-weight: normal;
+}
+
+.speedLabel {
+  color: var(--th-theme-subdue);
+  text-align: center;
+}
+
+.emptyState {
+  color: var(--th-theme-subdue);
+  text-align: center;
+}
+
+.paceBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--th-layout-spacing) / 4);
+  padding-top: calc(var(--th-layout-spacing) / 2);
+  border-top: 1px solid var(--th-theme-subdue);
+}
+
+.paceBig {
+  font-size: 1.5em;
+  font-variant-numeric: tabular-nums;
+  font-weight: bold;
+}
+
+.speedTimeLeft {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  padding-top: calc(var(--th-layout-spacing) / 2);
+  border-top: 1px solid var(--th-theme-subdue);
+}
+
+.speedTimeLeftValue {
+  font-variant-numeric: tabular-nums;
+  font-weight: bold;
+}
+
+.resetButton {
+  box-sizing: border-box;
+  width: 100%;
+  border: 2px solid var(--th-theme-subdue);
+  border-radius: var(--th-layout-radius);
+  background: transparent;
+  color: var(--th-theme-text);
+  padding: calc(var(--th-icon-size, 24px) * (1/4)) calc(var(--th-icon-size, 24px) * (1/2));
+  text-align: center;
+  cursor: pointer;
+}
+
+.resetButton:hover,
+.resetButton:focus-visible {
+  background-color: var(--th-theme-hover);
+  color: var(--th-theme-onHover);
+  outline: none;
+}
+
+.completedTitle {
+  margin: 0 0 calc(var(--th-layout-spacing) / 2);
+  font-size: 1em;
+}
+
+.completedList {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--th-layout-spacing) / 2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.completedItem {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--th-layout-spacing) / 4);
+  padding: calc(var(--th-layout-spacing) / 4) 0;
+  border-bottom: 1px solid var(--th-theme-subdue);
+}
+
+.completedItemHeader {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--th-layout-spacing) / 2);
+}
+
+.completedItemInfo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(var(--th-layout-spacing) / 2);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.completedItemTime {
+  font-variant-numeric: tabular-nums;
+  font-weight: bold;
+}
+
+.completedItemDate {
+  color: var(--th-theme-subdue);
+  font-size: 0.875em;
+  white-space: nowrap;
+}
+
+.completedItemDelete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: calc(var(--th-icon-size, 24px) * 5/6);
+  height: calc(var(--th-icon-size, 24px) * 5/6);
+  border: none;
+  background: transparent;
+  color: var(--th-theme-text);
+  cursor: pointer;
+  padding: 0;
+}
+
+.completedItemDelete svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+.completedItemDelete:hover,
+.completedItemDelete:focus-visible {
+  color: var(--th-theme-onHover);
+  background-color: var(--th-theme-hover);
+  border-radius: var(--th-layout-radius);
+  outline: none;
+}
+
+/* CLAUDE-ADDED: The Moon+-style "reading history in days" rows -- used both top-level (Timer tab, the
+   currently-open period) and nested/indented inside a Completed Reads entry (that entry's own
+   archived days). Sized down from the surrounding text since it's always a breakdown of a number
+   shown bigger just above it (the live pace, or the completed entry's total). */
+.dailyHistoryList {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--th-layout-spacing) / 4);
+  margin: 0;
+  padding: 0;
+  padding-left: var(--th-layout-spacing);
+  list-style: none;
+  font-size: 0.875em;
+  color: var(--th-theme-subdue);
+}
+
+.dailyHistoryItem {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--th-layout-spacing) / 2);
+}
+
+.dailyHistoryDate {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dailyHistoryPercent {
+  font-variant-numeric: tabular-nums;
+  font-weight: bold;
+  color: var(--th-theme-text);
+}
+
+/* Confirmation dialog -- shared by both the reset flow and the per-item delete flow (only one can be
+   pending at a time, see StatefulReadingTimerContainer's pendingConfirm state). A standalone centered
+   dialog (not routed through the sheet system, same approach as NoteOverlay.tsx's own backdrop/dialog)
+   since it needs to appear in the middle of the screen regardless of whether the timer panel itself is
+   a popover, bottom sheet, or docked. */
+.confirmBackdrop {
+  position: fixed;
+  inset: 0;
+  /* The timer panel's own popover (Sheets) gets a dynamically-assigned z-index of 100000 from
+     react-aria's overlay stacking -- 1000 rendered this backdrop behind it. Same "beat the bottom
+     sheet" fix as .dropdownPopover in thorium-web.reader.settings.module.css. */
+  z-index: 1000000 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--th-layout-spacing);
+  background-color: var(--th-layout-defaults-scrim, rgba(0, 0, 0, 0.2));
+}
+
+.confirmDialog {
+  position: relative;
+  outline: none;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--th-layout-constraints-modal, 420px);
+  max-height: 90dvh;
+  overflow-y: auto;
+  background-color: var(--th-theme-background);
+  color: var(--th-theme-text);
+  border-radius: var(--th-layout-radius);
+  border: 1px solid var(--th-theme-subdue);
+  filter: drop-shadow(var(--th-theme-elevate));
+  padding: var(--th-layout-spacing);
+  /* Room for .confirmClose in the top-right corner without it overlapping the confirm text. */
+  padding-top: calc(var(--th-layout-spacing) + var(--th-icon-size, 24px) * 5/6);
+}
+
+.confirmClose {
+  position: absolute;
+  top: calc(var(--th-layout-spacing) / 2);
+  right: calc(var(--th-layout-spacing) / 2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--th-icon-size, 24px) * 5/6);
+  height: calc(var(--th-icon-size, 24px) * 5/6);
+  border: none;
+  background: transparent;
+  color: var(--th-theme-text);
+  cursor: pointer;
+  padding: 0;
+}
+
+.confirmClose svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+.confirmClose:hover,
+.confirmClose:focus-visible {
+  color: var(--th-theme-onHover);
+  background-color: var(--th-theme-hover);
+  border-radius: var(--th-layout-radius);
+  outline: none;
+}
+
+.confirmText {
+  margin: 0 0 var(--th-layout-spacing);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: calc(var(--th-layout-spacing) / 2);
+}
+
+.confirmButton {
+  box-sizing: border-box;
+  border: 2px solid var(--th-theme-subdue);
+  border-radius: var(--th-layout-radius);
+  background: transparent;
+  color: var(--th-theme-text);
+  padding: calc(var(--th-icon-size, 24px) * (1/4)) calc(var(--th-icon-size, 24px) * (1/2));
+  cursor: pointer;
+}
+
+.confirmButton:hover,
+.confirmButton:focus-visible {
+  background-color: var(--th-theme-hover);
+  color: var(--th-theme-onHover);
+  outline: none;
+}
+
+.confirmButtonPrimary {
+  border-color: var(--th-theme-text);
+  font-weight: bold;
+}

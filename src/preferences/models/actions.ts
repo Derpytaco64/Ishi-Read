@@ -65,8 +65,10 @@ export interface ThDockingPref<T extends string> {
 };
 
 export enum ThActionsKeys {
+  annotations = "annotations",
   fullscreen = "fullscreen",
   jumpToPosition = "jumpToPosition",
+  readingTimer = "readingTimer",
   settings = "settings",
   toc = "toc"
 }
@@ -133,6 +135,24 @@ export const defaultFullscreenAction: ThActionsTokens = {
   shortcut: null
 }
 
+export const defaultReadingTimerAction: ThActionsTokens = {
+  visibility: ThCollapsibilityVisibility.partially,
+  shortcut: null,
+  sheet: {
+    defaultSheet: ThSheetTypes.popover,
+    breakpoints: {
+      [ThBreakpoints.compact]: ThSheetTypes.bottomSheet
+    }
+  },
+  docked: {
+    dockable: ThDockingTypes.none
+  },
+  snapped: {
+    scrim: true,
+    minHeight: "content-height"
+  }
+}
+
 export const defaultTocAction: ThActionsTokens = {
   visibility: ThCollapsibilityVisibility.partially,
   shortcut: {
@@ -155,8 +175,30 @@ export const defaultTocAction: ThActionsTokens = {
   }
 }
 
+export const defaultAnnotationsAction: ThActionsTokens = {
+  visibility: ThCollapsibilityVisibility.partially,
+  shortcut: {
+    label: "H",
+    keyCombos: [{ keyCode: 72, shift: true, alt: true, suppressOnInteractiveElement: TEXT_INPUT_SELECTORS }]
+  },
+  sheet: {
+    defaultSheet: ThSheetTypes.popover,
+    breakpoints: {
+      [ThBreakpoints.compact]: ThSheetTypes.fullscreen,
+      [ThBreakpoints.medium]: ThSheetTypes.fullscreen
+    }
+  },
+  docked: {
+    dockable: ThDockingTypes.both,
+    dragIndicator: false,
+    width: 460,
+    minWidth: 380,
+    maxWidth: 560
+  }
+}
+
 export const defaultJumpToPositionAction: ThActionsTokens = {
-  visibility: ThCollapsibilityVisibility.overflow,
+  visibility: ThCollapsibilityVisibility.partially,
   shortcut: {
     label: "J",
     keyCombos: [{ keyCode: 74, shift: true, alt: true, suppressOnInteractiveElement: TEXT_INPUT_SELECTORS }]

@@ -26,10 +26,13 @@ import {
   defaultFullscreenAction,
   defaultTocAction,
   defaultJumpToPositionAction,
+  defaultAnnotationsAction,
+  defaultReadingTimerAction,
   defaultContentProtectionConfig,
   defaultFontCollection,
   defaultLetterSpacing,
   defaultLineHeights,
+  defaultMarginHorizontal,
   defaultParagraphIndent,
   defaultParagraphSpacing,
   defaultSpacingPresets,
@@ -281,20 +284,24 @@ export const defaultPreferences: ThPreferences<DefaultKeys> = createPreferences<
   },
   actions: {
     reflowOrder: [
-      ThActionsKeys.settings,
+      ThActionsKeys.readingTimer,
+      ThActionsKeys.annotations,
+      ThActionsKeys.jumpToPosition,
       ThActionsKeys.toc,
-      ThActionsKeys.fullscreen,
-      ThActionsKeys.jumpToPosition
+      ThActionsKeys.settings,
+      ThActionsKeys.fullscreen
     ],
     fxlOrder: [
-      ThActionsKeys.settings,
+      ThActionsKeys.readingTimer,
+      ThActionsKeys.annotations,
+      ThActionsKeys.jumpToPosition,
       ThActionsKeys.toc,
-      ThActionsKeys.fullscreen,
-      ThActionsKeys.jumpToPosition
+      ThActionsKeys.settings,
+      ThActionsKeys.fullscreen
     ],
     webPubOrder: [
-      ThActionsKeys.settings,
       ThActionsKeys.toc,
+      ThActionsKeys.settings,
       ThActionsKeys.fullscreen
     ],
     collapse: true,
@@ -303,6 +310,8 @@ export const defaultPreferences: ThPreferences<DefaultKeys> = createPreferences<
       [ThActionsKeys.fullscreen]: defaultFullscreenAction,
       [ThActionsKeys.toc]: defaultTocAction,
       [ThActionsKeys.jumpToPosition]: defaultJumpToPositionAction,
+      [ThActionsKeys.annotations]: defaultAnnotationsAction,
+      [ThActionsKeys.readingTimer]: defaultReadingTimerAction,
     }
   },
   docking: {
@@ -340,6 +349,7 @@ export const defaultPreferences: ThPreferences<DefaultKeys> = createPreferences<
       ThSettingsKeys.textGroup,
       ThSettingsKeys.theme,
       ThSettingsKeys.spacingGroup,
+      ThSettingsKeys.marginHorizontal,
       ThSettingsKeys.layout,
       ThSettingsKeys.columns
     ],
@@ -369,6 +379,7 @@ export const defaultPreferences: ThPreferences<DefaultKeys> = createPreferences<
         allowUnset: false,
         keys: defaultLineHeights
       },
+      [ThSettingsKeys.marginHorizontal]: defaultMarginHorizontal,
       [ThSettingsKeys.paragraphIndent]: defaultParagraphIndent,
       [ThSettingsKeys.paragraphSpacing]: defaultParagraphSpacing,
       [ThSettingsKeys.wordSpacing]: defaultWordSpacing,

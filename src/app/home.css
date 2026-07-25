@@ -1,5 +1,26 @@
 #home {
   margin: 20px;
+  /* CLAUDE-ADDED: position: relative anchors the absolutely-positioned .logo to this container instead of the viewport. */
+  position: relative;
+  /* CLAUDE-ADDED: Light-mode palette, overridden below by #home[data-theme="dark"]. */
+  --th-color-background: #fff;
+  --th-color-text: #333;
+  --th-color-text-secondary: #666;
+  background-color: var(--th-color-background);
+  color: var(--th-color-text);
+}
+
+/* CLAUDE-ADDED: Dark palette swapped in when the library page's dark-mode toggle is on. Keyed off <html data-theme> (set by the blocking script in layout.tsx) rather than #home itself, so the correct palette is already in place before #home's first paint — no light-then-dark flash. */
+html[data-theme="dark"] #home {
+  /* CLAUDE-ADDED: Brightened from #1a1a1a per user feedback that dark mode read as too dark. */
+  --th-color-background: #2b2b2b;
+  --th-color-text: #e8e8e8;
+  --th-color-text-secondary: #b3b3b3;
+}
+
+/* CLAUDE-ADDED: Colors the margin around #home so no light edge shows around it in dark mode. */
+html[data-theme="dark"] body {
+  background-color: #2b2b2b;
 }
 
 .header {
@@ -34,6 +55,8 @@ h1 {
 h2 {
   font-size: 1.25rem;
   margin-top: 3rem;
+  /* CLAUDE-ADDED: h2 had no color rule, so it stayed black text in dark mode; wire it to the same var as h1. */
+  color: var(--th-color-text);
 }
 
 .dev-books {

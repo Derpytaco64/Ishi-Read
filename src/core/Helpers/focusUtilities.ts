@@ -10,6 +10,17 @@ export const isKeyboardTriggered = (el: Element | undefined | null) => {
   return false;
 }
 
+// CLAUDE-ADDED: After go()-ing to a locator from a sheet (Annotations list, return-to-position), the
+// sheet's own overlay returns focus to whatever trigger button opened it -- correct a11y default, but it
+// leaves keyboard page-turns (ArrowRight/Left) going nowhere since the reading iframe no longer has focus.
+// Deferred via setTimeout so it runs after that focus-restoration effect rather than racing it.
+export const focusReadingContainer = () => {
+  window.setTimeout(() => {
+    const iframe = document.getElementById("thorium-web-container")?.querySelector("iframe");
+    (iframe as HTMLElement | null)?.focus();
+  }, 0);
+}
+
 export const isInteractiveElement = (element: Element | null) => {
   const iElements = ["A", "AREA", "BUTTON", "DETAILS", "INPUT", "SELECT", "TEXTAREA"];
   const iRoles = ["dialog", "radiogroup", "radio", "menu", "menuitem"]

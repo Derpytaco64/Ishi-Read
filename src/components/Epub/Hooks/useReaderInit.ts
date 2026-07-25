@@ -87,6 +87,8 @@ export const useEpubReaderInit = ({
     fontLanguage,
     getFontInjectables,
     getAndroidFXLPatch,
+    // CLAUDE-ADDED: Lets the cover-alone-on-right injectable target exactly the first reading-order resource.
+    firstResourceHref: publication?.readingOrder?.items?.[0]?.href,
   });
 
   const handleCleanup = useCallback(() => {
@@ -113,8 +115,8 @@ export const useEpubReaderInit = ({
       container: container.current,
       publication,
       listeners,
-      positionsList: positionsList?.map(loc => new Locator(loc)) || [],
-      initialPosition: initialPosition ? new Locator(initialPosition) : undefined,
+      positionsList: positionsList?.flatMap(loc => Locator.deserialize(loc) ?? []) || [],
+      initialPosition: initialPosition ? Locator.deserialize(initialPosition) : undefined,
       preferences: epubPreferences,
       defaults: epubDefaults,
       injectables: injectables || undefined,

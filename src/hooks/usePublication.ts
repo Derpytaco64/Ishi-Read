@@ -164,17 +164,7 @@ export const usePublication = ({
               fetcher: manifestFetcher
             });
             
-            // For EPUB, fetch positions before mounting reader
-            if (detectedProfile === "epub") {
-              try {
-                const rawPositions = await pub.positionsFromManifest();
-                const positionsList = deserializePositions(rawPositions);
-                dispatch(setPositionsList(positionsList));
-              } catch (error) {
-                console.error("Failed to fetch positions:", error);
-                dispatch(setPositionsList([]));
-              }
-            }
+            // CLAUDE-ADDED: Removed the blocking positionsFromManifest() call that used to run here — it forced a second sequential streamer request before the reader could mount, and duplicated the fetch already done by the metadata effect below, doubling the open-book wait.
 
             // For audio, build the TOC tree from the publication
             if (detectedProfile === "audio") {
@@ -184,7 +174,8 @@ export const usePublication = ({
               const publicationTitle = manifestObj.metadata.title.getTranslation("en");
               let idCounter = 0;
               const idGenerator = () => `toc-${ ++idCounter }`;
-              dispatch(setTocTree(buildTocTree(tocLinks, idGenerator, undefined, publicationTitle)));
+              const readingOrderHrefs = new Set(manifestObj.readingOrder?.items.map((item) => item.href) || []);
+              dispatch(setTocTree(buildTocTree(tocLinks, idGenerator, undefined, publicationTitle, readingOrderHrefs)));
             }
 
             setPublication(pub);

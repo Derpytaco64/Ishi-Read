@@ -29,14 +29,21 @@ export const useWebPubKeyboardPeripherals = (): IKeyboardPeripheralsConfig => {
     };
 
     const config: IKeyboardPeripheralsConfig = [
-      { type: NavPeripheralType.zoomIn,  keyCombos: [...ZOOM_IN_KEY_COMBOS]  },
-      { type: NavPeripheralType.zoomOut, keyCombos: [...ZOOM_OUT_KEY_COMBOS] },
+      { type: NavPeripheralType.zoomIn,     keyCombos: [...ZOOM_IN_KEY_COMBOS,  { keyCode: 38, suppressOnInteractiveElement: true }] },
+      { type: NavPeripheralType.zoomOut,    keyCombos: [...ZOOM_OUT_KEY_COMBOS, { keyCode: 40, suppressOnInteractiveElement: true }] },
+      { type: NavPeripheralType.exitReader, keyCombos: [{ keyCode: 27, suppressOnInteractiveElement: true }] },
     ];
 
     for (const [key, tokens] of Object.entries(actionsKeys)) {
       const shortcut = tokens?.shortcut;
       const isAvailable = actionAvailability[key] ?? true;
-      if (shortcut && isAvailable) config.push({ type: toActionPeripheralType(key), keyCombos: shortcut.keyCombos });
+      if (!isAvailable) continue;
+
+      const keyCombos = [...(shortcut?.keyCombos ?? [])];
+      // CLAUDE-ADDED: Tab opens the Table of Contents whenever focus isn't on an interactive element
+      if (key === ThActionsKeys.toc) keyCombos.push({ keyCode: 9, suppressOnInteractiveElement: true });
+
+      if (keyCombos.length) config.push({ type: toActionPeripheralType(key), keyCombos });
     }
 
     for (const [key, tokens] of Object.entries(docking.keys)) {

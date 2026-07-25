@@ -19,10 +19,11 @@ import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { setActionOpen } from "@/lib/actionsReducer";
 import { setImmersive, setUserNavigated } from "@/lib/readerReducer";
 
-import { isPositionsListValid } from "./helpers/utils";
+import { findExactPageLocator } from "@/helpers/exactPageLocator";
+import { isPositionsListValid, isExactPageCountValid } from "./helpers/utils";
 
-export const StatefulJumpToPositionContainer = ({ 
-  triggerRef 
+export const StatefulJumpToPositionContainer = ({
+  triggerRef
 }: StatefulActionContainerProps) => {
   const { t } = useI18n();
   const profile = useAppSelector(state => state.reader.profile);
@@ -30,6 +31,15 @@ export const StatefulJumpToPositionContainer = ({
   const positionsList = useAppSelector(state => state.publication.positionsList);
 
   const positionNumbers = useAppSelector(state => state.publication.unstableTimeline?.progression?.currentPositions);
+
+  // CLAUDE-ADDED: Prefer the exact page-count system (useExactPageCount, dispatched via setExactPageCount)
+  // over the coarse manifest positionsList when it has data -- it's only populated for reflowable,
+  // non-scroll content, so FXL/scroll books fall back to the exact same positionsList-based path this
+  // dialog already used before it existed.
+  const exactTotalPages = useAppSelector(state => state.publication.exactPageCount?.totalPages);
+  const exactCurrentPageRange = useAppSelector(state => state.publication.exactPageCount?.currentPageRange);
+  const exactResourcePages = useAppSelector(state => state.publication.exactPageCount?.resourcePages);
+  const usingExact = isExactPageCountValid(exactTotalPages);
 
   const reducedMotion = useAppSelector(state => state.theming.prefersReducedMotion);
   const dispatch = useAppDispatch();
@@ -39,7 +49,7 @@ export const StatefulJumpToPositionContainer = ({
 
   const { go } = useEpubNavigator();
 
-  // Component has to handle updates locally since EpubNavigator updates positions, 
+  // Component has to handle updates locally since EpubNavigator updates positions,
   // so we use these as an intermediary
   const [position, setPosition] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string>();
@@ -47,14 +57,22 @@ export const StatefulJumpToPositionContainer = ({
   // Position Numbers can be a range so we must check position is in range
   // And not only that the array simply includes the position
   const positionInRange = useCallback(() => {
-    if (!positionNumbers) return false;
-    return positionNumbers.length === 2
-      ? position >= positionNumbers[0] && position <= positionNumbers[1]
-      : position === positionNumbers[0];
-  }, [position, positionNumbers]);
+    const range = usingExact ? exactCurrentPageRange : positionNumbers;
+    if (!range || range.length === 0) return false;
+    return range.length === 2
+      ? position >= range[0]! && position <= range[1]!
+      : position === range[0];
+  }, [position, usingExact, exactCurrentPageRange, positionNumbers]);
+
+  // CLAUDE-ADDED: Page 0 (the cover) is a valid target in the exact system, so the old `!position`
+  // falsy check (which would treat 0 as "empty") can't be reused here.
+  const hasValidPosition = position !== undefined && position !== null && !Number.isNaN(position);
+
+  const minPosition = usingExact ? 0 : 1;
+  const maxPosition = usingExact ? exactTotalPages! : positionsList.length;
 
   // Update the label to use react-i18next interpolation
-  const label = t("reader.jumpToPosition.label", { positionStart: 1, positionEnd: positionsList.length });
+  const label = t("reader.jumpToPosition.label", { positionStart: minPosition, positionEnd: maxPosition });
 
   const setOpen = useCallback((value: boolean) => {
     if (profile) {
@@ -78,9 +96,29 @@ export const StatefulJumpToPositionContainer = ({
   const handleAction = useCallback((e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    if (!positionsList) return;
-
     setErrorMessage(undefined); // Clear previous errors
+
+    const cb = () => {
+      setOpen(false);
+      dispatch(setImmersive(true));
+      dispatch(setUserNavigated(true));
+    };
+
+    if (usingExact) {
+      const locator = findExactPageLocator(exactResourcePages, position);
+
+      if (!locator) {
+        setErrorMessage(t("reader.jumpToPosition.error.notFound"));
+        return;
+      }
+
+      if (positionInRange()) return setOpen(false);
+
+      go(locator, !reducedMotion, cb);
+      return;
+    }
+
+    if (!positionsList) return;
 
     const item = positionsList.find(item => item.locations.position === position);
 
@@ -88,25 +126,23 @@ export const StatefulJumpToPositionContainer = ({
       setErrorMessage(t("reader.jumpToPosition.error.notFound"));
       return;
     }
-    
+
     if (positionInRange()) return setOpen(false);
 
-    const cb = () => {
-      setOpen(false);
-      dispatch(setImmersive(true));
-      dispatch(setUserNavigated(true));
-    };
-    
     go(item, !reducedMotion, cb);
-  }, [position, positionsList, reducedMotion, t, positionInRange, go, setOpen, dispatch]);
+  }, [position, usingExact, exactResourcePages, positionsList, reducedMotion, t, positionInRange, go, setOpen, dispatch]);
 
-  // Since we are using an intermediary local state, we must keep track when positionNumbers changes
+  // Since we are using an intermediary local state, we must keep track when the current position changes
   useEffect(() => {
-    positionNumbers && setPosition(positionNumbers[0]);
-  }, [positionNumbers]);
+    if (usingExact) {
+      exactCurrentPageRange && setPosition(exactCurrentPageRange[0]!);
+    } else {
+      positionNumbers && setPosition(positionNumbers[0]!);
+    }
+  }, [usingExact, exactCurrentPageRange, positionNumbers]);
 
-  // In case there is no positions list or no valid positions we return
-  if (!isPositionsListValid(positionsList)) return null;
+  // In case there is no positions list or no valid positions (and no exact page count either) we return
+  if (!isPositionsListValid(positionsList) && !usingExact) return null;
 
   return (
     <>
@@ -131,7 +167,7 @@ export const StatefulJumpToPositionContainer = ({
           compounds={{
             button: {
               className: jumpToPositionStyles.button,
-              isDisabled: !position || positionInRange()
+              isDisabled: !hasValidPosition || positionInRange()
             }
           }}
         >
@@ -142,8 +178,8 @@ export const StatefulJumpToPositionContainer = ({
             onChange={ setPosition }
             onInput={ handleInput }
             value={ position }
-            minValue={ 1 }
-            maxValue={ positionsList.length }
+            minValue={ minPosition }
+            maxValue={ maxPosition }
             step={ 1 }
             formatOptions={{ style: "decimal" }}
             isWheelDisabled={ true }

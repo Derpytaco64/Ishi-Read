@@ -31,10 +31,11 @@ import {
   FrameClickEvent,
   SuspiciousActivityEvent
 } from "@readium/navigator-html-injectables";
-import { EpubNavigatorListeners, KeyboardPeripheralEventData } from "@readium/navigator";
-import { 
-  Locator, 
-  Publication, 
+import { Decoration, DecorationActivationEvent, EpubNavigatorListeners, KeyboardPeripheralEventData } from "@readium/navigator";
+import {
+  Locator,
+  LocatorText,
+  Publication,
   Layout
 } from "@readium/shared";
 import { PositionStorage, StatefulReaderProps } from "../Reader/StatefulReaderWrapper";
@@ -49,6 +50,14 @@ import { usePreferences } from "@/preferences/hooks/usePreferences";
 import { useSettingsComponentStatus } from "@/components/Settings/hooks/useSettingsComponentStatus";
 import { useEpubStatelessCache } from "./Hooks/useEpubStatelessCache";
 import { useEpubReaderInit } from "./Hooks/useReaderInit";
+import { useMarginSync, applyMargin } from "./Hooks/useMarginSync";
+import { useShortImageSpread } from "./Hooks/useShortImageSpread";
+import { useExactPageCount } from "./Hooks/useExactPageCount";
+import { useReadingTimer } from "@/components/Actions/ReadingTimer/hooks/useReadingTimer";
+import { useReadingSpeedSampler } from "@/components/Actions/ReadingTimer/hooks/useReadingSpeedSampler";
+import { useBookWordCount } from "./Hooks/useBookWordCount";
+import { persistWordCount } from "@/lib/readingTimeReducer";
+import { PairedSpreadOverlay } from "./PairedSpreadOverlay";
 import { useEpubNavigator } from "@/core/Hooks/Epub/useEpubNavigator";
 import { useFullscreen } from "@/core/Hooks/useFullscreen";
 import { usePrevious } from "@/core/Hooks/usePrevious";
@@ -78,12 +87,22 @@ import {
   setScrollAffordance,
   setUserNavigated
 } from "@/lib/readerReducer";
-import { 
+import {
   setTimeline,
   setPublicationStart,
-  setPublicationEnd
+  setPublicationEnd,
+  setExactPageCount
 } from "@/lib/publicationReducer";
+import { setPendingSelection, openNoteOverlay, setFlashLocator } from "@/lib/annotationsReducer";
+import { highlightToDecoration, noteToDecoration } from "@/components/Actions/Annotations/helpers/toDecoration";
+import { formatTimestamp } from "@/components/Actions/Annotations/helpers/formatTimestamp";
+import { NOTE_HOVER_MESSAGE_TYPE, NoteHoverEntry } from "./Hooks/noteHoverScript";
+import { SelectionPopover } from "@/components/Actions/Annotations/SelectionPopover";
+import { NoteOverlay } from "@/components/Actions/Annotations/NoteOverlay";
 import { toggleActionOpen, dockAction } from "@/lib/actionsReducer";
+import { openImageOverlay } from "@/lib/imageOverlayReducer";
+import { getClickedImage } from "./Helpers/getClickedImage";
+import { StatefulImageOverlay } from "./ImageOverlay/StatefulImageOverlay";
 
 import classNames from "classnames";
 import debounce from "debounce";
@@ -148,6 +167,14 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   const isRTL = useAppSelector(state => state.publication.isRTL);
   const positionsList = useAppSelector(state => state.publication.positionsList);
   const fontLanguage = useAppSelector(state => state.publication.fontLanguage);
+  const highlights = useAppSelector(state => state.annotations.highlights);
+  const notes = useAppSelector(state => state.annotations.notes);
+  const flashLocator = useAppSelector(state => state.annotations.flashLocator);
+  const pendingSelection = useAppSelector(state => state.annotations.pendingSelection);
+
+  // CLAUDE-ADDED: Runs for the whole time this book is open, independent of whether the reading-timer
+  // header button is currently visible or collapsed into the overflow menu -- see useReadingTimer.ts.
+  useReadingTimer();
 
   // Check if font family component is being used
   const { isComponentUsed: isFontFamilyUsed } = useSettingsComponentStatus({
@@ -166,6 +193,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   const letterSpacing = getEffectiveSpacingValue(ThSpacingSettingsKeys.letterSpacing);
   const lineLength = useAppSelector(state => state.settings.lineLength);
   const lineHeight = getEffectiveSpacingValue(ThSpacingSettingsKeys.lineHeight);
+  const marginHorizontal = useAppSelector(state => state.settings.marginHorizontal);
   const paragraphIndent = getEffectiveSpacingValue(ThSpacingSettingsKeys.paragraphIndent);
   const paragraphSpacing = getEffectiveSpacingValue(ThSpacingSettingsKeys.paragraphSpacing);
   const publisherStyles = useAppSelector(state => state.settings.publisherStyles);
@@ -201,6 +229,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
     ligatures,
     lineLength,
     lineHeight,
+    marginHorizontal,
     noRuby,
     paragraphIndent,
     paragraphSpacing,
@@ -220,6 +249,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
 
   const atPublicationStart = useAppSelector(state => state.publication.atPublicationStart);
   const atPublicationEnd = useAppSelector(state => state.publication.atPublicationEnd);
+  const actionsState = useAppSelector(state => profile ? state.actions.keys[profile] : undefined);
 
   const dispatch = useAppDispatch();
   const getFocusedDockableKey = useFocusedDockableKey();
@@ -243,20 +273,78 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
     goForward,
     navLayout,
     currentPositions,
+    currentLocator,
     canGoBackward,
     canGoForward,
     isScrollStart,
     isScrollEnd,
     getCframes,
-    submitPreferences
+    submitPreferences,
+    applyDecorations,
+    registerDecorationObserver,
+    unregisterDecorationObserver
   } = epubNavigator;
 
+  // CLAUDE-ADDED: See useShortImageSpread.ts -- pairs consecutive image-only "insert" resources into one visible spread in two-column mode.
+  const { pair: spreadPair, evaluate: evaluateSpread } = useShortImageSpread({
+    publication,
+    isFXL,
+    isScroll,
+    getCframes,
+    goForward,
+    goBackward,
+    positionsList,
+  });
+
+  // CLAUDE-ADDED: Keeps already-loaded frames' horizontal margin in sync when the user changes the setting -- see useMarginSync.ts.
+  useMarginSync({ getCframes, marginHorizontal });
+
+  // CLAUDE-ADDED: useExactPageCount is called later (it needs navigatorReady, which itself comes from useEpubReaderInit, which consumes `listeners` below) -- listeners.positionChanged needs to call its notifyLocatorChanged on every navigation, so that call is routed through this ref instead of the hook's return value directly, breaking the circular ordering.
+  const notifyExactPageCountRef = useRef<(locator: Locator) => void>(() => {});
+
+  // CLAUDE-ADDED: Same ref-indirection as notifyExactPageCountRef above -- useReadingSpeedSampler has
+  // no actual ordering dependency on navigatorReady, but keeping both positionChanged hookups in the
+  // same shape (and next to each other) keeps this section easy to scan.
+  const notifyReadingSpeedRef = useRef<(locator: Locator) => void>(() => {});
+  const { notifyLocatorChanged: notifyReadingSpeed } = useReadingSpeedSampler();
+  notifyReadingSpeedRef.current = notifyReadingSpeed;
+
+  const readingTimeIsLoaded = useAppSelector(state => state.readingTime.isLoaded);
+  const wordCount = useAppSelector(state => state.readingTime.wordCount);
+  const readingManifestUrl = useAppSelector(state => state.readingTime.manifestUrl);
+
+  // CLAUDE-ADDED: Runs at most once ever per book -- gated off the moment the server-fetched value
+  // (readingTimeIsLoaded) confirms wordCount is genuinely uncached, and turned back off as soon as
+  // useBookWordCount reports a result (see the effect below persisting it, which then makes wordCount
+  // non-null and this condition false on the next render).
+  const bookWordCount = useBookWordCount({
+    publication,
+    enabled: readingTimeIsLoaded && wordCount === null
+  });
+
+  useEffect(() => {
+    if (bookWordCount.wordCount !== null && readingManifestUrl) {
+      dispatch(persistWordCount(readingManifestUrl, bookWordCount.wordCount));
+    }
+  }, [bookWordCount.wordCount, readingManifestUrl, dispatch]);
+
+  // CLAUDE-ADDED: Latest note-hover-preview entries, kept in a ref so `listeners.frameLoaded` (bound
+  // once via `listeners`'s own useMemo -- see there) can hand them to a newly-loaded frame without
+  // needing `notes` in that useMemo's dependency array. Updated by the effect further down that also
+  // broadcasts to already-live frames.
+  const noteHoverEntriesRef = useRef<NoteHoverEntry[]>([]);
+
   const { setLocalData, getLocalData, localData } = usePositionStorage(localDataKey, positionStorage);
+
+  // CLAUDE-ADDED: The real navigator's viewport only ever has one of the pair's two resources loaded (see useShortImageSpread.ts), so navigatorInstance.viewport.positions reports just that one resource's position -- not the pair -- while a paired spread is on screen. Substituting the pair's own leftPosition/rightPosition here is what makes the footer show both, the same way it does for a real two-column text spread. Deliberately not memoized -- like the currentPositions() call it replaces, this needs to read the navigator's live value on every render, not just when spreadPair itself changes.
+  const activeCurrentPositions = spreadPair?.leftPosition !== undefined && spreadPair?.rightPosition !== undefined
+    ? [spreadPair.leftPosition, spreadPair.rightPosition]
+    : currentPositions() || [];
 
   const timeline = useTimeline({
     publication: publication,
     currentLocation: localData,
-    currentPositions: currentPositions() || [],
+    currentPositions: activeCurrentPositions,
     positionsList: positionsList,
     onChange: (timeline) => {
       dispatch(setTimeline(timeline));
@@ -347,6 +435,18 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
       }
   }, [cache, preferences.affordances.scroll, toggleIsImmersive]);
 
+  // CLAUDE-ADDED: Checked before handleTap/handleClick's own page-navigation/immersive-toggle logic --
+  // tapping/clicking an <img> in the reading content should open the fullscreen image viewer instead of
+  // navigating or toggling the header/footer. See getClickedImage.ts for why this parses outerHTML
+  // rather than querying the iframe DOM directly.
+  const handleImageClick = useCallback((_event: FrameClickEvent): boolean => {
+    const image = getClickedImage(_event, getCframes);
+    if (!image) return false;
+
+    dispatch(openImageOverlay(image));
+    return true;
+  }, [dispatch, getCframes]);
+
   // We could use canGoBackward() and canGoForward() directly on arrows
   // but maybe we will need to sync the state for other features in the future
   const updatePublicationNavigationState = useCallback(() => {
@@ -382,6 +482,20 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
 
   const { zoomIn, zoomOut } = useZoomCallbacks(epubNavigator);
 
+  // CLAUDE-ADDED: Escape exits back to the backLink href, but only when no transient overlay
+  // (Toc, Settings, JumpToPosition...) is open -- that Escape press just closes it instead
+  const backLinkHref = preferences.theming.header?.backLink?.href;
+  const exitReader = useCallback(() => {
+    if (!backLinkHref) return;
+
+    const hasOpenOverlay = Object.values(actionsState ?? {}).some(
+      (action) => action?.isOpen && (!action.docking || action.docking === ThDockingKeys.transient)
+    );
+    if (hasOpenOverlay) return;
+
+    window.location.href = backLinkHref;
+  }, [backLinkHref, actionsState]);
+
   const goProgression = useCallback((shiftKey?: boolean) => {
     if (!cache.current.settings?.scroll) {
       const cb = () => {
@@ -394,21 +508,54 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
     }
   }, [dispatch, activateImmersiveOnAction, cache, goBackward, goForward]);
 
+  // CLAUDE-ADDED: Memoized once (unlike the previous inline `debounce(...)` call, which built a fresh
+  // debounced function on every positionChanged event -- since each one got its own independent timer,
+  // none of them actually coalesced rapid position changes, they just each fired ~250ms later
+  // unthrottled. Reusing one stable instance here means only the last position in a burst gets saved.
+  const debouncedSavePosition = useMemo(
+    () => debounce((locator: Locator) => {
+      setLocalData(locator);
+      updatePublicationNavigationState();
+    }, 250),
+    [setLocalData, updatePublicationNavigationState]
+  );
+
+  useEffect(() => () => debouncedSavePosition.clear(), [debouncedSavePosition]);
+
   const listeners: EpubNavigatorListeners = useMemo(() => ({
-    frameLoaded: async function (_wnd: Window): Promise<void> {},
-    positionChanged: async function (locator: Locator): Promise<void> {
-      const debouncedHandleProgression = debounce(
-        async () => {
-          setLocalData(locator);
-          updatePublicationNavigationState();
-        }, 250);
-      debouncedHandleProgression();
+    // CLAUDE-ADDED: Applies the current horizontal margin to every freshly-loaded frame -- see useMarginSync.ts (keeps already-loaded frames in sync when the setting changes).
+    frameLoaded: async function (wnd: Window): Promise<void> {
+      applyMargin(wnd, cache.current.settings.marginHorizontal);
+      // CLAUDE-ADDED: A freshly-loaded frame's noteHoverScript has no data yet -- the notes-changed
+      // effect below only broadcasts to frames that are *already* live at the time notes change, so a
+      // new frame needs its own, one-time push of whatever the current entries are.
+      wnd.postMessage({ type: NOTE_HOVER_MESSAGE_TYPE, notes: noteHoverEntriesRef.current }, "*");
     },
+    positionChanged: async function (locator: Locator): Promise<void> {
+      debouncedSavePosition(locator);
+
+      // CLAUDE-ADDED: Not debounced, unlike the above -- the pairing/auto-advance logic in useShortImageSpread needs to react to every single position change in sequence to correctly detect "user paged past an already-shown pair".
+      evaluateSpread(locator);
+
+      // CLAUDE-ADDED: See notifyExactPageCountRef's declaration above for why this is a ref call.
+      notifyExactPageCountRef.current(locator);
+      notifyReadingSpeedRef.current(locator);
+    },
+    // CLAUDE-ADDED: tap/click only ever fire when the iframe's selection is collapsed at pointerup (see
+    // Peripherals.onPointUp's own early returns) -- i.e. never on the same pointerup that just produced
+    // a real text selection -- so clearing pendingSelection here is exactly "closed the popover because
+    // the user deselected or tapped elsewhere", never a race with opening a fresh one. This is also the
+    // only signal available for that: the popover's own "click outside" listener is on the parent
+    // document, which never sees pointerdown events that happen inside the cross-origin reading iframe.
     tap: function (_e: FrameClickEvent): boolean {
+      dispatch(setPendingSelection(null));
+      if (handleImageClick(_e)) return true;
       handleTap(_e);
       return true;
     },
     click: function (_e: FrameClickEvent): boolean {
+      dispatch(setPendingSelection(null));
+      if (handleImageClick(_e)) return true;
       handleClick(_e);
       return true;
     },
@@ -457,7 +604,43 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
       }
       return false;
     },
-    textSelected: function (_selection: BasicTextSelection): void {},
+    // CLAUDE-ADDED: Builds a Locator anchored on the selection's text (plus before/after context from
+    // the patch-package patch on @readium/navigator-html-injectables -- see Peripherals.ts) rather than
+    // the tracked reading position, since the two can diverge on a long scrolled/paginated resource.
+    // Readium's own decoration renderer resolves this via text search (rangeFromLocator), so href +
+    // text is all a highlight/note/selection-bookmark Locator actually needs.
+    textSelected: function (selection: BasicTextSelection): void {
+      const base = currentLocator();
+      if (!base || !selection.text) return;
+
+      const locator = new Locator({
+        href: base.href,
+        type: base.type,
+        title: base.title,
+        locations: base.locations,
+        text: new LocatorText({
+          highlight: selection.text,
+          before: selection.before,
+          after: selection.after
+        })
+      });
+
+      // CLAUDE-ADDED: selection.x/y are relative to the reading iframe's own content window (they come
+      // from a Range inside that document), not the parent page -- translate to page-absolute
+      // coordinates via the iframe element's own bounding rect so SelectionPopover needs no cross-origin
+      // DOM access. Picks the first iframe in the container; in two-column/paired-spread layouts with
+      // more than one mounted iframe this can target the wrong one -- acceptable v1 simplification.
+      const iframeRect = container.current?.querySelector("iframe")?.getBoundingClientRect();
+
+      dispatch(setPendingSelection({
+        locator: locator.serialize(),
+        text: selection.text,
+        x: (iframeRect?.left ?? 0) + selection.x,
+        y: (iframeRect?.top ?? 0) + selection.y,
+        width: selection.width,
+        height: selection.height
+      }));
+    },
     contentProtection: function (_type: string, _data: SuspiciousActivityEvent): void {},
     contextMenu: function (_data: ContextMenuEvent): void {},
     peripheral: function (data: KeyboardPeripheralEventData): void {
@@ -472,6 +655,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
         case NavPeripheralType.moveEnd:          moveTo("end");        break;
         case NavPeripheralType.zoomIn:           zoomIn();             break;
         case NavPeripheralType.zoomOut:          zoomOut();            break;
+        case NavPeripheralType.exitReader:       exitReader();         break;
         default: {
           const actionKey = fromActionPeripheralType(data.type);
 
@@ -496,7 +680,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
         }
       }
     },
-  }), [navLayout, setLocalData, dispatch, handleTap, handleClick, cache, preferences.affordances.scroll, isScrollStart, isScrollEnd, updatePublicationNavigationState, moveTo, goProgression, zoomIn, zoomOut, profile, handleFullscreen, getFocusedDockableKey]);
+  }), [navLayout, debouncedSavePosition, dispatch, handleTap, handleClick, handleImageClick, cache, preferences.affordances.scroll, isScrollStart, isScrollEnd, moveTo, goProgression, zoomIn, zoomOut, exitReader, profile, handleFullscreen, getFocusedDockableKey, evaluateSpread, currentLocator]);
   
   const initialPosition = useMemo(() => getLocalData(), [getLocalData]);
 
@@ -528,6 +712,210 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
       dispatch(setLoading(false));
     }
   });
+
+  // CLAUDE-ADDED: Renders saved highlights/notes as decorations whenever the underlying Redux lists
+  // change (annotationsReducer, hydrated on book open by loadAnnotations) or the navigator (re)mounts --
+  // applyDecorations diffs against the previous list for that group internally, so this is safe to call
+  // on every render of the effect without manually tracking what's already applied.
+  useEffect(() => {
+    if (!navigatorReady) return;
+
+    const highlightDecorations = highlights
+      .map(highlightToDecoration)
+      .filter((decoration): decoration is Decoration => decoration !== null);
+
+    applyDecorations(highlightDecorations, "highlights");
+  }, [navigatorReady, highlights, applyDecorations]);
+
+  useEffect(() => {
+    if (!navigatorReady) return;
+
+    const noteDecorations = notes
+      .map(noteToDecoration)
+      .filter((decoration): decoration is Decoration => decoration !== null);
+
+    applyDecorations(noteDecorations, "notes");
+  }, [navigatorReady, notes, applyDecorations]);
+
+  // CLAUDE-ADDED: Posts the current notes' quote/preview text directly to every currently-live reading
+  // iframe for noteHoverScript.ts (injected into every resource) to pick up -- see that file's own
+  // comment for why postMessage rather than localStorage (some publisher-prepared EPUBs, Kobo-formatted
+  // ones in particular, embed their own script that replaces window.localStorage with a fake stub,
+  // silently breaking any feature that depends on it). noteHoverEntriesRef mirrors the computed entries
+  // so frameLoaded below can hand them to a *newly*-loaded frame without needing `notes` in the
+  // `listeners` useMemo's own dependency array.
+  useEffect(() => {
+    const NOTE_PREVIEW_LENGTH = 120;
+    const entries: NoteHoverEntry[] = notes
+      .map(note => {
+        const quote = Locator.deserialize(note.locator)?.text?.highlight;
+        if (!quote) return null;
+        const preview = note.text.length > NOTE_PREVIEW_LENGTH
+          ? `${ note.text.slice(0, NOTE_PREVIEW_LENGTH) }…`
+          : note.text;
+        const timestamp = formatTimestamp(note.updatedAt ?? note.createdAt);
+        return { id: note.id, quote, preview, timestamp };
+      })
+      .filter((entry): entry is NoteHoverEntry => entry !== null);
+
+    noteHoverEntriesRef.current = entries;
+
+    getCframes()?.forEach(frame => {
+      frame?.window?.postMessage({ type: NOTE_HOVER_MESSAGE_TYPE, notes: entries }, "*");
+    });
+  }, [notes, getCframes]);
+
+  // CLAUDE-ADDED: Creating a highlight (or saving/cancelling a note from the selection popover) leaves
+  // the reading iframe's native window.getSelection() non-collapsed -- it's the same drag-selection that
+  // triggered the popover in the first place, and nothing ever explicitly clears it once the popover
+  // closes. Peripherals.onPointUp's own `!selection?.isCollapsed` guard then silently swallows the very
+  // next tap/click anywhere in the content (no "tap"/"click" comms message is sent at all, so
+  // setPendingSelection(null) never dispatches from there), even though that same click *does* collapse
+  // the stale selection as a side effect -- so a second click was needed to actually register. Clearing
+  // the selection ourselves the moment the popover closes (pendingSelection: something -> null) means the
+  // very next click is a normal, first-time close.
+  const pendingSelectionRef = useRef(pendingSelection);
+  useEffect(() => {
+    if (pendingSelectionRef.current && !pendingSelection) {
+      getCframes()?.forEach(frame => frame?.window?.getSelection()?.removeAllRanges());
+    }
+    pendingSelectionRef.current = pendingSelection;
+  }, [pendingSelection, getCframes]);
+
+  // CLAUDE-ADDED: Briefly re-decorates a jump target (set by StatefulAnnotationsContainer right after
+  // navigating there) in a dedicated "flash" group so it's easy to spot after a jump from the
+  // Annotations panel -- cleared via the same applyDecorations([], group) call the decoration API
+  // already uses to remove a group, then the Redux flag is cleared so it doesn't refire on rerender.
+  useEffect(() => {
+    if (!navigatorReady || !flashLocator) return;
+
+    const locator = Locator.deserialize(flashLocator);
+    if (!locator) {
+      dispatch(setFlashLocator(null));
+      return;
+    }
+
+    applyDecorations([{
+      id: "flash",
+      locator,
+      style: { tint: "#FF6B35", layout: "bounds", width: "wrap" } as Decoration["style"]
+    }], "flash");
+
+    const timeout = window.setTimeout(() => {
+      applyDecorations([], "flash");
+      dispatch(setFlashLocator(null));
+    }, 1300);
+
+    return () => window.clearTimeout(timeout);
+  }, [navigatorReady, flashLocator, applyDecorations, dispatch]);
+
+  // CLAUDE-ADDED: Tapping an existing highlight opens the same SelectionPopover used for a fresh
+  // selection, just with `existing` set so it shows edit-color/delete instead of the initial
+  // color/bookmark/note choices -- see SelectionPopover.tsx. Tapping an existing *note* instead opens
+  // NoteOverlay, which reads it before offering a begin-editing button (see annotationsReducer.ts's
+  // noteOverlay state) -- unlike a highlight, a note has content worth reading before deciding to edit it.
+  useEffect(() => {
+    if (!navigatorReady) return;
+
+    const highlightObserver = {
+      onDecorationActivated: (event: DecorationActivationEvent): boolean => {
+        // CLAUDE-ADDED: Despite the type doc's "navigator container coordinates" claim, the actual
+        // bundled implementation (inside @readium/navigator's dist) reports event.rect as the
+        // decoration's Range.getBoundingClientRect() *within the reading iframe's own viewport*,
+        // multiplied by devicePixelRatio -- the same scaling Peripherals applies to tap/click x/y.
+        // Needs the same iframe-rect + DPR conversion as the text-selection path in `textSelected`
+        // below, not the outer container's rect (which double-counts/omits the iframe's own offset
+        // and left the popover positioned nowhere near the actual highlighted text).
+        const iframeRect = container.current?.querySelector("iframe")?.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        const rect = event.rect;
+        dispatch(setPendingSelection({
+          locator: event.decoration.locator.serialize(),
+          text: event.decoration.locator.text?.highlight ?? "",
+          x: (iframeRect?.left ?? 0) + (rect?.left ?? 0) / dpr,
+          y: (iframeRect?.top ?? 0) + (rect?.top ?? 0) / dpr,
+          width: (rect?.width ?? 0) / dpr,
+          height: (rect?.height ?? 0) / dpr,
+          existing: { type: "highlight", id: event.decoration.id }
+        }));
+        // CLAUDE-ADDED: Returning true here is documented as "suppresses normal tap/click navigation",
+        // implemented via a `_decorationActivationConsumed` flag (inside @readium/navigator's bundled
+        // dist) that's meant to swallow the one tap/click message accompanying this same activation.
+        // But Peripherals sends that tap/click *before* Decorator sends decoration_activated for the
+        // same pointerup (Peripherals mounts before the Decorator module, so its listener attaches --
+        // and therefore fires -- first), so the flag actually arms too late to catch its intended
+        // target and instead swallows the *next* unrelated click/tap, whenever that happens to be --
+        // which is what made closing this popover by clicking elsewhere require two clicks (the first
+        // silently consumed the stale flag, only the second one actually reached tap/click). Returning
+        // false avoids arming it at all; the accompanying tap/click's own side effects (chrome
+        // toggle/page-turn) already run independently of this return value, so nothing is lost.
+        return false;
+      }
+    };
+
+    const noteObserver = {
+      onDecorationActivated: (event: DecorationActivationEvent): boolean => {
+        dispatch(openNoteOverlay(event.decoration.id));
+        return false;
+      }
+    };
+
+    registerDecorationObserver("highlights", highlightObserver);
+    registerDecorationObserver("notes", noteObserver);
+
+    return () => {
+      unregisterDecorationObserver(highlightObserver);
+      unregisterDecorationObserver(noteObserver);
+    };
+  }, [navigatorReady, registerDecorationObserver, unregisterDecorationObserver, dispatch]);
+
+  // CLAUDE-ADDED: Test/spike for an "exact" page-turn count -- see useExactPageCount.ts. Signature string covers every setting that can change how many columns of content fit per screen, so the full-book measurement pass only reruns when one of them actually changes, not on every render.
+  const exactPageCountLayoutSignature = useMemo(() => JSON.stringify({
+    textAlign, columnCount, fontFamily, fontSize, fontWeight, hyphens, letterSpacing, ligatures,
+    lineLength, lineHeight, noRuby, paragraphIndent, paragraphSpacing, publisherStyles,
+    textNormalization, wordSpacing, theme, colorScheme
+  }), [
+    textAlign, columnCount, fontFamily, fontSize, fontWeight, hyphens, letterSpacing, ligatures,
+    lineLength, lineHeight, noRuby, paragraphIndent, paragraphSpacing, publisherStyles,
+    textNormalization, wordSpacing, theme, colorScheme
+  ]);
+
+  const exactPageCount = useExactPageCount({
+    publication,
+    isFXL,
+    isScroll,
+    navigatorReady,
+    enabled: true,
+    getCframes,
+    currentLocator,
+    layoutSignature: exactPageCountLayoutSignature
+  });
+
+  notifyExactPageCountRef.current = exactPageCount.notifyLocatorChanged;
+
+  useEffect(() => {
+    if (exactPageCount.elapsedMs !== null) {
+      console.info(
+        `[ExactPageCount] ${ exactPageCount.currentPageRange?.join("-") }/${ exactPageCount.totalPages } pages ` +
+        `across ${ exactPageCount.resourceCount } resources, computed in ${ Math.round(exactPageCount.elapsedMs) }ms`
+      );
+    }
+    if (exactPageCount.error) {
+      console.warn(`[ExactPageCount] failed: ${ exactPageCount.error }`);
+    }
+  }, [exactPageCount.elapsedMs, exactPageCount.error, exactPageCount.currentPageRange, exactPageCount.totalPages, exactPageCount.resourceCount]);
+
+  // CLAUDE-ADDED: Dispatched independently of setTimeline/unstableTimeline -- useExactPageCount is called
+  // after useTimeline in this component (it needs navigatorReady), so it can't feed into useTimeline's own
+  // props without an awkward hook reorder. The footer and "Go to position" dialog read this directly via
+  // state.publication.exactPageCount.
+  useEffect(() => {
+    dispatch(setExactPageCount({
+      totalPages: exactPageCount.totalPages,
+      currentPageRange: exactPageCount.currentPageRange,
+      resourcePages: exactPageCount.resourcePages
+    }));
+  }, [dispatch, exactPageCount.totalPages, exactPageCount.currentPageRange, exactPageCount.resourcePages]);
 
   const applyConstraint = useCallback(async (value: number) => {
     await submitPreferences({
@@ -631,9 +1019,11 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
 
             <article className={ readerStyles.wrapper } aria-label={ t("reader.app.publicationWrapper") }>
               <div id="thorium-web-container" className={ readerStyles.iframeContainer } ref={ container }></div>
+              { /* CLAUDE-ADDED: Rendered as a sibling, not a child, of #thorium-web-container -- that div's contents are managed imperatively by @readium/navigator, so React must never reconcile children into it directly. */ }
+              <PairedSpreadOverlay pair={ spreadPair } />
             </article>
 
-          { !isScroll 
+          { !isScroll
             ? <nav className={ classNames(arrowStyles.container, arrowStyles.rightContainer) }>
                 <StatefulReaderArrowButton 
                   direction="right" 
@@ -665,6 +1055,9 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
         </div>
       </StatefulDockingWrapper>
     </main>
+    <SelectionPopover />
+    <NoteOverlay />
+    <StatefulImageOverlay />
   </NavigatorProvider>
   </>
 )};

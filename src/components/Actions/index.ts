@@ -5,6 +5,7 @@ export * from "./models";
 
 export * from "./Fullscreen";
 export * from "./JumpToPosition";
+export * from "./ReadingTimer";
 export * from "./Settings";
 export * from "./Toc";
 export * from "./Triggers";

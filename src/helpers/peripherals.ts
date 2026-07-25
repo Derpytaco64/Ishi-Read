@@ -9,6 +9,7 @@ export const NavPeripheralType = {
   moveEnd:          "th_nav_move_end",
   zoomIn:           "th_nav_zoom_in",
   zoomOut:          "th_nav_zoom_out",
+  exitReader:       "th_nav_exit_reader",
 } as const;
 
 // Ctrl/Cmd + = or Numpad+, covering Blink (187) and Gecko (61) key codes

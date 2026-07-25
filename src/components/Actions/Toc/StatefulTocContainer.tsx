@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 import { Link } from "@readium/shared";
 import { ThActionsKeys, ThDockingKeys, ThSheetTypes } from "@/preferences/models";
@@ -18,7 +18,7 @@ import { useI18n } from "@/i18n/useI18n";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { setActionOpen } from "@/lib/actionsReducer";
 import { setTocEntry } from "@/lib/publicationReducer";
-import { findTocItemById } from "@/helpers/buildTocTree";
+import { findTocItemById, applyExactPositions } from "@/helpers/buildTocTree";
 import { setImmersive, setUserNavigated } from "@/lib/readerReducer";
 
 import { isActiveElement } from "@/core/Helpers/focusUtilities";
@@ -32,7 +32,16 @@ export const StatefulTocContainer = ({ triggerRef }: StatefulActionContainerProp
   const unstableTimeline = useAppSelector(state => state.publication.unstableTimeline);
   const tocEntry = unstableTimeline?.toc?.currentEntry ?? undefined;
   const tocEntryId = tocEntry?.id;
-  const tocTree = unstableTimeline?.toc?.tree;
+  const rawTocTree = unstableTimeline?.toc?.tree;
+
+  // CLAUDE-ADDED: Remaps displayed page numbers from the coarse positionsList-derived ones to the
+  // exact page-count system, so the TOC stays consistent with the footer/"Go to position" dialog. Falls
+  // back to the raw tree (its original positionsList-derived positions) when useExactPageCount has no
+  // data yet (FXL/scroll/still scanning).
+  const exactResourcePages = useAppSelector(state => state.publication.exactPageCount?.resourcePages);
+  const tocTree = useMemo(() => (
+    rawTocTree && exactResourcePages ? applyExactPositions(rawTocTree, exactResourcePages) : rawTocTree
+  ), [rawTocTree, exactResourcePages]);
 
   const { goLink, getScriptMode } = useNavigator().unified;
   // vertical-cjk has RTL reading progression but lays out as LTR in the TOC

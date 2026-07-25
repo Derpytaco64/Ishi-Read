@@ -75,6 +75,7 @@ export interface SettingsReducerState {
   ligatures: boolean | null;
   lineHeight: ThLineHeightOptions | null;
   lineLength: LineLengthStateObject | null;
+  marginHorizontal: number;
   noRuby: boolean | null;
   paragraphIndent: number | null;
   paragraphSpacing: number | null;
@@ -96,6 +97,7 @@ const initialState: SettingsReducerState = {
   ligatures: null,
   lineHeight: ThLineHeightOptions.publisher,
   lineLength: null,
+  marginHorizontal: 20,
   noRuby: null,
   paragraphIndent: null,
   paragraphSpacing: null,
@@ -240,6 +242,9 @@ export const settingsSlice = createSlice({
           break;
       }
     },
+    setMarginHorizontal: (state, action) => {
+      state.marginHorizontal = action.payload
+    },
     setParagraphIndent: (state, action) => {
       handleSpacingSetting(state, action, ThSpacingSettingsKeys.paragraphIndent);
     },
@@ -304,6 +309,7 @@ export const {
   setLetterSpacing,
   setLineHeight,
   setLineLength,
+  setMarginHorizontal,
   setParagraphIndent,
   setParagraphSpacing,
   setPublisherStyles,

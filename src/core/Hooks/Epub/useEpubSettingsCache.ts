@@ -14,6 +14,7 @@ export interface ReadiumCSSSettings {
   ligatures: boolean | null;
   lineLength: LineLengthStateObject | null;
   lineHeight: ThLineHeightOptions | null;
+  marginHorizontal: number;
   noRuby: boolean | null;
   paragraphIndent: number | null;
   paragraphSpacing: number | null;
@@ -40,6 +41,7 @@ export const useEpubSettingsCache = (
   ligatures: boolean | null,
   lineLength: LineLengthStateObject | null,
   lineHeight: ThLineHeightOptions | null,
+  marginHorizontal: number,
   noRuby: boolean | null,
   paragraphIndent: number | null,
   paragraphSpacing: number | null,
@@ -60,6 +62,7 @@ export const useEpubSettingsCache = (
       ligatures,
       lineHeight,
       lineLength,
+      marginHorizontal,
       noRuby,
       paragraphIndent,
       paragraphSpacing,
@@ -83,6 +86,7 @@ export const useEpubSettingsCache = (
       ligatures,
       lineHeight,
       lineLength,
+      marginHorizontal,
       noRuby,
       paragraphIndent,
       paragraphSpacing,
@@ -103,6 +107,7 @@ export const useEpubSettingsCache = (
     ligatures,
     lineHeight,
     lineLength,
+    marginHorizontal,
     noRuby,
     paragraphIndent,
     paragraphSpacing,

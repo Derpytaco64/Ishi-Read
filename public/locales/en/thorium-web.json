@@ -65,10 +65,78 @@
         "wrapper": "Navigate through the publication"
       }
     },
+    "annotations": {
+      "title": "Annotations",
+      "tabs": {
+        "all": "All",
+        "highlights": "Highlights",
+        "bookmarks": "Bookmarks",
+        "notes": "Notes"
+      },
+      "addNote": "Add note",
+      "bookmarkPage": "Bookmark this page",
+      "bookmarkSelection": "Bookmark selection",
+      "colors": {
+        "blue": "Blue",
+        "green": "Green",
+        "pink": "Pink",
+        "purple": "Purple",
+        "yellow": "Yellow"
+      },
+      "delete": "Delete",
+      "emptyState": "Highlights, bookmarks, and notes added while reading will show up here.",
+      "lastEdited": "Last edited {{ date }}",
+      "notePlaceholder": "Add a note…",
+      "returnToPosition": "Return to previous position",
+      "save": "Save",
+      "sortOrder": {
+        "beginningToEnd": "Beginning to end",
+        "endToBeginning": "End to beginning"
+      },
+      "dictionary": {
+        "lookUp": "Look up",
+        "title": "Definition",
+        "loading": "Looking up…",
+        "error": "Couldn't get a definition. Try again.",
+        "notFound": "No dictionary entry found for this selection.",
+        "attribution": "Source: Wordset Dictionary (CC BY-SA 4.0)"
+      }
+    },
     "fullscreen": {
       "tooltip": "Fullscreen",
       "trigger": "Toggle fullscreen mode",
       "close": "Exit fullscreen mode"
+    },
+    "readingTimer": {
+      "tooltip": "Reading time: {{ time }}",
+      "title": "Reading Timer",
+      "reset": "Reset",
+      "confirmTitle": "Save reading time?",
+      "confirmText": "Save this session as a Completed Read Time before resetting?",
+      "confirmDiscard": "Reset without saving",
+      "confirmSave": "Save & reset",
+      "delete": "Delete",
+      "deleteConfirmTitle": "Delete this Completed Read Time?",
+      "deleteConfirmText": "This can't be undone.",
+      "completedEmptyState": "No completed reading sessions yet.",
+      "tabs": {
+        "timer": "Timer",
+        "completed": "Completed Reads"
+      },
+      "speed": {
+        "currentPace": "Current pace",
+        "wpmUnit": "wpm",
+        "timeLeft": "Time left in book",
+        "emptyState": "Keep reading to see your pace."
+      },
+      "dailyHistory": {
+        "title": "Reading history"
+      },
+      "units": {
+        "seconds": "s",
+        "minutes": "m",
+        "hours": "h"
+      }
     },
     "toc": {
       "entries": "Entries in the table"

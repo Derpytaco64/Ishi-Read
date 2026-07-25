@@ -16,6 +16,7 @@ import { useI18n } from "@/i18n/useI18n";
 
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import { setColumnCount } from "@/lib/settingsReducer";
+import { bumpReaderReloadKey } from "@/lib/readerReducer";
 import { useIsScroll } from "@/hooks";
 
 import debounce from "debounce";
@@ -84,6 +85,14 @@ export const StatefulColumns = () => {
     await submitPreferences({ [prefKey]: colCount });
     updateEffectiveValue(value, getSetting(prefKey));
     dispatch(setColumnCount(value));
+
+    // CLAUDE-ADDED: Selecting 2-column mode forces a full reader reload -- per-resource
+    // one-time setup (landscape-image spanning, paired-spread detection) is only ever computed
+    // on navigation, so switching into 2 columns mid-resource leaves it stale until the next
+    // real page turn. See StatefulReaderWrapper.tsx's use of readerReloadKey as a remount key.
+    if (value === "2") {
+      dispatch(bumpReaderReloadKey());
+    }
   }, [prefKey, submitPreferences, getSetting, updateEffectiveValue, dispatch]);
 
   const debouncedUpdate = useCallback(() => {

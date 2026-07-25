@@ -106,7 +106,8 @@
     "react-modal-sheet": "5.2.1",
     "react-redux": "^9.2.0",
     "react-resizable-panels": "^3.0.6",
-    "react-stately": "^3.47.0"
+    "react-stately": "^3.47.0",
+    "wordset-dictionary": "^1.0.2"
   },
   "devDependencies": {
     "@svgr/webpack": "^8.1.0",

@@ -1,9 +1,13 @@
 import { ThPlugin } from "../PluginRegistry";
 import { ThActionsKeys, ThSettingsKeys } from "@/preferences/models";
 
+import { StatefulAnnotationsTrigger } from "../../Actions/Annotations/StatefulAnnotationsTrigger";
+import { StatefulAnnotationsContainer } from "../../Actions/Annotations/StatefulAnnotationsContainer";
 import { StatefulFullscreenTrigger } from "../../Actions/Fullscreen/StatefulFullscreenTrigger";
 import { StatefulJumpToPositionTrigger } from "../../Actions/JumpToPosition/StatefulJumpToPositionTrigger";
 import { StatefulJumpToPositionContainer } from "../../Actions/JumpToPosition/StatefulJumpToPositionContainer";
+import { StatefulReadingTimerTrigger } from "../../Actions/ReadingTimer/StatefulReadingTimerTrigger";
+import { StatefulReadingTimerContainer } from "../../Actions/ReadingTimer/StatefulReadingTimerContainer";
 import { StatefulSettingsTrigger } from "../../Actions/Settings/StatefulSettingsTrigger";
 import { StatefulVisualSettingsContainer } from "../../Actions/Settings/StatefulVisualSettingsContainer";
 import { StatefulTocTrigger } from "../../Actions/Toc/StatefulTocTrigger";
@@ -16,6 +20,7 @@ import { StatefulHyphens } from "../../Settings/Text/StatefulHyphens";
 import { StatefulLayout } from "../../Epub/Settings/StatefulLayout";
 import { StatefulLetterSpacing } from "../../Settings/Spacing/StatefulLetterSpacing";
 import { StatefulLineHeight } from "../../Settings/Spacing/StatefulLineHeight";
+import { StatefulMarginHorizontal } from "../../Epub/Settings/StatefulMarginHorizontal";
 import { StatefulParagraphIndent } from "../../Settings/Spacing/StatefulParagraphIndent";
 import { StatefulParagraphSpacing } from "../../Settings/Spacing/StatefulParagraphSpacing";
 import { StatefulPublisherStyles } from "../../Settings/StatefulPublisherStyles";
@@ -38,12 +43,20 @@ export const createDefaultPlugin = (): ThPlugin => {
     version: "1.5.5",
     components: {
       actions: {
+        [ThActionsKeys.annotations]: {
+          Trigger: StatefulAnnotationsTrigger,
+          Target: StatefulAnnotationsContainer
+        },
         [ThActionsKeys.fullscreen]: {
           Trigger: StatefulFullscreenTrigger
         },
         [ThActionsKeys.jumpToPosition]: {
           Trigger: StatefulJumpToPositionTrigger,
           Target: StatefulJumpToPositionContainer
+        },
+        [ThActionsKeys.readingTimer]: {
+          Trigger: StatefulReadingTimerTrigger,
+          Target: StatefulReadingTimerContainer
         },
         [ThActionsKeys.settings]: {
           Trigger: StatefulSettingsTrigger,
@@ -80,6 +93,9 @@ export const createDefaultPlugin = (): ThPlugin => {
         [ThSettingsKeys.lineHeight]: {
           Comp: StatefulLineHeight,
           type: "spacing"
+        },
+        [ThSettingsKeys.marginHorizontal]: {
+          Comp: StatefulMarginHorizontal
         },
         [ThSettingsKeys.paragraphIndent]: {
           Comp: StatefulParagraphIndent,

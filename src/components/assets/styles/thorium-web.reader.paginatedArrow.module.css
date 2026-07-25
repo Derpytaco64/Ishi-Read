@@ -1,6 +1,9 @@
+/* CLAUDE-ADDED: Above PairedSpreadOverlay (z-index:5, see thorium-web.pairedSpreadOverlay.module.css)
+   so the arrows -- and their hover-to-reveal -- still work over a paired "double image" spread the same
+   as over normal content, instead of being covered by the overlay's own edge-turn zones. */
 .container {
   position: absolute;
-  z-index: 2;
+  z-index: 6;
 }
 
 .leftContainer {

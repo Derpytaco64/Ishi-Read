@@ -10,7 +10,7 @@ import { ThPluginRegistry } from "../Plugins/PluginRegistry";
 import { ThPluginProvider } from "../Plugins/PluginProvider";
 import { NavigatorProvider } from "@/core/Navigator";
 
-import { Publication } from "@readium/shared";
+import { Locator, Publication } from "@readium/shared";
 import { ContextMenuEvent, SuspiciousActivityEvent } from "@readium/navigator-html-injectables";
 import { fromActionPeripheralType, fromDockingPeripheralType } from "@/helpers/peripherals";
 import { AudioNavigatorListeners, KeyboardPeripheralEventData } from "@readium/navigator";
@@ -204,6 +204,16 @@ const StatefulPlayerInner = ({ publication, localDataKey, positionStorage, cover
     }
   }, [cache, preferences.affordances.next, isFragmentAffordance, pause]);
 
+  // CLAUDE-ADDED: positionChanged previously called setLocalData on every timeupdate event with no
+  // debounce -- fine for a synchronous localStorage write, but expensive once it's a network call
+  // (see Epub/StatefulReader.tsx for the same fix).
+  const debouncedSavePosition = useMemo(
+    () => debounce((locator: Locator) => setLocalData(locator), 250),
+    [setLocalData]
+  );
+
+  useEffect(() => () => debouncedSavePosition.clear(), [debouncedSavePosition]);
+
   const listeners: AudioNavigatorListeners = useMemo(() => ({
     timelineItemChanged: (item: TimelineItem | undefined) => {
       if (!item) {
@@ -227,7 +237,7 @@ const StatefulPlayerInner = ({ publication, localDataKey, positionStorage, cover
       handleContinuousPlay(isTransitionToNext);
     },
     positionChanged: (locator) => {
-      setLocalData(locator);
+      debouncedSavePosition(locator);
 
       if (canGoBackward()) {
         dispatch(setPublicationStart(false));
@@ -306,7 +316,7 @@ const StatefulPlayerInner = ({ publication, localDataKey, positionStorage, cover
       }
     },
     contextMenu: (_data: ContextMenuEvent) => {}
-  }), [setLocalData, canGoBackward, canGoForward, isPlaying, dispatch, cache, submitPreferences, publication, handleTimelineNavigation, handleSleepTimerEndOfFragment, handleContinuousPlay, profile, getFocusedDockableKey]);
+  }), [debouncedSavePosition, canGoBackward, canGoForward, isPlaying, dispatch, cache, submitPreferences, publication, handleTimelineNavigation, handleSleepTimerEndOfFragment, handleContinuousPlay, profile, getFocusedDockableKey]);
 
   const initialPosition = useMemo(() => getLocalData(), [getLocalData]);
 

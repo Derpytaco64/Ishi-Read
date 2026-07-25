@@ -79,12 +79,12 @@ export const StatefulZoom = () => {
 
   return (
     <>
-    { zoomRangeConfig.variant === ThSettingsRangeVariant.numberField 
+    { zoomRangeConfig.variant === ThSettingsRangeVariant.numberField
       ? <StatefulNumberField
         standalone={ true }
-        defaultValue={ 1 } 
-        value={ derivedState } 
-        onChange={ async(value) => await updatePreference(value) } 
+        defaultValue={ 1 }
+        value={ derivedState }
+        onChange={ async(value) => await updatePreference(value) }
         label={ isFXL ? t("reader.preferences.zoom") : t("reader.preferences.fontSize") }
         placeholder={ placeholderText }
         range={ zoomRangeConfig.range }
@@ -95,23 +95,23 @@ export const StatefulZoom = () => {
           incrementIcon: isFXL ? ZoomIn : Increase,
           incrementLabel: t("common.actions.increase")
         }}
-        formatOptions={{ style: "percent" }} 
+        formatOptions={{ style: "percent" }}
         isWheelDisabled={ true }
         isVirtualKeyboardDisabled={ true }
       />
       : <StatefulSlider
         standalone={ true }
         displayTicks={ zoomRangeConfig.variant === ThSettingsRangeVariant.incrementedSlider }
-        defaultValue={ 1 } 
-        value={ derivedState } 
-        onChange={ async(value) => await updatePreference(value as number) } 
+        defaultValue={ 1 }
+        value={ derivedState }
+        onChange={ async(value) => await updatePreference(value as number) }
         label={ isFXL ? t("reader.preferences.zoom") : t("reader.preferences.fontSize") }
         placeholder={ placeholderText }
         range={ zoomRangeConfig.range }
         step={ zoomRangeConfig.step }
-        formatOptions={{ style: "percent" }} 
+        formatOptions={{ style: "percent" }}
       />
-    } 
+    }
     </>
   );
 };

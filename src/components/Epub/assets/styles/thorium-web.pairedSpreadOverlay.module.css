@@ -1,0 +1,27 @@
+/* CLAUDE-ADDED: Sits over #thorium-web-container (see .wrapper's position:relative in thorium-web.reader.app.module.css) showing two paired "insert" images side by side. backgroundColor/columnGap are set inline per-render from the live iframe's computed style (see useShortImageSpread.ts), not here, so the overlay always matches whatever reading theme is currently active. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  /* CLAUDE-ADDED: Mirrors readium-css's own img rule (object-fit:contain) so a paired image reads the same as it would rendered alone. */
+  object-fit: contain;
+}
+
+/* CLAUDE-ADDED: Layered on top of the two <img> elements (later in DOM, same stacking context) so only
+   these edge slivers intercept clicks for page-turning -- the rest of each image stays click-to-open. */
+.edgeZone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  cursor: pointer;
+}

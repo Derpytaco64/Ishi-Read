@@ -206,9 +206,13 @@ export const useEpubPreferencesConfig = ({
       maximalLineLength: preferences.typography.maximalLineLength,
       minimalLineLength: preferences.typography.minimalLineLength,
       optimalLineLength: preferences.typography.optimalLineLength,
+      // CLAUDE-ADDED: Pinned at the app's static default rather than the user's live margin
+      // value -- see useMarginSync.ts for why. Margin is applied as a direct inline style
+      // instead, so readium's own column-layout math (which factors pageGutter into its "Auto"
+      // column-count decision) stays stable regardless of what the user sets the margin to.
       pageGutter: preferences.typography.pageGutter,
-      scrollPaddingTop: preferences.theming.layout.ui?.reflow === ThLayoutUI.layered 
-        ? (preferences.theming.icon.size || 24) * 3 
+      scrollPaddingTop: preferences.theming.layout.ui?.reflow === ThLayoutUI.layered
+        ? (preferences.theming.icon.size || 24) * 3
         : (preferences.theming.icon.size || 24),
       scrollPaddingBottom: preferences.theming.layout.ui?.reflow === ThLayoutUI.layered
         ? (preferences.theming.icon.size || 24) * (isVerticalScript ? 3 : 5)

@@ -21,6 +21,19 @@
   margin: 0;
 }
 
+/* Label with an inline reset button right next to the text, instead of the
+   far-right placement StatefulNumberField's own standalone label gets (see
+   .resetButton's margin-inline-start: auto below). */
+.labelWithReset {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--th-layout-spacing) / 4);
+}
+
+.labelWithReset .resetButton {
+  margin-inline-start: 0;
+}
+
 .groupLabel {
   padding-top: calc(var(--th-icon-size, 24px) * (1/3));
 }

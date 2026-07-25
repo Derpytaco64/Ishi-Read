@@ -37,6 +37,7 @@ export enum ThSettingsKeys {
   letterSpacing = "letterSpacing",
   ligatures = "ligatures",
   lineHeight = "lineHeight",
+  marginHorizontal = "marginHorizontal",
   noRuby = "noRuby",
   paragraphIndent = "paragraphIndent",
   paragraphSpacing = "paragraphSpacing",
@@ -189,7 +190,14 @@ export const defaultZoom: ThSettingsRangePrefRequired = {
   variant: ThSettingsRangeVariant.numberField,
   placeholder: ThSettingsRangePlaceholder.range,
   range: [0.7, 4],
-  step: 0.05
+  step: 0.01
+}
+
+export const defaultMarginHorizontal: ThSettingsRangePrefRequired = {
+  variant: ThSettingsRangeVariant.numberField,
+  placeholder: ThSettingsRangePlaceholder.range,
+  range: [0, 100],
+  step: 5
 }
 
 export const defaultSpacingPresets = {

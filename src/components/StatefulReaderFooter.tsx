@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef } from "react";
 import readerStyles from "./assets/styles/thorium-web.reader.app.module.css";
 import readerPaginationStyles from "./assets/styles/thorium-web.reader.pagination.module.css";
 
+import { Locator } from "@readium/shared";
 import { ThBreakpoints, ThLayoutUI, ThFormatPref, ThProgressionFormat } from "@/preferences/models";
 
 import { ThFooter } from "@/core/Components/Reader/ThFooter";
@@ -13,13 +14,17 @@ import { ThInteractiveOverlay } from "../core/Components/Reader/ThInteractiveOve
 import { StatefulReaderPagination } from "./StatefulReaderPagination";
 import { ThPaginationLinkProps } from "@/core/Components/Reader/ThPagination";
 
+import UndoIcon from "@/core/Components/Settings/assets/icons/undo.svg";
+
 import { useNavigator } from "@/core/Navigator";
 import { useFocusWithin, useLocale } from "react-aria";
 import { useI18n } from "@/i18n/useI18n";
 
 import { setHovering } from "@/lib/readerReducer";
+import { setReturnLocator } from "@/lib/annotationsReducer";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { useIsScroll } from "@/hooks";
+import { focusReadingContainer } from "@/core/Helpers/focusUtilities";
 
 import classNames from "classnames";
 
@@ -69,6 +74,19 @@ export const StatefulReaderFooter = ({
   };
 
   const { previousLocator, nextLocator, go } = useNavigator().unified;
+  const returnLocator = useAppSelector(state => state.annotations.returnLocator);
+
+  // CLAUDE-ADDED: returnLocator is set by StatefulAnnotationsContainer right before jumping to a saved
+  // annotation -- this is the "jump back to where I was" affordance for undoing that navigation.
+  const handleReturn = useCallback(() => {
+    const locator = Locator.deserialize(returnLocator);
+    if (!locator) return;
+
+    go(locator, true, () => {
+      dispatch(setReturnLocator(null));
+      focusReadingContainer();
+    });
+  }, [returnLocator, go, dispatch]);
 
   const buildNode = useCallback((
     locator: ReturnType<typeof previousLocator>,
@@ -167,16 +185,40 @@ export const StatefulReaderFooter = ({
               }
             } }
           >
+            <span className={ readerStyles.progressionWithReturn }>
+              <StatefulReaderProgression
+                className={ readerPaginationStyles.progression }
+                formatPref={ progressionFormatPref }
+                fallbackVariant={ progressionFormatFallback }
+              />
+              { !!returnLocator &&
+                <button
+                  type="button"
+                  className={ readerStyles.returnButton }
+                  aria-label={ t("reader.annotations.returnToPosition") }
+                  onClick={ handleReturn }
+                >
+                  <UndoIcon aria-hidden="true" focusable="false" />
+                </button>
+              }
+            </span>
+          </StatefulReaderPagination>
+        : <span className={ readerStyles.progressionWithReturn }>
             <StatefulReaderProgression
-              className={ readerPaginationStyles.progression }
               formatPref={ progressionFormatPref }
               fallbackVariant={ progressionFormatFallback }
             />
-          </StatefulReaderPagination>
-        : <StatefulReaderProgression
-            formatPref={ progressionFormatPref }
-            fallbackVariant={ progressionFormatFallback }
-          /> }
+            { !!returnLocator &&
+              <button
+                type="button"
+                className={ readerStyles.returnButton }
+                aria-label={ t("reader.annotations.returnToPosition") }
+                onClick={ handleReturn }
+              >
+                <UndoIcon aria-hidden="true" focusable="false" />
+              </button>
+            }
+          </span> }
     </ThFooter>
     </>
   )

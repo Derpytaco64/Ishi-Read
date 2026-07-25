@@ -43,20 +43,28 @@ export const useEpubKeyboardPeripherals = (): IKeyboardPeripheralsConfig => {
       { type: NavPeripheralType.progressBackward, keyCombos: [{ keyCode: 32, shift: true, suppressOnInteractiveElement: true, condition: noScroll }] },
       { type: NavPeripheralType.moveRight,        keyCombos: [{ keyCode: 39,              suppressOnInteractiveElement: true, condition: noScroll }] },
       { type: NavPeripheralType.moveLeft,         keyCombos: [{ keyCode: 37,              suppressOnInteractiveElement: true, condition: noScroll }] },
-      { type: NavPeripheralType.moveUp,           keyCombos: [{ keyCode: 38,              suppressOnInteractiveElement: true, condition: noScroll },
-                                                              { keyCode: 33,              suppressOnInteractiveElement: true, condition: noScroll }] },
-      { type: NavPeripheralType.moveDown,         keyCombos: [{ keyCode: 40,              suppressOnInteractiveElement: true, condition: noScroll },
-                                                              { keyCode: 34,              suppressOnInteractiveElement: true, condition: noScroll }] },
+      // CLAUDE-ADDED: ArrowUp/ArrowDown (keyCode 38/40) drive zoom instead -- PageUp/PageDown remain for moveUp/moveDown
+      { type: NavPeripheralType.moveUp,           keyCombos: [{ keyCode: 33,              suppressOnInteractiveElement: true, condition: noScroll }] },
+      { type: NavPeripheralType.moveDown,         keyCombos: [{ keyCode: 34,              suppressOnInteractiveElement: true, condition: noScroll }] },
       { type: NavPeripheralType.moveHome,         keyCombos: [{ keyCode: 36,              suppressOnInteractiveElement: true, condition: noScroll }] },
       { type: NavPeripheralType.moveEnd,          keyCombos: [{ keyCode: 35,              suppressOnInteractiveElement: true, condition: noScroll }] },
-      { type: NavPeripheralType.zoomIn,           keyCombos: ZOOM_IN_KEY_COMBOS.map(c => ({ ...c, condition: zoomActive }))  },
-      { type: NavPeripheralType.zoomOut,          keyCombos: ZOOM_OUT_KEY_COMBOS.map(c => ({ ...c, condition: zoomActive })) },
+      { type: NavPeripheralType.zoomIn,           keyCombos: [...ZOOM_IN_KEY_COMBOS.map(c => ({ ...c, condition: zoomActive })),
+                                                              { keyCode: 38,              suppressOnInteractiveElement: true, condition: zoomActive }] },
+      { type: NavPeripheralType.zoomOut,          keyCombos: [...ZOOM_OUT_KEY_COMBOS.map(c => ({ ...c, condition: zoomActive })),
+                                                              { keyCode: 40,              suppressOnInteractiveElement: true, condition: zoomActive }] },
+      { type: NavPeripheralType.exitReader,       keyCombos: [{ keyCode: 27,              suppressOnInteractiveElement: true }] },
     ];
 
     for (const [key, tokens] of Object.entries(actionsKeys)) {
       const shortcut = tokens?.shortcut;
       const isAvailable = actionAvailability[key] ?? true;
-      if (shortcut && isAvailable) config.push({ type: toActionPeripheralType(key), keyCombos: shortcut.keyCombos });
+      if (!isAvailable) continue;
+
+      const keyCombos = [...(shortcut?.keyCombos ?? [])];
+      // CLAUDE-ADDED: Tab opens the Table of Contents whenever focus isn't on an interactive element
+      if (key === ThActionsKeys.toc) keyCombos.push({ keyCode: 9, suppressOnInteractiveElement: true });
+
+      if (keyCombos.length) config.push({ type: toActionPeripheralType(key), keyCombos });
     }
 
     for (const [key, tokens] of Object.entries(docking.keys)) {

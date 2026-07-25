@@ -14,6 +14,18 @@ const nextConfig = {
         protocol: "https",
         hostname: "www.archive.org",
       },
+      {
+        protocol: "http",
+        hostname: "localhost",
+        port: "15080",
+        pathname: "/webpub/**",
+      },
+            {
+        protocol: "https",
+        hostname: "192.168.1.13",
+        port: "15443",
+        pathname: "/webpub/**",
+      }
     ],
   },
   

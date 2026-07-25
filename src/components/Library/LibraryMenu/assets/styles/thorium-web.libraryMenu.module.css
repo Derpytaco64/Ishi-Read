@@ -1,0 +1,412 @@
+.trigger {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  display: block;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+  border-radius: 4px;
+}
+
+.trigger:hover {
+  opacity: 0.85;
+}
+
+.trigger[data-focus-visible] {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 2px;
+}
+
+.logo {
+  height: 60px;
+  width: auto;
+  pointer-events: none;
+}
+
+/* Underlay: fixed full-viewport scrim, drawer content is pinned to the left edge.
+   React Aria applies this className to both the true underlay and its inner
+   modal-content boundary (used for outside-click detection) when Modal is used
+   standalone. pointer-events: none here (with pointer-events: auto on .dialog)
+   lets clicks on the scrim fall through to that boundary as "outside" clicks
+   instead of registering as hits on the boundary's own full-viewport box. */
+.underlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-start;
+  background-color: rgba(0, 0, 0, 0.3);
+  transition: opacity 200ms ease;
+  pointer-events: none;
+}
+
+.underlay[data-entering] {
+  animation: fadeIn 200ms ease;
+}
+
+.underlay[data-exiting] {
+  animation: fadeOut 200ms ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.dialog {
+  --th-color-background: #fff;
+  --th-color-text: #333;
+  --th-color-text-secondary: #666;
+  --th-color-primary: #e0e0e0;
+
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 300px;
+  max-width: 85vw;
+  height: 100%;
+  background-color: var(--th-color-background);
+  color: var(--th-color-text);
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
+  pointer-events: auto;
+  outline: none;
+  overflow-y: auto;
+}
+
+:global(html[data-theme="dark"]) .dialog {
+  --th-color-background: #2b2b2b;
+  --th-color-text: #e8e8e8;
+  --th-color-text-secondary: #b3b3b3;
+  --th-color-primary: #5a5a5a;
+}
+
+.underlay[data-entering] .dialog {
+  animation: slideIn 200ms ease;
+}
+
+.underlay[data-exiting] .dialog {
+  animation: slideOut 200ms ease;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slideOut {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  padding: 0.35rem 0.35rem 0;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.closeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--th-color-text);
+  cursor: pointer;
+}
+
+.closeButton svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: currentColor;
+}
+
+.closeButton[data-hovered] {
+  background-color: var(--th-color-primary);
+}
+
+.closeButton[data-focus-visible] {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 2px;
+}
+
+.brand {
+  display: flex;
+  justify-content: center;
+  padding: 0 1rem;
+  flex-shrink: 0;
+}
+
+.logoLarge {
+  width: 200px;
+  height: auto;
+}
+
+.body {
+  flex: 1;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.footer {
+  margin-top: auto;
+  padding: 1rem;
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid var(--th-color-primary);
+  flex-shrink: 0;
+}
+
+.disclosure {
+  margin: 0.75rem 1rem 0;
+  border: 1px solid var(--th-color-primary);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 150ms ease;
+}
+
+.disclosure[data-expanded] {
+  border-color: var(--th-color-text-secondary);
+}
+
+.disclosureHeading {
+  margin: 0;
+}
+
+.disclosureTrigger {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--th-color-text);
+  border: none;
+  /* Matches .disclosure's own radius so the focus outline (drawn against this element's box, not
+     its clipped-by-overflow ancestor) follows the same rounded shape instead of rendering as a
+     sharp rectangle that pokes past the rounded card. */
+  border-radius: 12px;
+  background: none;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 150ms ease;
+}
+
+.disclosureTrigger[data-hovered] {
+  background-color: var(--th-color-primary);
+}
+
+.disclosureTrigger[data-focus-visible] {
+  outline: 2px solid #6ba4ff;
+  outline-offset: -2px;
+}
+
+.disclosureIcon {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: var(--th-color-text-secondary);
+  flex-shrink: 0;
+  transition: fill 150ms ease;
+}
+
+.disclosureTrigger[data-hovered] .disclosureIcon {
+  fill: var(--th-color-text);
+}
+
+.disclosureLabel {
+  flex: 1;
+  text-align: left;
+}
+
+.disclosureChevron {
+  width: 1rem;
+  height: 1rem;
+  fill: var(--th-color-text-secondary);
+  flex-shrink: 0;
+  transition: transform 150ms ease, fill 150ms ease;
+}
+
+.disclosure[data-expanded] .disclosureChevron {
+  transform: rotate(180deg);
+  fill: var(--th-color-text);
+}
+
+.disclosurePanel {
+  padding: 0.25rem 0.9rem 0.9rem;
+  outline: none;
+}
+
+/* React Aria's Disclosure marks a collapsed panel hidden="until-found" (content-visibility:
+   hidden) rather than display: none -- that hides the panel's content but not its own padding
+   box, so it was rendering as an empty strip below the trigger. Force it fully out of layout. */
+.disclosurePanel[hidden] {
+  display: none;
+}
+
+/* Nested "Shelves" disclosure, inset within the Settings panel -- lighter weight than the
+   top-level card (no border box) since it's a sub-section, not a sibling of Settings itself. */
+.nestedDisclosure {
+  margin: 0.25rem -0.9rem 0;
+  border-top: 1px solid var(--th-color-primary);
+}
+
+.nestedDisclosure .disclosureTrigger {
+  padding: 0.6rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--th-color-text-secondary);
+}
+
+.nestedDisclosure .disclosureTrigger[data-hovered] {
+  color: var(--th-color-text);
+}
+
+.nestedDisclosure[data-expanded] .disclosureChevron {
+  transform: rotate(180deg);
+  fill: var(--th-color-text);
+}
+
+.nestedDisclosure .disclosurePanel {
+  padding: 0.25rem 0.9rem 0.5rem;
+}
+
+.shelfList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  outline: none;
+}
+
+.shelfRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.25rem 0.25rem 0.25rem 0;
+  border-radius: 8px;
+  outline: none;
+}
+
+.shelfRow[data-focus-visible] {
+  outline: 2px solid #6ba4ff;
+  outline-offset: -2px;
+}
+
+.shelfRow[data-dragging] {
+  opacity: 0.5;
+}
+
+.shelfDragHandle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--th-color-text-secondary);
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.shelfDragHandle svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: currentColor;
+}
+
+.shelfDragHandle[data-hovered] {
+  background-color: var(--th-color-primary);
+  color: var(--th-color-text);
+}
+
+.shelfDragHandle[data-focus-visible] {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 2px;
+}
+
+.shelfRow .switch {
+  flex: 1;
+}
+
+/* React Aria's default drop indicator, rendered between rows while dragging. */
+.shelfList :global(.react-aria-DropIndicator) {
+  outline: none;
+}
+
+.shelfList :global(.react-aria-DropIndicator[data-drop-target]) {
+  height: 2px;
+  margin: 2px 0;
+  background-color: #6ba4ff;
+  border-radius: 1px;
+}
+
+/* Dark mode switch */
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--th-color-text);
+}
+
+.switchIndicator {
+  width: 2rem;
+  height: 1.143rem;
+  border: 2px solid var(--th-color-text-secondary);
+  background: var(--th-color-background);
+  border-radius: 1.143rem;
+  transition: all 200ms;
+  flex-shrink: 0;
+}
+
+.switchIndicator::before {
+  content: "";
+  display: block;
+  margin: 0.143rem;
+  width: 0.857rem;
+  height: 0.857rem;
+  background: var(--th-color-text-secondary);
+  border-radius: 16px;
+  transition: all 200ms;
+}
+
+.switch[data-selected] .switchIndicator {
+  background: var(--th-color-text-secondary);
+}
+
+.switch[data-selected] .switchIndicator::before {
+  background: var(--th-color-background);
+  transform: translateX(100%);
+}
+
+.switch[data-focus-visible] .switchIndicator {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 2px;
+}

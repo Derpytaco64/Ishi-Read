@@ -129,6 +129,7 @@
 
 .treeItem[data-disabled] {
   color: var(--th-theme-disable);
+  cursor: default;
 }
 
 .treeItem[data-selected] {

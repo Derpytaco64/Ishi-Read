@@ -12,6 +12,7 @@ import { ThProgression } from "@/core/Components/Reader/ThProgression";
 import { useI18n } from "@/i18n/useI18n";
 
 import { useAppSelector } from "@/lib/hooks";
+import { useIsScroll } from "@/hooks";
 
 import { makeBreakpointsMap } from "@/core/Helpers/breakpointsMap";
 import { getBestMatchingProgressionFormat } from "@/core/Helpers/progressionFormat";
@@ -30,10 +31,23 @@ export const StatefulReaderProgression = ({
   const { t } = useI18n();
   
   const unstableTimeline = useAppSelector(state => state.publication.unstableTimeline);
+  const exactPageCount = useAppSelector(state => state.publication.exactPageCount);
   const isImmersive = useAppSelector(state => state.reader.isImmersive);
   const isFullscreen = useAppSelector(state => state.reader.isFullscreen);
   const isHovering = useAppSelector(state => state.reader.isHovering);
   const breakpoint = useAppSelector(state => state.theming.breakpoint);
+  // CLAUDE-ADDED: useExactPageCount never produces data for FXL/scroll (see its own gating) -- there,
+  // falling back to the coarse positionsList-based totalPositions/currentPositions is correct and
+  // permanent. But for paginated reflow content, exactPageCount is null for the several seconds its
+  // full-book measurement pass takes on every fresh book open (and briefly after any layout-affecting
+  // settings change with no prior value cached yet) -- during that window the old fallback logic showed
+  // the coarse estimate as if it were final, which can be wildly off from the real per-column count for
+  // a given font/margin/column configuration (reported as a "false 400 to 650" page count). Distinguishing
+  // "will never have exact data" from "doesn't have it yet" lets the indicator stay blank briefly instead
+  // of flashing a wrong number.
+  const isFXL = useAppSelector(state => state.publication.isFXL);
+  const isScroll = useIsScroll();
+  const exactPageCountApplies = !isFXL && !isScroll;
 
   
   const fallbackFormat = useMemo(() => {
@@ -76,12 +90,12 @@ export const StatefulReaderProgression = ({
     }
     
     if (Array.isArray(variants)) {
-      return getBestMatchingProgressionFormat(variants, unstableTimeline?.progression) || 
+      return getBestMatchingProgressionFormat(variants, unstableTimeline?.progression, exactPageCount) ||
         fallbackFormat.variants;
     }
-    
+
     return variants;
-  }, [variants, unstableTimeline?.progression, fallbackFormat, isImmersive, isHovering, isFullscreen, displayInImmersive, displayInFullscreen]);
+  }, [variants, unstableTimeline?.progression, exactPageCount, fallbackFormat, isImmersive, isHovering, isFullscreen, displayInImmersive, displayInFullscreen]);
 
   // Compute display text based on current position and timeline
   const displayText = useMemo(() => {
@@ -89,7 +103,7 @@ export const StatefulReaderProgression = ({
       return "";
     }
 
-    const { 
+    const {
       currentPositions = [],
       totalPositions,
       relativeProgression,
@@ -99,9 +113,22 @@ export const StatefulReaderProgression = ({
       totalItems,
       currentIndex
     } = unstableTimeline.progression;
-    
+
+    // CLAUDE-ADDED: Prefer the exact page-count system (useExactPageCount) over the coarse manifest
+    // positionsList when it has data -- see getSupportedProgressionFormats for the matching logic that
+    // decided displayFormat in the first place. Only falls back to the old fields where exact counting
+    // doesn't apply at all (FXL/scroll) -- when it applies but just hasn't finished its first pass yet,
+    // effectivePositions/effectiveTotal stay empty/undefined so the cases below render nothing rather
+    // than the coarse (and potentially very inaccurate) estimate.
+    const effectivePositions = exactPageCount?.currentPageRange ?? (exactPageCountApplies ? [] : currentPositions);
+    const effectiveTotal = exactPageCount?.totalPages ?? (exactPageCountApplies ? undefined : totalPositions);
+    // CLAUDE-ADDED: One decimal place (not a rounded whole percent) for the overall book progress.
+    const effectivePercentage = (exactPageCount?.totalPages && exactPageCount.currentPageRange)
+      ? (((exactPageCount.currentPageRange[exactPageCount.currentPageRange.length - 1] ?? 0) / exactPageCount.totalPages) * 100).toFixed(1)
+      : ((totalProgression || 0) * 100).toFixed(1);
+
     let text = "";
-    
+
     // Format positions for display (handle array of two positions with a dash)
     const formatPositions = (positions: number[]) => {
       if (positions.length === 2) {
@@ -109,46 +136,44 @@ export const StatefulReaderProgression = ({
       }
       return positions[0]?.toString() || "";
     };
-        
+
     switch (displayFormat) {
       case ThProgressionFormat.positions:
-        if (currentPositions.length > 0) {
-          text = formatPositions(currentPositions);
+        if (effectivePositions.length > 0) {
+          text = formatPositions(effectivePositions);
         }
         break;
-        
+
       case ThProgressionFormat.positionsOfTotal:
-        if (currentPositions.length > 0 && totalPositions) {
-          text = t("reader.progression.xOfY.compact", { 
-            x: formatPositions(currentPositions),
-            y: totalPositions
+        if (effectivePositions.length > 0 && effectiveTotal) {
+          text = t("reader.progression.xOfY.compact", {
+            x: formatPositions(effectivePositions),
+            y: effectiveTotal
           });
         }
         break;
 
       case ThProgressionFormat.positionsPercentOfTotal:
-        if (currentPositions.length > 0 && totalPositions) {
-          const percentage = Math.round((totalProgression || 0) * 100);
-          text = t("reader.progression.xOfY.descriptive", { 
-            x: formatPositions(currentPositions),
-            y: totalPositions,
-            z: `${ percentage }%`
+        if (effectivePositions.length > 0 && effectiveTotal) {
+          text = t("reader.progression.xOfY.descriptive", {
+            x: formatPositions(effectivePositions),
+            y: effectiveTotal,
+            z: `${ effectivePercentage }%`
           });
         }
         break;
-        
+
       case ThProgressionFormat.positionsLeft:
         if (positionsLeft !== undefined) {
-          text = t(`reader.progression.positionsLeftInChapter.descriptive`, { 
+          text = t(`reader.progression.positionsLeftInChapter.descriptive`, {
             count: positionsLeft
           });
         }
         break;
-        
+
       case ThProgressionFormat.overallProgression:
         if (totalProgression !== undefined) {
-          const percentage = Math.round(totalProgression * 100);
-          text = `${ percentage }%`;
+          text = `${ effectivePercentage }%`;
         }
         break;
         
@@ -180,7 +205,7 @@ export const StatefulReaderProgression = ({
     }
     
     return text;
-  }, [displayFormat, unstableTimeline, t]);
+  }, [displayFormat, unstableTimeline, exactPageCount, exactPageCountApplies, t]);
 
   if (!displayText || displayFormat === ThProgressionFormat.none) {
     return null;

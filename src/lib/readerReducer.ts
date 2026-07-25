@@ -18,6 +18,7 @@ export interface ReaderReducerState {
   isFullscreen: boolean;
   settingsContainer: ThSettingsContainerKeys;
   platformModifier: UnstablePlatformModifier;
+  readerReloadKey: number;
 }
 
 const initialState: ReaderReducerState = {
@@ -31,7 +32,8 @@ const initialState: ReaderReducerState = {
   hasUserNavigated: false,
   isFullscreen: false,
   settingsContainer: ThSettingsContainerKeys.initial,
-  platformModifier: defaultPlatformModifier
+  platformModifier: defaultPlatformModifier,
+  readerReloadKey: 0
 }
 
 export const readerSlice = createSlice({
@@ -85,6 +87,12 @@ export const readerSlice = createSlice({
     },
     setSettingsContainer: (state, action) => {
       state.settingsContainer = action.payload
+    },
+    // CLAUDE-ADDED: Bumped to force a full remount of the EPUB reader subtree (via a React `key`
+    // in StatefulReaderWrapper.tsx) when settings changes need a hard reload rather than a live
+    // preference update -- see StatefulColumns.tsx's "2 cols" selection for why.
+    bumpReaderReloadKey: (state) => {
+      state.readerReloadKey += 1;
     }
   }
 })
@@ -102,7 +110,8 @@ export const {
   setHasArrows,  
   setUserNavigated,
   setFullscreen,
-  setSettingsContainer
+  setSettingsContainer,
+  bumpReaderReloadKey
 } = readerSlice.actions;
 
 export default readerSlice.reducer;

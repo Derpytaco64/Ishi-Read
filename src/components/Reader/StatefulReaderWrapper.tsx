@@ -196,6 +196,11 @@ const StatefulReaderContent = ({ profile, publication, plugins, coverUrl, ...pro
   const themeObject = useAppSelector(state => state.theming.theme);
   const isFXL = useAppSelector(state => state.publication.isFXL);
   const theme = profile === "epub" ? (isFXL ? themeObject.fxl : themeObject.reflow) : ThThemeKeys.light;
+  // CLAUDE-ADDED: Bumped by StatefulColumns.tsx when the user selects 2-column mode -- used as a
+  // React `key` below to force a full remount of the EPUB reader, since column-mode-dependent
+  // per-resource setup (landscape-image spanning, paired-spread detection) is only recomputed on
+  // navigation and otherwise goes stale until the next real page turn.
+  const readerReloadKey = useAppSelector(state => state.reader.readerReloadKey);
   const dispatch = useAppDispatch();
 
   useEffect(() => {
@@ -235,7 +240,7 @@ const StatefulReaderContent = ({ profile, publication, plugins, coverUrl, ...pro
 
   switch (profile) {
     case "epub":
-      return <Suspense><StatefulEpubReader publication={ publication } { ...props } plugins={ plugins } containerRefSetter={ setContainerRef } /></Suspense>;
+      return <Suspense><StatefulEpubReader key={ readerReloadKey } publication={ publication } { ...props } plugins={ plugins } containerRefSetter={ setContainerRef } /></Suspense>;
     case "webPub":
     default:
       return <Suspense><StatefulWebPubReader publication={ publication } { ...props } plugins={ plugins } containerRefSetter={ setContainerRef } /></Suspense>;

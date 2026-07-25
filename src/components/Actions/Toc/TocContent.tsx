@@ -100,6 +100,7 @@ export const TocContent = ({
               data-href={ item.href }
               className={ tocStyles.treeItem }
               textValue={ item.title || "" }
+              isDisabled={ item.isNavigable === false }
             >
               <TreeItemContent>
                 { item.children && (
@@ -113,7 +114,8 @@ export const TocContent = ({
                 ) }
                 <div className={ tocStyles.treeItemText }>
                   <div className={ tocStyles.treeItemTextTitle }>{ item.title }</div>
-                  { item.position && <div className={ tocStyles.treeItemTextPosition }>{ item.position }</div> }
+                  { /* CLAUDE-ADDED: item.position !== undefined, not a truthy check -- 0 is a meaningful position (a resource with no pages of its own), not "no position". */ }
+                  { item.position !== undefined && <div className={ tocStyles.treeItemTextPosition }>{ item.position }</div> }
                 </div>
               </TreeItemContent>
               <Collection items={ item.children }>

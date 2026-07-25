@@ -9,19 +9,19 @@ type ScrollOptions = {
   inline?: ScrollLogicalPosition;
 };
 
-type Action = 
-  | { 
+type Action =
+  | {
       type: "focus";
       options?: {
         preventScroll?: boolean;
         scrollContainerToTop?: boolean;
       };
     }
-  | { 
+  | {
       type: "scrollIntoView";
       options?: ScrollOptions;
     }
-  | { 
+  | {
       type: "none";
     };
 
@@ -52,15 +52,15 @@ const isInViewport = (element: Element, container: Element | null = null): boole
   );
 };
 
-// WARNING: This hook is not a general purpose hook, 
+// WARNING: This hook is not a general purpose hook,
 // it is specifically designed to be used with React Aria Components
 // It is not recommended to use it with other libraries or components
 export const useFirstFocusable = (props?: UseFirstFocusableProps) => {
-  const { 
-    withinRef, 
-    fallbackRef, 
-    scrollerRef, 
-    trackedState, 
+  const {
+    withinRef,
+    fallbackRef,
+    scrollerRef,
+    trackedState,
     updateState,
     action = { type: "none" }, // Default to no action if not provided
     withSelector
@@ -80,10 +80,10 @@ export const useFirstFocusable = (props?: UseFirstFocusableProps) => {
 
   useEffect(() => {
     if (!withinRef) return;
-    
+
     // If trackedState is false and updateState hasn't changed, do nothing
     if (!trackedState && updateState === previousUpdateState) return;
-    
+
     // Determine what triggered this effect
     const isTrackedStateUpdate = trackedState && (previousTrackedState !== trackedState);
     const isUpdateStateUpdate = updateState !== previousUpdateState;
@@ -131,7 +131,7 @@ export const useFirstFocusable = (props?: UseFirstFocusableProps) => {
           case "focus": {
             const preventScroll = actionRef.current.options?.scrollContainerToTop || actionRef.current.options?.preventScroll;
             element.focus({ preventScroll: preventScroll ?? false });
-            
+
             // Handle container scrolling if requested
             if (actionRef.current.options?.scrollContainerToTop) {
               const scrollContainer = scrollerRef?.current || withinRef.current;
@@ -139,7 +139,7 @@ export const useFirstFocusable = (props?: UseFirstFocusableProps) => {
             }
             break;
           }
-          
+
           case "scrollIntoView":
             if (!isInViewport(element, scrollerRef?.current || null)) {
               element.scrollIntoView(actionRef.current.options);
