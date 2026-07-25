@@ -1,3 +1,50 @@
+# Planned Features
+## Progress Tracking
+- ~~Base thorium appears to save book position in your browser's local storage instead of alongside the server's files~~
+- ~~The first step to enabling reader progress saving at the server level is changing the save location from the browser that loads the website to the server itself~~
+	- Tracking a specific account's progress via a tag would also be a nice feature
+- After that we need a way to read books without Internet connection in the case of an android app. This will require a way to connect to the server and stream the books while syncing the *most recent* position update to the server
+- It would need a way to download the books to the device and present them while tracking the position. Then a way to track the same book. Probably the base64 encoding we currently use for book web pages and resolve which state is the most recent upon reconnection to the server.
+- ~~For sync purposes the books should probably be identified with a deterministic hash like with KOsync~~
+## Login Page
+- Base thorium doesn't have accounts or a log in page so it will be imperative to create a firm security front to prevent bad actors from getting into the site.
+- This mean I will need accounts, log ins, and a way to prevent each page on the site from being accessed without valid credentials along with a way to encrypt the check for those credentials.
+## Library Interface
+- ~~Move the settings menu to an overlay accessed by clicking the logo~~
+	- Have all the reader settings there
+	- Light dark mode button
+	- User stuff once we get there
+- Custom shelves
+- Automatic series shelves based off the readium meta data
+- Series # ordering
+- Meta data view
+	- Display the 1024 character "pages" calculated by readium and the pages based on the current viewport settings
+- The settings menu should have fields for the readium server url, publications directory, and the userdata folder
+- Note and etc. access outside the book
+- ![[Pasted image 20260719094350.png]]
+## Reader Functions
+- Thorium already has a lot of features out of the box but I would like to add some
+	- ~~Allow setting the margin, and font size manually~~
+		- couldn't get vertical margin to work, the default seems fine.
+	- ~~Make landscape images render across two pages in double column mode~~
+	- ~~more keyboard shortcuts?~~
+		- ~~Tab - Table of Contents~~
+		- ~~Up Arrow - Zoom in~~
+		- ~~Down Arrow - Zoom out~~
+		- ~~Escape - Exit to library~~
+	- ~~Highlighting~~
+	- ~~Bookmarking~~
+	- ~~Notes~~
+		- Accessible outside of the book itself
+	- ~~Dictionary Integration~~
+	- ~~Track time spent reading~~
+		- ~~Reset~~
+		- ~~Save Completion times~~
+		- ~~Display~~
+			- ~~Delete~~
+	- ~~words per minute tracking~~
+	- ~~Click on image to expand it with a easy to click button to leave it~~
+	- ~~Dynamic page number and current page display based on the viewport and remaining "pages"~~
 # Thorium Web
 
 Thorium Web is a web-based reader for EPUB and other digital publications, built using Next.js and modern web technologies. It is designed to provide a fast, responsive, and accessible reading experience.
