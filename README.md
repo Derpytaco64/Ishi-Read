@@ -1,3 +1,7 @@
+#***Disclaimer***
+I cloned the thorium repository and have been vibecodin the fuck out of it so that the reader and library page behave the way I want them to. I can not promise that this is a stable, secure, or well engineered app, but I can say that I test every feature I try to have Claude make so that it functions at the least. If you happen to try this personal project, bug reports would be nice.
+
+
 # Planned Features
 ## Progress Tracking
 - ~~Base thorium appears to save book position in your browser's local storage instead of alongside the server's files~~
