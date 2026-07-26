@@ -17,9 +17,12 @@ import { ThModal } from "@/core/Components/Containers/ThModal";
 import { ThContainerBody } from "@/core/Components/Containers/ThContainerBody";
 import { ThContainerHeaderWithClose } from "@/core/Components/Containers/ThContainerHeader";
 import { ThSwitch } from "@/core/Components/Settings/ThSwitch";
+import { ThSlider } from "@/core/Components/Settings/ThSlider";
 
 import { THEME_STORAGE_KEY } from "@/app/themeStorage";
 import { SHELF_LABELS, ShelfKey, ShelfPrefs } from "@/app/shelfPrefs";
+import { useAccentColor } from "@/app/useAccentColor";
+import { MIN_COVER_SIZE, MAX_COVER_SIZE } from "@/app/coverSizeStorage";
 
 import logo from "@/assets/ishamel.png";
 import floofLogo from "@/assets/foof_ishmael.png";
@@ -34,13 +37,17 @@ export interface StatefulLibraryMenuProps {
   onToggleShelf: (key: ShelfKey) => void;
   shelfOrder: ShelfKey[];
   onReorderShelves: (order: ShelfKey[]) => void;
+  coverSize: number;
+  onChangeCoverSize: (size: number) => void;
 }
 
 export const StatefulLibraryMenu = ({
   shelfPrefs,
   onToggleShelf,
   shelfOrder,
-  onReorderShelves
+  onReorderShelves,
+  coverSize,
+  onChangeCoverSize
 }: StatefulLibraryMenuProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -52,6 +59,8 @@ export const StatefulLibraryMenu = ({
   useEffect(() => {
     setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
   }, []);
+
+  const { accentColor, setAccentColor } = useAccentColor();
 
   const toggleTheme = () => {
     setTheme((prev) => {
@@ -177,6 +186,55 @@ export const StatefulLibraryMenu = ({
                     </GridListItem>
                   ) }
                 </GridList>
+              </DisclosurePanel>
+            </Disclosure>
+
+            <Disclosure className={ styles.nestedDisclosure }>
+              <Heading className={ styles.disclosureHeading }>
+                <Button slot="trigger" className={ styles.disclosureTrigger }>
+                  <span className={ styles.disclosureLabel }>Accent Color</span>
+                  <ChevronDown aria-hidden="true" focusable="false" className={ styles.disclosureChevron } />
+                </Button>
+              </Heading>
+
+              <DisclosurePanel className={ styles.disclosurePanel }>
+                { /* CLAUDE-ADDED: Native <input type="color"> rather than a custom picker -- every
+                     modern browser ships its own OS-level color picker UI behind this, which covers
+                     swatches/hex-entry/eyedropper for free instead of us building any of it. */ }
+                <label className={ styles.colorPickerRow }>
+                  <span>Play button &amp; progress dial color</span>
+                  <input
+                    type="color"
+                    className={ styles.colorPicker }
+                    value={ accentColor }
+                    onChange={ (e) => setAccentColor(e.target.value) }
+                    aria-label="Accent color"
+                  />
+                </label>
+              </DisclosurePanel>
+            </Disclosure>
+
+            <Disclosure className={ styles.nestedDisclosure }>
+              <Heading className={ styles.disclosureHeading }>
+                <Button slot="trigger" className={ styles.disclosureTrigger }>
+                  <span className={ styles.disclosureLabel }>Cover Size</span>
+                  <ChevronDown aria-hidden="true" focusable="false" className={ styles.disclosureChevron } />
+                </Button>
+              </Heading>
+
+              <DisclosurePanel className={ styles.disclosurePanel }>
+                <ThSlider
+                  aria-label="Cover size"
+                  className={ styles.coverSizeSlider }
+                  range={ [MIN_COVER_SIZE, MAX_COVER_SIZE] }
+                  value={ coverSize }
+                  onChange={ (value) => onChangeCoverSize(Array.isArray(value) ? value[0] : value) }
+                  compounds={{
+                    output: { className: styles.coverSizeOutput },
+                    track: { className: styles.coverSizeTrack },
+                    thumb: { className: styles.coverSizeThumb }
+                  }}
+                />
               </DisclosurePanel>
             </Disclosure>
           </DisclosurePanel>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 
@@ -10,6 +10,17 @@ import { ThContainerBody } from "@/core/Components/Containers/ThContainerBody";
 import { ThCloseButton } from "@/core/Components/Buttons/ThCloseButton";
 
 import { Publication } from "@/components/Misc/PublicationGrid";
+
+import { getManifestUrlFromBookUrl } from "@/helpers/getBookProgress";
+import { fetchPositionFromServer } from "@/lib/userData/positionApi";
+import { fetchReadingTimeFromServer } from "@/lib/userData/readingTimeApi";
+import { fetchWordCountFromServer } from "@/lib/userData/wordCountApi";
+import { fetchReadingSpeedSamplesFromServer } from "@/lib/userData/readingSpeedApi";
+import { fetchCompletedReadTimesFromServer } from "@/lib/userData/completedReadTimesApi";
+import { StoredCompletedReadTime } from "@/lib/userData/readingTimeTypes";
+import { computeCurrentWpm, estimateSecondsLeft } from "@/components/Actions/ReadingTimer/helpers/computeReadingSpeed";
+import { formatFullReadingTime, formatEstimatedTime, ReadingTimeUnitLabels } from "@/components/Actions/ReadingTimer/helpers/formatReadingTime";
+import { formatTimestamp, formatDateOnly } from "@/components/Actions/Annotations/helpers/formatTimestamp";
 
 import PlayIcon from "./assets/icons/play_arrow.svg";
 
@@ -23,6 +34,75 @@ import type { SheetRef } from "react-modal-sheet";
 // handleBodyRef below) rather than animating to a fixed snap, so "fully open" is just wherever
 // that continuous tracking ends up (y reaching 0), not a discrete state.
 const PEEK_SNAP = 1;
+
+// CLAUDE-ADDED: StatefulBookSheet doesn't use the app's i18n system (see formatDate below, and every
+// other hardcoded English label in this file) -- plain literals here match that existing convention
+// rather than introducing useI18n just for this one section.
+const READING_TIME_UNITS: ReadingTimeUnitLabels = { seconds: "s", minutes: "m", hours: "h" };
+
+// CLAUDE-ADDED: Geometry for the read-progress dial. Deliberately sized and stroked differently from
+// PublicationGrid's own ProgressRing (46px/17r/5 stroke) -- that one's a small corner badge on a
+// thumbnail; this is a standalone detail-panel graphic and reads better bigger. Colors come from
+// this component's own --th-color-* custom properties (see .root) instead of ProgressRing's
+// hardcoded yellow-on-black, so it matches the sheet's light/dark theme instead of always looking
+// like the grid's dark overlay treatment.
+const DIAL_SIZE = 225;
+const DIAL_RADIUS = 100;
+const DIAL_STROKE = 25;
+const DIAL_CIRCUMFERENCE = 2 * Math.PI * DIAL_RADIUS;
+
+const ReadProgressDial = ({ percent }: { percent: number }) => {
+  const clamped = Math.min(100, Math.max(0, percent));
+  const center = DIAL_SIZE / 2;
+  const dashOffset = DIAL_CIRCUMFERENCE * (1 - clamped / 100);
+
+  return (
+    <svg
+      className={ styles.progressDial }
+      width={ DIAL_SIZE }
+      height={ DIAL_SIZE }
+      viewBox={ `0 0 ${ DIAL_SIZE } ${ DIAL_SIZE }` }
+      role="img"
+      aria-label={ `${ clamped.toFixed(1) }% read` }
+    >
+      <g transform={ `rotate(-90 ${ center } ${ center })` }>
+        <circle
+          className={ styles.progressDialTrack }
+          cx={ center } cy={ center } r={ DIAL_RADIUS }
+          strokeWidth={ DIAL_STROKE }
+        />
+        <circle
+          className={ styles.progressDialFill }
+          cx={ center } cy={ center } r={ DIAL_RADIUS }
+          strokeWidth={ DIAL_STROKE }
+          strokeDasharray={ DIAL_CIRCUMFERENCE }
+          strokeDashoffset={ dashOffset }
+          strokeLinecap="round"
+        />
+      </g>
+      <text
+        className={ styles.progressDialText }
+        x="50%" y="50%" textAnchor="middle" dominantBaseline="central"
+      >
+        { clamped.toFixed(1) }%
+      </text>
+    </svg>
+  );
+};
+
+// CLAUDE-ADDED: Everything the "Reading Timer" and "Completed Read" sections need, fetched together
+// per book (see the effect below) since they're all keyed by the same manifestUrl and most of them
+// (wpm, secondsLeft) are derived from more than one of the raw values.
+interface ReadingStats {
+  percent: number | null;
+  totalSeconds: number | null;
+  wpm: number | null;
+  secondsLeft: number | null;
+  // CLAUDE-ADDED: Most recent completed read only (see the effect's sort-and-take-first below), not
+  // the full history -- "the last run", matching the reader's own Completed tab's most-recent-first
+  // ordering, just showing the one entry instead of the whole list.
+  lastCompletedRead: StoredCompletedReadTime | null;
+}
 
 export interface StatefulBookSheetProps {
   publication: Publication | null;
@@ -76,6 +156,55 @@ export const StatefulBookSheet = ({
       setTimeout(() => setCopiedUuid(false), 1500);
     }).catch(() => {});
   };
+
+  // CLAUDE-ADDED: Powers both the read-progress dial and the "Reading Timer" section -- fetched
+  // together (not via PublicationGrid's own progressByUrl prop, which only carries the percent) since
+  // wpm/secondsLeft need wordCount + speedSamples + the same position locator's totalProgression the
+  // dial uses, and every one of these is keyed by manifestUrl, not by the page's own book list. Reset
+  // to null on every book change so a slow fetch never shows the *previous* book's stats under the
+  // new one's title -- an empty section while loading reads better than a wrong one.
+  const [readingStats, setReadingStats] = useState<ReadingStats | null>(null);
+
+  useEffect(() => {
+    setReadingStats(null);
+
+    if (!displayed) return;
+    const manifestUrl = getManifestUrlFromBookUrl(displayed.url);
+    if (!manifestUrl) return;
+
+    let cancelled = false;
+
+    Promise.all([
+      fetchPositionFromServer(manifestUrl),
+      fetchReadingTimeFromServer(manifestUrl),
+      fetchWordCountFromServer(manifestUrl),
+      fetchReadingSpeedSamplesFromServer(manifestUrl),
+      fetchCompletedReadTimesFromServer(manifestUrl)
+    ]).then(([locator, totalSeconds, wordCount, speedSamples, completedReadTimes]) => {
+      if (cancelled) return;
+
+      const totalProgression = locator?.locations.totalProgression;
+      const percent = typeof totalProgression === "number"
+        ? Math.round(Math.min(1, Math.max(0, totalProgression)) * 1000) / 10
+        : null;
+      const wpm = computeCurrentWpm(speedSamples);
+      const secondsLeft = wordCount !== null && typeof totalProgression === "number"
+        ? estimateSecondsLeft(wordCount, totalProgression, wpm)
+        : null;
+      // CLAUDE-ADDED: Same most-recent-first ordering as StatefulReadingTimerContainer's own
+      // sortedCompletedReadTimes -- upsertCompletedReadTime appends, so completedAt (not array
+      // order) is what actually determines which one is "the last run".
+      const lastCompletedRead = completedReadTimes.length > 0
+        ? completedReadTimes.reduce((latest, item) => item.completedAt > latest.completedAt ? item : latest)
+        : null;
+
+      setReadingStats({ percent, totalSeconds, wpm, secondsLeft, lastCompletedRead });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [displayed]);
 
   // CLAUDE-ADDED: sheetRef exposes react-modal-sheet's underlying `y` motion value (its vertical
   // offset -- 0 is fully open, sheetHeight is fully closed) and `height` (the measured sheet
@@ -235,65 +364,158 @@ export const StatefulBookSheet = ({
                manifest.metadata (see src/app/api/books/route.ts) except fileSize, which comes from
                a filesystem stat since EPUB byte size was never part of the manifest to begin with. */ }
           <div className={ styles.details }>
-            { (displayed.calibreId || displayed.uuid || displayed.addedAt || displayed.modified || displayed.fileSize) && (
-              <div className={ styles.chipRow }>
-                { displayed.calibreId && (
-                  <span className={ styles.chip }><strong>ID:</strong> { displayed.calibreId }</span>
+            <div className={ styles.detailsTop }>
+              <div className={ styles.detailsChips }>
+                { (displayed.calibreId || displayed.uuid || displayed.addedAt || displayed.modified || displayed.fileSize) && (
+                  <div className={ styles.chipRow }>
+                    { displayed.calibreId && (
+                      <span className={ styles.chip }><strong>ID:</strong> { displayed.calibreId }</span>
+                    ) }
+                    { displayed.uuid && (
+                      <span className={ styles.chip }>
+                        <strong>UUID:</strong>
+                        <button type="button" className={ styles.chipButton } onClick={ handleCopyUuid }>
+                          { copiedUuid ? "Copied!" : "Copy UUID" }
+                        </button>
+                      </span>
+                    ) }
+                    { formatDate(displayed.addedAt) && (
+                      <span className={ styles.chip }><strong>Date added:</strong> { formatDate(displayed.addedAt) }</span>
+                    ) }
+                    { formatDate(displayed.modified) && (
+                      <span className={ styles.chip }><strong>Last modified:</strong> { formatDate(displayed.modified) }</span>
+                    ) }
+                    { displayed.fileSize && (
+                      <span className={ styles.chip }><strong>File size:</strong> { displayed.fileSize }</span>
+                    ) }
+                  </div>
                 ) }
-                { displayed.uuid && (
-                  <span className={ styles.chip }>
-                    <strong>UUID:</strong>
-                    <button type="button" className={ styles.chipButton } onClick={ handleCopyUuid }>
-                      { copiedUuid ? "Copied!" : "Copy UUID" }
-                    </button>
-                  </span>
-                ) }
-                { formatDate(displayed.addedAt) && (
-                  <span className={ styles.chip }><strong>Date added:</strong> { formatDate(displayed.addedAt) }</span>
-                ) }
-                { formatDate(displayed.modified) && (
-                  <span className={ styles.chip }><strong>Last modified:</strong> { formatDate(displayed.modified) }</span>
-                ) }
-                { displayed.fileSize && (
-                  <span className={ styles.chip }><strong>File size:</strong> { displayed.fileSize }</span>
-                ) }
-              </div>
-            ) }
 
-            { (displayed.language || displayed.isbn) && (
-              <div className={ styles.chipRow }>
-                { displayed.language && (
-                  <span className={ styles.chip }><strong>Language:</strong> { displayed.language }</span>
+                { (displayed.language || displayed.isbn) && (
+                  <div className={ styles.chipRow }>
+                    { displayed.language && (
+                      <span className={ styles.chip }><strong>Language:</strong> { displayed.language }</span>
+                    ) }
+                    { displayed.isbn && (
+                      <span className={ styles.chip }><strong>ISBN:</strong> { displayed.isbn }</span>
+                    ) }
+                  </div>
                 ) }
-                { displayed.isbn && (
-                  <span className={ styles.chip }><strong>ISBN:</strong> { displayed.isbn }</span>
-                ) }
-              </div>
-            ) }
 
-            { displayed.tags && displayed.tags.length > 0 && (
-              <div className={ styles.tagsRow }>
-                { displayed.tags.map((tag) => (
-                  <span key={ tag } className={ styles.tag }>{ tag }</span>
-                )) }
-              </div>
-            ) }
+                { displayed.tags && displayed.tags.length > 0 && (
+                  <div className={ styles.tagsRow }>
+                    { displayed.tags.map((tag) => (
+                      <span key={ tag } className={ styles.tag }>{ tag }</span>
+                    )) }
+                  </div>
+                ) }
 
-            { (displayed.publisher || displayed.published) && (
-              <div className={ styles.chipRow }>
-                { displayed.publisher && (
-                  <span className={ styles.chip }><strong>Publisher:</strong> { displayed.publisher }</span>
-                ) }
-                { formatDate(displayed.published) && (
-                  <span className={ styles.chip }><strong>Published:</strong> { formatDate(displayed.published) }</span>
+                { (displayed.publisher || displayed.published) && (
+                  <div className={ styles.chipRow }>
+                    { displayed.publisher && (
+                      <span className={ styles.chip }><strong>Publisher:</strong> { displayed.publisher }</span>
+                    ) }
+                    { formatDate(displayed.published) && (
+                      <span className={ styles.chip }><strong>Published:</strong> { formatDate(displayed.published) }</span>
+                    ) }
+                  </div>
                 ) }
               </div>
-            ) }
+
+              { /* CLAUDE-ADDED: Only rendered once there's actual progress to show -- readingStats
+                   starts null while its fetch is in flight (or the book's never been opened, in which
+                   case percent itself resolves to null), and a 0%/empty dial isn't more informative
+                   than no dial at all. Matches PublicationGrid's ProgressRing convention (percent > 0
+                   gate) for the same reason. */ }
+              { readingStats?.percent !== null && readingStats?.percent !== undefined && readingStats.percent > 0 && (
+                <ReadProgressDial percent={ readingStats.percent } />
+              ) }
+            </div>
 
             { displayed.description && (
               <div>
                 <h3 className={ styles.descriptionHeading }>Description</h3>
                 <p className={ styles.descriptionText }>{ displayed.description }</p>
+              </div>
+            ) }
+
+            { /* CLAUDE-ADDED: The reader's own StatefulReadingTimerContainer shows this same
+                 trio (elapsed time / current pace / time left) plus a full daily-history table and
+                 reset/delete controls -- this is the read-only summary version for a library-level
+                 popup, reusing its exact formatting/estimation helpers so the numbers always agree
+                 with what the in-reader panel shows for the same book. */ }
+            { readingStats && (readingStats.totalSeconds !== null || readingStats.wpm !== null) && (
+              <div>
+                <h3 className={ styles.descriptionHeading }>Reading Timer</h3>
+                <div className={ styles.statsRow }>
+                  { readingStats.totalSeconds !== null && (
+                    <span className={ styles.chip }>
+                      <strong>Time read:</strong> { formatFullReadingTime(readingStats.totalSeconds, READING_TIME_UNITS) }
+                    </span>
+                  ) }
+                  { readingStats.wpm !== null && (
+                    <span className={ styles.chip }><strong>Pace:</strong> { Math.round(readingStats.wpm) } wpm</span>
+                  ) }
+                  { readingStats.secondsLeft !== null && (
+                    <span className={ styles.chip }>
+                      <strong>Time left:</strong> { formatEstimatedTime(readingStats.secondsLeft, READING_TIME_UNITS) }
+                    </span>
+                  ) }
+                </div>
+              </div>
+            ) }
+
+            { /* CLAUDE-ADDED: The most recent entry from the reader's own Completed tab (see
+                 lastCompletedRead in the effect above) -- created whenever the in-reader timer is
+                 reset with "save", archiving everything accumulated since the previous reset/save as
+                 one completed run. Only ever the single latest one here, not the full history list
+                 the reader panel shows -- this is a summary popup, not a replacement for it. */ }
+            { readingStats?.lastCompletedRead && (
+              <div>
+                <h3 className={ styles.descriptionHeading }>Completed Read</h3>
+                <div className={ styles.statsRow }>
+                  <span className={ styles.chip }>
+                    <strong>Completed:</strong> { formatTimestamp(readingStats.lastCompletedRead.completedAt) }
+                  </span>
+                  <span className={ styles.chip }>
+                    <strong>Duration:</strong> { formatFullReadingTime(readingStats.lastCompletedRead.seconds, READING_TIME_UNITS) }
+                  </span>
+                </div>
+
+                { /* CLAUDE-ADDED: The day-by-day breakdown archived onto this specific completed run
+                     (see DailyReadingBucket/lastCompletedRead.dailyHistory) -- each bucket is one
+                     day's reading session within it, same data the reader's own Completed tab shows
+                     nested under each entry (see DailyHistoryRows in StatefulReadingTimerContainer),
+                     just re-sorted/re-rendered here with this component's own chip styling instead of
+                     that panel's baseline-aligned row layout. wpm is derived from the bucket's raw
+                     seconds/words the same way computeCurrentWpm derives the rolling estimate --
+                     never stored pre-computed, so it can't drift from its own inputs. */ }
+                { readingStats.lastCompletedRead.dailyHistory && readingStats.lastCompletedRead.dailyHistory.length > 0 && (
+                  <ul className={ styles.sessionsList }>
+                    { [...readingStats.lastCompletedRead.dailyHistory]
+                      .sort((a, b) => b.date.localeCompare(a.date))
+                      .map((bucket) => {
+                        const wpm = bucket.seconds > 0 ? Math.round(bucket.words / (bucket.seconds / 60)) : null;
+                        const percent = Number.isFinite(bucket.progressionDelta) ? Math.round(bucket.progressionDelta * 100) : 0;
+
+                        return (
+                          <li key={ bucket.date } className={ styles.sessionRow }>
+                            <span className={ styles.chip }>
+                              { formatDateOnly(new Date(`${ bucket.date }T00:00:00`)) }
+                            </span>
+                            <span className={ styles.chip }>{ formatFullReadingTime(bucket.seconds, READING_TIME_UNITS) }</span>
+                            { /* CLAUDE-ADDED: Always rendered (an em dash when there's no pace data for
+                                 this day) rather than omitted -- .sessionsList aligns every row into the
+                                 same 4 grid columns (see the stylesheet), so a row that skipped this cell
+                                 entirely would shift its own percent cell left into the pace column,
+                                 misaligning it against every other row's. */ }
+                            <span className={ styles.chip }>{ wpm !== null ? `${ wpm } wpm` : "—" }</span>
+                            <span className={ styles.chip }>{ percent }%</span>
+                          </li>
+                        );
+                      }) }
+                  </ul>
+                ) }
               </div>
             ) }
           </div>

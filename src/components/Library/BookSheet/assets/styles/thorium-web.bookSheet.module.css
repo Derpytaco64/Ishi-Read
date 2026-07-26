@@ -1,11 +1,15 @@
+/* CLAUDE-ADDED: --th-color-accent/--th-color-accent-text are deliberately NOT declared here anymore
+   -- they used to be hardcoded per-theme (light: #2f6fed/#fff, dark: #5b8dff/#101010), but the
+   accent is now a single user-chosen color (see the Accent Color picker in StatefulLibraryMenu.tsx)
+   applied once, globally, to <html> by useAccentColor.ts/layout.tsx's blocking init script -- both
+   are still referenced below via var(), they just inherit the app-wide value through the cascade
+   instead of this component re-declaring its own. */
 .root {
   --th-color-text: #333;
   --th-color-text-secondary: #666;
   --th-color-background: #fff;
   --th-color-primary: #e0e0e0;
   --th-color-secondary: #fafafa;
-  --th-color-accent: #2f6fed;
-  --th-color-accent-text: #fff;
 }
 
 :global(html[data-theme="dark"]) .root {
@@ -14,8 +18,6 @@
   --th-color-background: #2b2b2b;
   --th-color-primary: #5a5a5a;
   --th-color-secondary: #3d3d3d;
-  --th-color-accent: #5b8dff;
-  --th-color-accent-text: #101010;
 }
 
 /* React Modal Sheet sets its own opacity/backgroundColor inline (see react-modal-sheet's
@@ -114,7 +116,7 @@
    .closeButton. */
 .playButton {
   position: absolute;
-  right: 3.75rem;
+  right: 3.0rem;
   top: calc(var(--play-size) / -2);
   display: flex;
   align-items: center;
@@ -122,7 +124,10 @@
   width: var(--play-size);
   height: var(--play-size);
   border-radius: 50%;
-  background-color: var(--th-color-accent);
+  /* CLAUDE-ADDED: Fallback values (after the comma) only matter if useAccentColor.ts's effect and
+     layout.tsx's blocking init script both somehow never ran (e.g. JS disabled) -- var()'s own
+     fallback, not a real expectation of this component's own default. */
+  background-color: var(--th-color-accent, #2f6fed);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   text-decoration: none;
   cursor: pointer;
@@ -133,7 +138,7 @@
   height: 2.5rem;
   /* Optical centering: the triangle glyph's mass sits left-of-center in its viewBox. */
   margin-left: 2.0px;
-  fill: var(--th-color-accent-text);
+  fill: var(--th-color-accent-text, #fff);
 }
 
 .playButton:hover {
@@ -240,6 +245,19 @@
      footprint, since they're positioned against .container's same full-width box .heroRow itself
      spans. */
   padding: 0 calc(2.5rem + var(--play-size) + 1.25rem) 1.5rem calc(1.75rem + var(--cover-w) + 1.25rem);
+  /* CLAUDE-ADDED: Bug -- books with a short title (one line instead of two, e.g. "Re:ZERO
+     -Starting Life in Another World-, Vol. 2" vs Vol. 1's longer subtitle) made .heroRow's own
+     natural (unset) height shrink below where .cover's fixed bottom edge sits, so .details started
+     rendering underneath/overlapping the still-visible bottom of the cover art instead of safely
+     below it -- .cover is a sibling in .header now (see the comment there), not a child of
+     .heroRow the way it used to be, so nothing was otherwise keeping .heroRow tall enough to clear
+     it regardless of how little text a given book's title/author/series actually need. 135px is
+     .cover's own bottom edge position (427.5px tall, positioned 285px above .header's top --
+     so 427.5 - 285 = 142.5px below it) minus .spacer's 20px (already flow height above .heroRow),
+     plus a little breathing room so short-title books still read as more than a 0px-clearance
+     touch -- has to be kept in sync by hand with --cover-h/.cover's top/.spacer's height if any of
+     those change. */
+  min-height: 135px;
 }
 
 .meta {
@@ -293,11 +311,110 @@
   gap: 1rem;
 }
 
+/* CLAUDE-ADDED: Row layout so .progressDial floats to the right of the stacked chip/tag rows
+   instead of taking a row of its own -- align-items: flex-start (not center) so the dial sits level
+   with the *top* of that stack rather than centering across its full (variable, tag-count-dependent)
+   height. */
+.detailsTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.detailsChips {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* CLAUDE-ADDED: flex-shrink: 0 keeps the row's own flex sizing (see .detailsTop) from squeezing this
+   narrower than its content when .detailsChips is wide -- that's a *layout* constraint, separate
+   from the width/height below, which is what actually shrinks the dial as the viewport narrows.
+   width/height here override the SVG's own width/height attributes (ReadProgressDial's DIAL_SIZE,
+   currently 225) -- CSS size wins over those presentation attributes for a replaced element like
+   <svg>, same as it would for an <img>. The viewBox stays fixed at DIAL_SIZE x DIAL_SIZE regardless
+   (untouched, still set via the width/height *attributes* the JSX passes), so shrinking the
+   rendered box via CSS scales everything inside proportionally -- the ring, its stroke, and the
+   percentage text all get smaller together, rather than the stroke/text staying a fixed pixel size
+   while just the circle shrinks. The clamp's max (225px) has to be kept in sync with DIAL_SIZE by
+   hand if that ever changes again -- CSS can't reach into the .tsx file to read the constant. */
+.progressDial {
+  flex-shrink: 0;
+  position: relative;
+  left: -50px;
+  width: clamp(64px, 14vw, 225px);
+  height: clamp(64px, 14vw, 225px);
+}
+
+.progressDialTrack {
+  fill: none;
+  stroke: var(--th-color-primary);
+}
+
+.progressDialFill {
+  fill: none;
+  stroke: var(--th-color-accent, #2f6fed);
+}
+
+.progressDialText {
+  fill: var(--th-color-text);
+  font-size: 40px;
+  font-weight: 700;
+}
+
 .chipRow,
 .tagsRow {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
+}
+
+/* CLAUDE-ADDED: Reading Timer's and Completed Read's own single summary row (Time read/Pace/Time
+   left, and Completed/Duration respectively) -- a dedicated class rather than reusing .chipRow,
+   since .chipRow is shared by the calibre metadata rows above (ID/UUID, language/ISBN,
+   publisher/published) where wrapping to multiple lines on a narrow card is expected and fine.
+   grid-auto-flow: column lays chips out left-to-right like a flex row would (there's only ever one
+   row here, so nothing to column-align against within the row itself), but grid is what
+   .sessionsList below actually needs multiple rows of, so both use the same mechanism for a
+   consistent look across this whole reading-stats area rather than mixing flex and grid. */
+.statsRow {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  justify-content: start;
+  gap: 0.6rem;
+}
+
+/* CLAUDE-ADDED: One <li class="sessionRow"> per reading session (see the Completed Read section).
+   Unlike .statsRow above, this genuinely has multiple rows, which is the whole reason it's a grid
+   at all: .sessionRow's own display: contents (below) lets each <li>'s <span> children become
+   direct items of *this* grid instead of their own separate row-local one, so
+   grid-template-columns (a fixed 4 columns: date/duration/pace/percent) is shared across every
+   session -- each column's track width is the widest cell *in that column across all rows*, so
+   e.g. every row's pace value starts at the same x position regardless of how wide that
+   particular row's own date or duration text happens to be, instead of each row packing its own
+   chips left based only on its own content (StatefulBookSheet.tsx's wpm-cell placeholder, "—" for
+   rows with no pace data, is what keeps every row contributing exactly 4 cells to this -- a row
+   that skipped its own pace cell entirely would shift its percent into the pace column instead).
+   list-style/margin/padding reset since these are grid cells first, list items second. padding-left
+   indents the whole list under the Completed/Duration summary above it, reading as a nested
+   breakdown of that entry rather than a sibling of equal weight. */
+.sessionsList {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0 0 0 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(4, max-content);
+  column-gap: 0.6rem;
+  row-gap: 0.5rem;
+  align-items: center;
+}
+
+.sessionRow {
+  display: contents;
 }
 
 .chip {

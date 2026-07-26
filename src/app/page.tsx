@@ -8,6 +8,7 @@ import Image from "next/image";
 
 import { isManifestRouteEnabled } from "./ManifestRouteEnabled";
 import { getBookProgressPercent } from "@/helpers/getBookProgress";
+import { useCoverSize } from "./useCoverSize";
 import {
   DEFAULT_SHELF_ORDER,
   DEFAULT_SHELF_PREFS,
@@ -90,6 +91,16 @@ export default function Home() {
   // CLAUDE-ADDED: Defaults to all shelves visible on the server render; the mount effect below
   // reads back the persisted choice, mirroring the theme state's hydration pattern above.
   const [shelfPrefs, setShelfPrefs] = useState<ShelfPrefs>(DEFAULT_SHELF_PREFS);
+
+  // CLAUDE-ADDED: Owned here (not called independently inside StatefulLibraryMenu too, unlike
+  // useAccentColor) and passed down as a prop -- accentColor's live update works across components
+  // without prop-drilling because setAccentColor's side effect is a global CSS custom property the
+  // browser repaints from directly, but coverSize only ever reaches PublicationGrid through this
+  // component's own React state (its columnWidth prop), so two independent hook instances here and
+  // in StatefulLibraryMenu would silently desync -- the menu's own change wouldn't re-render this
+  // component's grid until a full reload. Same reasoning shelfPrefs below is already prop-drilled
+  // instead of independently re-derived in each place that needs it.
+  const { coverSize, setCoverSize } = useCoverSize();
 
   useEffect(() => {
     try {
@@ -251,6 +262,8 @@ export default function Home() {
         onToggleShelf={ toggleShelf }
         shelfOrder={ shelfOrder }
         onReorderShelves={ reorderShelves }
+        coverSize={ coverSize }
+        onChangeCoverSize={ setCoverSize }
       />
 
       <header className="header">
@@ -286,6 +299,7 @@ export default function Home() {
               publications={ publications }
               renderCover={ renderBookCover }
               progressByUrl={ progressByUrl }
+              columnWidth={ coverSize }
               onSelect={ (publication) => {
                 setSelectedBook(publication);
                 setIsBookSheetOpen(true);

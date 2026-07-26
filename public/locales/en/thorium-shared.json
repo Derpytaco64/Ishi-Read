@@ -202,6 +202,9 @@
                 "title": "Layout"
             },
             "letterSpacing": "Letter spacing",
+            "margin": {
+                "horizontal": "Horizontal margin"
+            },
             "ligatures": {
                 "label": "Enable ligatures",
                 "title": "Ligatures"

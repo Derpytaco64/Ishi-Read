@@ -1,8 +1,8 @@
 import { PUBLICATION_MANIFESTS } from "@/config/publications";
 import { fetchPositionFromServer } from "@/lib/userData/positionApi";
 
-// CLAUDE-ADDED: Mirrors the /read/manifest/[manifest] and /read/[identifier] routes' own resolution logic (see usePublication.ts's selfHref and page.tsx's PUBLICATION_MANIFESTS lookup) so this reconstructs the exact manifest URL the reader uses to key its saved position.
-function getManifestUrlFromBookUrl(bookUrl: string): string | null {
+// CLAUDE-ADDED: Mirrors the /read/manifest/[manifest] and /read/[identifier] routes' own resolution logic (see usePublication.ts's selfHref and page.tsx's PUBLICATION_MANIFESTS lookup) so this reconstructs the exact manifest URL the reader uses to key its saved position. Exported (not just used internally below) so other callers keyed by manifestUrl -- e.g. StatefulBookSheet's reading-timer fetches -- can resolve it from a Publication's own url without duplicating this logic.
+export function getManifestUrlFromBookUrl(bookUrl: string): string | null {
   const manifestMatch = bookUrl.match(/^\/read\/manifest\/(.+)$/);
   if (manifestMatch) {
     try {

@@ -74,16 +74,22 @@
   stroke: rgba(255, 255, 255, 0.5);
 }
 
-/* CLAUDE-ADDED: Soft yellow fill per user request. */
+/* CLAUDE-ADDED: Was a hardcoded soft yellow -- now the same user-chosen accent color as
+   StatefulBookSheet's play button/progress dial (see the Accent Color picker in
+   StatefulLibraryMenu.tsx), which useAccentColor.ts applies globally to <html> as
+   --th-color-accent. The fallback (after the comma) only matters if that never ran (JS
+   disabled) -- it's the old hardcoded yellow, not a real expectation of this component's own
+   default. */
 .progressRingFill {
   fill: none;
-  stroke: #f2d675;
+  stroke: var(--th-color-accent, #f2d675);
 }
 
+/* CLAUDE-ADDED: No font-size here anymore -- PublicationGrid.tsx now sets it inline per-instance
+   (PROGRESS_RING_TEXT_RATIO * the ring's own dynamic size), scaling with the cover-size slider
+   instead of staying a fixed 9px regardless of how big the ring itself is. */
 .progressRingText {
   fill: #fff;
-  /* CLAUDE-ADDED: Shrunk slightly and tracked tighter to fit one-decimal values like "100.0%". */
-  font-size: 9px;
   font-weight: 600;
   letter-spacing: -0.3px;
 }

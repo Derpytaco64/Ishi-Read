@@ -13,54 +13,73 @@ import { getBookProgressPercent } from "@/helpers/getBookProgress";
 
 import classNames from "classnames";
 
-// CLAUDE-ADDED: Geometry for the corner progress ring; circumference drives the stroke-dasharray/offset fill technique. Sized up slightly from the original 40/15 to fit one-decimal values like "100.0%".
+// CLAUDE-ADDED: Geometry for the corner progress ring at the reference cover width (160, the
+// original hardcoded columnWidth default before cover size became a slider) -- circumference
+// drives the stroke-dasharray/offset fill technique. Sized up slightly from the original 40/15 to
+// fit one-decimal values like "100.0%". Every ProgressRing instance now scales all of this against
+// its own coverWidth prop (see RADIUS_RATIO/STROKE_RATIO/TEXT_RATIO below) instead of using these
+// as fixed pixel constants, so the ring stays proportional to the cover as that slider moves.
+const PROGRESS_RING_REFERENCE_WIDTH = 160;
 const PROGRESS_RING_SIZE = 46;
 const PROGRESS_RING_RADIUS = 17;
 // CLAUDE-ADDED: Widened from 3 to 5 per user feedback that the fill was hard to see.
 const PROGRESS_RING_STROKE = 5;
-const PROGRESS_RING_CIRCUMFERENCE = 2 * Math.PI * PROGRESS_RING_RADIUS;
+const PROGRESS_RING_TEXT_SIZE = 9;
+
+const PROGRESS_RING_SIZE_RATIO = PROGRESS_RING_SIZE / PROGRESS_RING_REFERENCE_WIDTH;
+const PROGRESS_RING_RADIUS_RATIO = PROGRESS_RING_RADIUS / PROGRESS_RING_SIZE;
+const PROGRESS_RING_STROKE_RATIO = PROGRESS_RING_STROKE / PROGRESS_RING_SIZE;
+const PROGRESS_RING_TEXT_RATIO = PROGRESS_RING_TEXT_SIZE / PROGRESS_RING_SIZE;
 
 // CLAUDE-ADDED: Circular reading-progress indicator. The two ring circles sit in a <g> rotated -90deg so the fill starts at 12 o'clock and sweeps clockwise; the percentage text lives outside that group so it stays upright.
-const ProgressRing = ({ percent }: { percent: number }) => {
+// coverWidth is the same columnWidth PublicationGrid renders the card at (see the call site below)
+// -- the ring's own size/stroke/font-size all scale proportionally from it, via the *_RATIO
+// constants above, rather than being fixed regardless of how big the cover itself is.
+const ProgressRing = ({ percent, coverWidth }: { percent: number; coverWidth: number }) => {
   const clamped = Math.min(100, Math.max(0, percent));
-  const center = PROGRESS_RING_SIZE / 2;
-  const dashOffset = PROGRESS_RING_CIRCUMFERENCE * (1 - clamped / 100);
+  const size = coverWidth * PROGRESS_RING_SIZE_RATIO;
+  const radius = size * PROGRESS_RING_RADIUS_RATIO;
+  const stroke = size * PROGRESS_RING_STROKE_RATIO;
+  const circumference = 2 * Math.PI * radius;
+  const center = size / 2;
+  const dashOffset = circumference * (1 - clamped / 100);
 
   return (
     <svg
       className={ publicationGridStyles.progressRing }
-      width={ PROGRESS_RING_SIZE }
-      height={ PROGRESS_RING_SIZE }
-      viewBox={ `0 0 ${ PROGRESS_RING_SIZE } ${ PROGRESS_RING_SIZE }` }
+      width={ size }
+      height={ size }
+      viewBox={ `0 0 ${ size } ${ size }` }
       aria-hidden="true"
     >
       <circle
         className={ publicationGridStyles.progressRingBackdrop }
         cx={ center }
         cy={ center }
-        r={ PROGRESS_RING_RADIUS + PROGRESS_RING_STROKE / 2 }
+        r={ radius + stroke / 2 }
       />
       <g transform={ `rotate(-90 ${ center } ${ center })` }>
         <circle
           className={ publicationGridStyles.progressRingTrack }
           cx={ center }
           cy={ center }
-          r={ PROGRESS_RING_RADIUS }
-          strokeWidth={ PROGRESS_RING_STROKE }
+          r={ radius }
+          strokeWidth={ stroke }
         />
         <circle
           className={ publicationGridStyles.progressRingFill }
           cx={ center }
           cy={ center }
-          r={ PROGRESS_RING_RADIUS }
-          strokeWidth={ PROGRESS_RING_STROKE }
-          strokeDasharray={ PROGRESS_RING_CIRCUMFERENCE }
+          r={ radius }
+          strokeWidth={ stroke }
+          strokeDasharray={ circumference }
           strokeDashoffset={ dashOffset }
           strokeLinecap="round"
         />
       </g>
       <text
         className={ publicationGridStyles.progressRingText }
+        style={{ fontSize: size * PROGRESS_RING_TEXT_RATIO }}
         x="50%"
         y="50%"
         textAnchor="middle"
@@ -216,7 +235,7 @@ export const PublicationGrid = ({
           </figure>
           { /* CLAUDE-ADDED: Sits in the bottom-right corner, same corner .info slides up to cover on hover -- .progressRing has a higher z-index so the ring stays visible on top of it instead of being hidden. Only shown once the book has actual saved progress. */ }
           { progressByUrl[publication.url] !== undefined && (
-            <ProgressRing percent={ progressByUrl[publication.url] } />
+            <ProgressRing percent={ progressByUrl[publication.url] } coverWidth={ columnWidth } />
           ) }
           <div className={ publicationGridStyles.info }>
             <h2 className={ publicationGridStyles.title }>
