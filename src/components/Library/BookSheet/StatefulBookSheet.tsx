@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 
@@ -14,6 +14,15 @@ import { Publication } from "@/components/Misc/PublicationGrid";
 import PlayIcon from "./assets/icons/play_arrow.svg";
 
 import styles from "./assets/styles/thorium-web.bookSheet.module.css";
+
+import type { SheetRef } from "react-modal-sheet";
+
+// CLAUDE-ADDED: Index into the snapPoints array below ([0, 0.5, 1]) that the sheet opens at --
+// cover/title/author/series only, per snap value 0.5. There's no equivalent FULL_SNAP index
+// anymore: wheel-scrolling moves the sheet by directly setting its underlying motion value (see
+// handleBodyRef below) rather than animating to a fixed snap, so "fully open" is just wherever
+// that continuous tracking ends up (y reaching 0), not a discrete state.
+const PEEK_SNAP = 1;
 
 export interface StatefulBookSheetProps {
   publication: Publication | null;
@@ -68,37 +77,93 @@ export const StatefulBookSheet = ({
     }).catch(() => {});
   };
 
+  // CLAUDE-ADDED: sheetRef exposes react-modal-sheet's underlying `y` motion value (its vertical
+  // offset -- 0 is fully open, sheetHeight is fully closed) and `height` (the measured sheet
+  // height). The wheel handler below sets `y` directly instead of calling the imperative snapTo(),
+  // so the sheet tracks the wheel continuously (comes into view proportionally to how much you've
+  // scrolled) rather than jumping/animating to a fixed endpoint on the first tick.
+  const sheetRef = useRef<SheetRef | null>(null);
+  const wheelCleanupRef = useRef<(() => void) | null>(null);
+
+  // CLAUDE-ADDED: react-modal-sheet unmounts the sheet's entire content subtree (including this
+  // body, and the content-scroller div wrapping it) whenever the sheet is fully closed -- see
+  // react-modal-sheet/dist/index.js's `state !== "closed" ? children : null`. A plain useRef +
+  // useEffect(..., []) attaches once at StatefulBookSheet's own mount, while the sheet is still
+  // closed and that subtree doesn't exist yet, and never re-runs on later opens. A ref callback on
+  // ThContainerBody instead fires every time its div actually mounts/unmounts, so re-attaching here
+  // always lands on a real node. Its parentElement is react-modal-sheet's own scroller div (the
+  // actual overflow-y: auto element -- see Sheet.Content in the library source, which renders this
+  // body as the scroller's only child), which is what we need for both the wheel listener target
+  // and its scrollTop check.
+  //
+  // React attaches onWheel/onTouchMove listeners as passive by default (see the React 17
+  // changelog), so e.preventDefault() from a JSX onWheel prop is silently ignored -- without it, a
+  // wheel-down at the peek position would scroll the (empty, not-yet-overflowing) content-scroller
+  // instead of dragging the sheet open. A manually attached, non-passive native listener is the
+  // only way to actually block the scroller's default action when we want the sheet to move
+  // instead of its content.
+  const handleBodyRef = useCallback((node: HTMLDivElement | null) => {
+    wheelCleanupRef.current?.();
+    wheelCleanupRef.current = null;
+
+    const scroller = node?.parentElement;
+    if (!scroller) return;
+
+    const onWheel = (e: WheelEvent) => {
+      const sheet = sheetRef.current;
+      if (!sheet) return;
+
+      const fullY = 0;
+      // CLAUDE-ADDED: Matches the 0.5 peek entry in snapPoints below -- half the sheet's own
+      // (near-viewport) height stays off-screen at rest, same as before, just no longer expressed
+      // as a snap index since there's nothing to snap to anymore.
+      const peekY = sheet.height / 2;
+      const current = sheet.y.get();
+
+      if (e.deltaY > 0 && current > fullY) {
+        e.preventDefault();
+        sheet.y.set(Math.max(fullY, current - e.deltaY));
+      } else if (e.deltaY < 0 && current < peekY && scroller.scrollTop <= 0) {
+        e.preventDefault();
+        sheet.y.set(Math.min(peekY, current - e.deltaY));
+      }
+    };
+
+    scroller.addEventListener("wheel", onWheel, { passive: false });
+    wheelCleanupRef.current = () => scroller.removeEventListener("wheel", onWheel);
+  }, []);
+
   return (
     <ThBottomSheet
+      ref={ sheetRef }
       isOpen={ isOpen }
       onOpenChange={ onOpenChange }
       onOpenEnd={ () => (playLinkRef.current ?? closeButtonRef.current)?.focus({ preventScroll: true }) }
-      // CLAUDE-ADDED: detent="content" (auto-fit to content, capped at ~viewport height) made the
-      // card's own height track its content -- whatever fit within that cap showed immediately,
-      // which on a tall viewport meant almost everything was visible on open regardless of how the
-      // scroll region was set up. detent="default" + snapPoints instead gives the card one fixed
-      // (near-viewport) height always, and only its *position* changes between snaps -- opening at
-      // the smaller snap genuinely leaves the rest of the (same, single) card below the viewport's
-      // bottom edge, and dragging it (grab anywhere on the card, not just the handle) up to the
-      // larger snap is what brings that into view. This is the same snapPoints-driven pattern the
-      // reader's own bottom sheets use (see StatefulBottomSheet.tsx).
+      // CLAUDE-ADDED: detent="default" + snapPoints gives the card one fixed (near-viewport) height
+      // always, with only its *position* changing -- opening at PEEK_SNAP (0.5) shows the
+      // cover/title/author/series and leaves the details panel below the viewport's bottom edge.
+      // snapPoints/initialSnap here only drive that initial open position and the drag-to-nearest-
+      // point behavior when grabbing the card directly (react-modal-sheet's own default, needed
+      // since touch devices have no wheel) -- wheel-scrolling (see handleBodyRef's wheel listener
+      // above) bypasses snapping entirely, setting the sheet's position directly so it tracks the
+      // wheel continuously instead of animating to a fixed point. The drag handle that would
+      // normally also move between snaps is hidden (.dragIndicator, in the stylesheet) since the
+      // wheel is the intended way to do this now.
       detent="default"
       snapPoints={ [0, 0.5, 1] }
-      initialSnap={ 1 }
+      initialSnap={ PEEK_SNAP }
       className={ styles.root }
       compounds={{
         container: { className: styles.container },
         header: { className: styles.header },
         dragIndicator: { className: styles.dragIndicator },
-        // CLAUDE-ADDED: ThBottomSheet (the shared primitive, also used by the reader's own sheets)
-        // sets `contain: content` + `overscroll-behavior: contain` on this element via a direct
-        // style mutation whenever the sheet is draggable (snapPoints.length > 1, true here) -- that
-        // broke two things at once: `contain: content` establishes a paint containment boundary, so
-        // it clipped the cover/play button's overhang exactly the way an ancestor's overflow: auto
-        // used to, and it also interfered with the content-scroller's own native scrolling once the
-        // card is fully expanded but its content still doesn't fit. .scroller below (a class scoped
-        // to only this sheet, not the global react-modal-sheet class, so it can't affect the
-        // reader's own draggable sheets elsewhere) overrides just `contain` back to none.
+        // CLAUDE-ADDED: ThBottomSheet sets `contain: content` + `overscroll-behavior: contain` on
+        // this element via a direct style mutation whenever the sheet is draggable (snapPoints.length
+        // > 1, true here) -- contain: paint (implied by contain: content) clipped anything rendering
+        // outside this element's own box, which broke both the cover/play button's overhang and the
+        // content-scroller's own ability to reveal content past its bottom edge once the card is
+        // fully expanded. .scroller below (a class scoped to only this sheet, not the global
+        // react-modal-sheet class) overrides just `contain` back to none.
         scroller: { className: styles.scroller },
         backdrop: { className: styles.backdrop }
       }}
@@ -109,6 +174,31 @@ export const StatefulBookSheet = ({
           heading: { className: styles.visuallyHidden }
         }}
       >
+        { /* CLAUDE-ADDED: Rendered here (inside the header, outside react-modal-sheet's own
+             content-scroller) rather than in the body below, specifically so they can overhang the
+             *card's* top edge -- .container has overflow: visible, but .scroller has its own
+             independent overflow-y: auto clipping anything that renders above its own top, no matter
+             what .container allows. The header sits outside the scroller entirely, so .cover/
+             .playButton's negative top offsets (see the stylesheet) land in the clear. */ }
+        { displayed && (
+          <>
+          <figure className={ styles.cover }>
+            <img src={ displayed.cover } alt="" className={ styles.coverImage } />
+          </figure>
+
+          <Link
+            ref={ playLinkRef }
+            // CLAUDE-ADDED: Cast to Route since publication.url is a dynamically-built manifest path that next.config.mjs's typedRoutes can't statically verify.
+            href={ displayed.url as Route }
+            className={ styles.playButton }
+            aria-label={ `Open ${ displayed.title }` }
+            onClick={ () => onOpenChange(false) }
+          >
+            <PlayIcon aria-hidden="true" focusable="false" />
+          </Link>
+          </>
+        ) }
+
         <ThCloseButton
           ref={ closeButtonRef }
           className={ styles.closeButton }
@@ -117,17 +207,15 @@ export const StatefulBookSheet = ({
         />
       </ThContainerHeader>
 
-      <ThContainerBody className={ styles.body }>
+      <ThContainerBody ref={ handleBodyRef } className={ styles.body }>
         { displayed && (
           <>
-          { /* CLAUDE-ADDED: Reserves the headroom .cover's negative top offset pokes into -- see
-               .spacer's comment in the stylesheet for why. */ }
+          { /* CLAUDE-ADDED: Reserves flow height above .heroRow so its title/author/series text
+               starts at a reasonable position below the card's rounded top corner, clear of the
+               cover art overhanging above it (see ThContainerHeader above and .spacer's comment in
+               the stylesheet). */ }
           <div className={ styles.spacer } aria-hidden="true" />
           <div className={ styles.heroRow }>
-            <figure className={ styles.cover }>
-              <img src={ displayed.cover } alt="" className={ styles.coverImage } />
-            </figure>
-
             <div className={ styles.meta }>
               <h2 className={ styles.title }>{ displayed.title }</h2>
               <p className={ styles.author }>{ displayed.author }</p>
@@ -141,17 +229,6 @@ export const StatefulBookSheet = ({
                 <p className={ styles.rendition }>{ displayed.rendition }</p>
               ) }
             </div>
-
-            <Link
-              ref={ playLinkRef }
-              // CLAUDE-ADDED: Cast to Route since publication.url is a dynamically-built manifest path that next.config.mjs's typedRoutes can't statically verify.
-              href={ displayed.url as Route }
-              className={ styles.playButton }
-              aria-label={ `Open ${ displayed.title }` }
-              onClick={ () => onOpenChange(false) }
-            >
-              <PlayIcon aria-hidden="true" focusable="false" />
-            </Link>
           </div>
 
           { /* CLAUDE-ADDED: calibre-style metadata panel -- everything here is sourced from

@@ -49,171 +49,48 @@
   border-top-right-radius: 20px !important;
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.25) !important;
   color: var(--th-color-text);
-}
 
-/* CLAUDE-ADDED: Undoes the `contain: content` that ThBottomSheet applies to this element via a
-   direct style mutation whenever the sheet is draggable (see the compounds.scroller comment in
-   StatefulBookSheet.tsx for the full story) -- contain: paint (implied by contain: content)
-   clipped anything rendering outside this element's own box, which broke both the cover/play
-   button's overhang and the content-scroller's own ability to reveal content past its bottom edge
-   once the card is fully expanded. */
-.scroller {
-  contain: none !important;
-}
-
-/* CLAUDE-ADDED: A normal-flow bar, not absolutely positioned -- Sheet.Header sits as a sibling
-   above Sheet.Content's own scrollable area (see react-modal-sheet/dist/index.js SheetContainer:
-   Header then Content, both children of the same flex column), so as long as this stays in normal
-   flow it acts as a sticky header for free: it never scrolls away, only the body below it does.
-   position: relative so .dragIndicator (rendered as this element's first child by ThBottomSheet)
-   can be centered absolutely without disturbing the close button's own flex placement. */
-.header {
-  position: relative;
-  display: flex;
-  justify-content: flex-end;
-  padding: 0.75rem;
-}
-
-/* CLAUDE-ADDED: The little pull handle react-modal-sheet renders (and makes functional) whenever
-   the sheet has more than one snapPoint -- grabbing it, or anywhere else on the card, and dragging
-   moves between the peek and full snaps. */
-.dragIndicator {
-  position: absolute;
-  left: 50%;
-  top: 0.65rem;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 3rem;
-  height: 1.25rem;
-  padding: 0;
-  border: none;
-  background: none;
-  cursor: grab;
-}
-
-/* CLAUDE-ADDED: The SVG this button renders by default (a thin material "horizontal_rule" glyph)
-   reads as an almost-invisible hairline at typical handle sizes -- drawn as a plain rounded bar via
-   background-color instead, which stays crisp and legible at any size. */
-.dragIndicator svg {
-  display: none;
-}
-
-.dragIndicator::before {
-  content: "";
-  display: block;
-  width: 2.5rem;
-  height: 0.3rem;
-  border-radius: 999px;
-  background-color: var(--th-color-text-secondary);
-  opacity: 0.5;
-}
-
-.dragIndicator:hover::before,
-.dragIndicator[data-hovered]::before {
-  opacity: 0.8;
-}
-
-.visuallyHidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.closeButton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background-color: rgba(0, 0, 0, 0.35);
-  color: #fff;
-  cursor: pointer;
-}
-
-.closeButton svg {
-  width: 1.1rem;
-  height: 1.1rem;
-  fill: currentColor;
-}
-
-.closeButton[data-hovered] {
-  background-color: rgba(0, 0, 0, 0.5);
-}
-
-.closeButton[data-focus-visible] {
-  outline: 2px solid #6ba4ff;
-  outline-offset: 2px;
-}
-
-/* CLAUDE-ADDED: --cover-w/--cover-h/--play-size/--cover-poke live here (not on .heroRow, their
-   most direct user) so .spacer below can reference --cover-poke too -- custom properties only
-   inherit downward, so a value .heroRow needed to share with its own parent has to be declared on
-   that parent instead.
-   .body itself has no height cap or scroll of its own anymore -- it's plain flow content, and the
-   *only* scrollable element is react-modal-sheet's own content-scroller div, left at its native
-   overflow-y: auto (never overridden). detent="content" grows the sheet's own card to fit .body's
-   full natural height up to roughly the viewport's height; whatever doesn't fit renders past that
-   and is genuinely below the browser window's bottom edge until the content-scroller is scrolled
-   -- there's no separate inner box with its own boundary, the whole card (cover through
-   description) is one continuous scrollable region, same as scrolling an ordinary long page. */
-.body {
+  /* CLAUDE-ADDED: Declared here (the nearest shared ancestor of .header and .body) rather than on
+     .body alone -- .cover/.playButton moved into .header (see ThContainerHeader in
+     StatefulBookSheet.tsx) so they can overhang .container's own top edge, and custom properties
+     only inherit downward, so a value both .header and .body need has to live on something that's
+     an ancestor of both, not on either one directly. */
   --cover-w: 285px;
   --cover-h: 427.5px;
   --play-size: 75px;
-  --cover-poke: 220px;
-
-  display: flex;
-  flex-direction: column;
 }
 
-/* CLAUDE-ADDED: Reserves --cover-poke of empty flow height above .heroRow so .cover's own
-   negative-top offset (see below) lands within the content-scroller's natural content instead of
-   exceeding it -- the content-scroller clips anything that renders above its own top edge (that's
-   what makes it scrollable), so the poke has to happen *inside* that normal flow, not by escaping
-   it. Deliberately a fixed constant rather than something derived from .heroRow's own rendered
-   height: title/series text height varies per book, and tying the spacer to that would mean it
-   could drift out of sync with the cover's actual poke on some books but not others. */
-.spacer {
-  height: var(--cover-poke);
-  flex-shrink: 0;
+/* CLAUDE-ADDED: react-modal-sheet gives this its own `position: relative` by default (see
+   Sheet.Content's base style in react-modal-sheet/dist/index.js) and paints it after -- i.e. on
+   top of -- this element unless this is positioned too; position: absolute both lifts it out of
+   the flow entirely (so it no longer pushes .body down, letting .body's own .spacer take over
+   exactly how much room to reserve) and, as a side effect, wins that stacking order, keeping the
+   close button clickable above the body's own content. left/right (no width) stretches it to the
+   container's full width, which .cover/.playButton/.closeButton all need since their own left/
+   right/top offsets are measured against *this* box, not their immediate (unstyled, auto-sized)
+   parent -- position: absolute always resolves against the nearest positioned ancestor, so it
+   skips right over that parent to land here regardless. No display/padding of its own anymore --
+   now that .closeButton positions itself (see below), every child of .header is position: absolute,
+   so .header itself has no flow content left to lay out. */
+.header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
 }
 
-.heroRow {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: 1.25rem;
-  /* CLAUDE-ADDED: Tall enough that .cover's absolutely-positioned bottom edge (see .cover) always
-     lands inside .heroRow's own box, however short its actual text content happens to be -- title
-     length, series presence, etc. can't push the cover's bottom past .heroRow into .details. */
-  min-height: calc(var(--cover-h) - var(--cover-poke) + 1.5rem);
-  box-sizing: border-box;
-  /* CLAUDE-ADDED: 3.5rem (not 1.75rem, unlike the mirroring left-side reservation for the cover)
-     -- .playButton itself sits inset that same 3.5rem from the right edge, leaving room in the
-     very corner for the close button. */
-  padding: 0 calc(2.5rem + var(--play-size) + 1.25rem) 1.5rem calc(1.75rem + var(--cover-w) + 1.25rem);
-}
-
-/* CLAUDE-ADDED: Positioned via a fixed `top` offset (--cover-poke above .heroRow's own top) rather
-   than the old bottom-anchored approach -- bottom-anchoring made the poke amount a function of
-   .heroRow's own rendered height (itself dependent on how much text the title/author/series need),
-   so two books with different-length titles would poke by different amounts. Anchoring from the
-   top makes the poke a fixed, chosen constant instead, matching what .spacer above reserves. */
+/* CLAUDE-ADDED: Anchored from .header's own top (== .container's top, since .header is now an
+   absolute overlay with no flow height of its own) so a fixed fraction of the cover's height pokes
+   above the card's rounded top corner, into the backdrop -- 235px of 427.5px total is ~55%, a
+   little over half. Unlike the old within-card poke this replaced, that overhang would get clipped
+   by .scroller's own overflow-y: auto if .cover were still inside .body/.heroRow (.scroller clips
+   independently of .container's overflow: visible) -- rendering it inside .header instead, a
+   sibling of .scroller rather than a descendant, is what lets it actually escape the card. */
 .cover {
   position: absolute;
   left: 1.75rem;
-  top: calc(-1 * var(--cover-poke));
+  top: -285px;
   width: var(--cover-w);
   height: var(--cover-h);
   margin: 0;
@@ -231,9 +108,141 @@
   display: block;
 }
 
+/* CLAUDE-ADDED: Half its own height above .header's top (== .container's top), matching the ask
+   that this overhang the card the same way .cover does. Mirrors .cover's left offset on the right
+   edge instead, inset far enough (3.5rem, not 1.75rem) to leave the very corner clear for
+   .closeButton. */
+.playButton {
+  position: absolute;
+  right: 3.75rem;
+  top: calc(var(--play-size) / -2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--play-size);
+  height: var(--play-size);
+  border-radius: 50%;
+  background-color: var(--th-color-accent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.playButton svg {
+  width: 2.5rem;
+  height: 2.5rem;
+  /* Optical centering: the triangle glyph's mass sits left-of-center in its viewBox. */
+  margin-left: 2.0px;
+  fill: var(--th-color-accent-text);
+}
+
+.playButton:hover {
+  filter: brightness(1.08);
+}
+
+.playButton:focus-visible {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 2px;
+}
+
+/* CLAUDE-ADDED: react-modal-sheet always renders this (whenever the sheet is draggable, true here
+   since snapPoints.length > 1) -- moving the sheet between snaps is wheel-driven now (see
+   StatefulBookSheet.tsx's wheel handler), so the little grab tab itself is just hidden rather than
+   styled. display: none also drops it out of tab order, so it can't be focused as a dead control. */
+.dragIndicator {
+  display: none;
+}
+
+/* CLAUDE-ADDED: Undoes the `contain: content` that ThBottomSheet applies to this element via a
+   direct style mutation whenever the sheet is draggable (see the compounds.scroller comment in
+   StatefulBookSheet.tsx for the full story) -- contain: paint (implied by contain: content)
+   clipped anything rendering outside this element's own box, which broke both the cover/play
+   button's overhang and the content-scroller's own ability to reveal content past its bottom edge
+   once the card is fully expanded. */
+.scroller {
+  contain: none !important;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* CLAUDE-ADDED: color was a hardcoded #fff back when background-color gave this a dark circle to
+   sit on regardless of what was behind it -- without that circle, it needs to match the card's own
+   surface instead (var(--th-color-text), same color the rest of the card's text uses), or it's
+   invisible in light theme sitting directly on .container's white background. */
+.closeButton {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--th-color-text);
+  cursor: pointer;
+}
+
+/* CLAUDE-ADDED: This is a filled-path Material Symbols icon (see close.svg), not a stroke-based
+   one, so there's no separate "thickness" to dial up -- scaling the whole icon up is what makes
+   its diagonal bars read as thicker too, since the same path proportions now cover more pixels. */
+.closeButton svg {
+  width: 1.6rem;
+  height: 1.6rem;
+  fill: currentColor;
+}
+
+.closeButton[data-focus-visible] {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 2px;
+}
+
+/* CLAUDE-ADDED: No height cap or scroll of its own -- it's plain flow content, and the *only*
+   scrollable element is react-modal-sheet's own content-scroller div, left at its native
+   overflow-y: auto (never overridden). Whatever doesn't fit renders past .container's own height
+   and is genuinely below the browser window's bottom edge until the content-scroller is scrolled
+   -- there's no separate inner box with its own boundary, the whole card (details through
+   description) is one continuous scrollable region, same as scrolling an ordinary long page. */
+.body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* CLAUDE-ADDED: Pushes .heroRow's title/author/series text down to a reasonable position below
+   the card's rounded top corner -- independent of .cover's own overhang now (see .cover and
+   .header in this file), since .cover moved out of .body/.heroRow entirely and no longer needs
+   this to line up with its own offset the way it used to. A fixed constant rather than something
+   derived from .heroRow's own rendered height: title/series text height varies per book, and tying
+   the spacer to that would mean it could drift book to book. */
+.spacer {
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.heroRow {
+  box-sizing: border-box;
+  /* CLAUDE-ADDED: Reserves the same horizontal room .cover/.playButton occupy up in .header (left
+     for the cover, right for the play button) so this row's text doesn't render underneath them --
+     they're a different element now (see .header in this file) but still share the same left/right
+     footprint, since they're positioned against .container's same full-width box .heroRow itself
+     spans. */
+  padding: 0 calc(2.5rem + var(--play-size) + 1.25rem) 1.5rem calc(1.75rem + var(--cover-w) + 1.25rem);
+}
+
 .meta {
-  flex: 1;
-  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -267,46 +276,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* CLAUDE-ADDED: Absolutely positioned within .heroRow, mirrored to the right edge instead of the
-   left like .cover, and anchored from the top the same way .cover now is (see .cover's comment) --
-   half its own height above .heroRow's top, so it straddles the same line .cover pokes above,
-   independent of .heroRow's own text-driven height. Half its own height is well within the
-   --cover-poke headroom .spacer reserves (75px / 2 = 37.5px vs. 220px reserved), so it doesn't need
-   its own spacer adjustment the way .cover does. */
-.playButton {
-  position: absolute;
-  right: 3.5rem;
-  top: calc(var(--play-size) / -2);
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--play-size);
-  height: var(--play-size);
-  border-radius: 50%;
-  background-color: var(--th-color-accent);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.playButton svg {
-  width: 2.5rem;
-  height: 2.5rem;
-  /* Optical centering: the triangle glyph's mass sits left-of-center in its viewBox. */
-  margin-left: 2.0px;
-  fill: var(--th-color-accent-text);
-}
-
-.playButton:hover {
-  filter: brightness(1.08);
-}
-
-.playButton:focus-visible {
-  outline: 2px solid #6ba4ff;
-  outline-offset: 2px;
 }
 
 /* CLAUDE-ADDED: The calibre-style metadata panel (ID/UUID/dates/tags/publisher/description). No
