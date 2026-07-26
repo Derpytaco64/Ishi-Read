@@ -1,20 +1,33 @@
 import fs from "fs";
 import path from "path";
 
-import { PUBLICATIONS_DIR } from "./publicationsConfig";
+import { getPublicationsDir } from "./publicationsConfig";
 
-export const USER_DATA_DIR = path.join(PUBLICATIONS_DIR, "UserData");
+// CLAUDE-ADDED: A function, not a constant -- the publications dir can change at runtime via the
+// Settings panel, so this must be re-derived on every call rather than fixed at module load.
+export function getUserDataDir(): string {
+  return path.join(getPublicationsDir(), "UserData");
+}
 
 // CLAUDE-ADDED: No auth system yet -- every request is attributed to this single stand-in user
 // until real sessions land. Isolated here so swapping it for a session lookup later is a small diff.
 export const CURRENT_USER_ID = "DT";
 
 export function getUserDir(userId: string): string {
-  return path.join(USER_DATA_DIR, userId);
+  return path.join(getUserDataDir(), userId);
 }
 
 export function getSettingsFilePath(userId: string): string {
   return path.join(getUserDir(userId), "settings.json");
+}
+
+// CLAUDE-ADDED: Deliberately a separate file from settings.json -- that one is fetched wholesale by
+// the reader's Redux store (hydrateFromServer merges every top-level key straight into RootState),
+// so library-page preferences (shelves, cover size, accent color, theme) can't share it without
+// tripping combineReducers' unknown-key warning. This file is only ever read/written by the library
+// page's own hooks.
+export function getLibraryPrefsFilePath(userId: string): string {
+  return path.join(getUserDir(userId), "libraryPrefs.json");
 }
 
 export function getPositionFilePath(userId: string, bookHash: string): string {
@@ -54,7 +67,7 @@ export function getDailyReadingHistoryFilePath(userId: string, bookHash: string)
 }
 
 function getUsersRegistryPath(): string {
-  return path.join(USER_DATA_DIR, "users.json");
+  return path.join(getUserDataDir(), "users.json");
 }
 
 // CLAUDE-ADDED: Stub registry for a future auth system -- one real entry (DT) today, shape ready
@@ -63,7 +76,7 @@ export function ensureUsersRegistry(): void {
   const registryPath = getUsersRegistryPath();
   if (fs.existsSync(registryPath)) return;
 
-  fs.mkdirSync(USER_DATA_DIR, { recursive: true });
+  fs.mkdirSync(getUserDataDir(), { recursive: true });
   fs.writeFileSync(
     registryPath,
     JSON.stringify([{ id: CURRENT_USER_ID, name: "DT" }], null, 2)

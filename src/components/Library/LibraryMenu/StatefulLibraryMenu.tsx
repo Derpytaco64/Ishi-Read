@@ -23,6 +23,8 @@ import { THEME_STORAGE_KEY } from "@/app/themeStorage";
 import { SHELF_LABELS, ShelfKey, ShelfPrefs } from "@/app/shelfPrefs";
 import { useAccentColor } from "@/app/useAccentColor";
 import { MIN_COVER_SIZE, MAX_COVER_SIZE } from "@/app/coverSizeStorage";
+import { useBookFolder } from "@/app/useBookFolder";
+import { fetchLibraryPrefsFromServer, saveLibraryPrefsToServer } from "@/lib/userData/libraryPrefsApi";
 
 import logo from "@/assets/ishamel.png";
 import floofLogo from "@/assets/foof_ishmael.png";
@@ -39,6 +41,7 @@ export interface StatefulLibraryMenuProps {
   onReorderShelves: (order: ShelfKey[]) => void;
   coverSize: number;
   onChangeCoverSize: (size: number) => void;
+  onBookFolderSaved?: () => void;
 }
 
 export const StatefulLibraryMenu = ({
@@ -47,7 +50,8 @@ export const StatefulLibraryMenu = ({
   shelfOrder,
   onReorderShelves,
   coverSize,
-  onChangeCoverSize
+  onChangeCoverSize,
+  onBookFolderSaved
 }: StatefulLibraryMenuProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -58,14 +62,53 @@ export const StatefulLibraryMenu = ({
 
   useEffect(() => {
     setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
+
+    // CLAUDE-ADDED: Same hydrateFromServer pattern the reader settings use. Unlike the localStorage
+    // seed above (already applied by layout.tsx's blocking init script before this ever runs), a
+    // value that arrives from the server here can genuinely differ, so it has to actually repaint.
+    fetchLibraryPrefsFromServer().then((server) => {
+      const fromServer = server?.theme;
+      if (fromServer !== "dark" && fromServer !== "light") return;
+
+      setTheme(fromServer);
+      localStorage.setItem(THEME_STORAGE_KEY, fromServer);
+      if (fromServer === "dark") {
+        document.documentElement.setAttribute("data-theme", "dark");
+      } else {
+        document.documentElement.removeAttribute("data-theme");
+      }
+    });
   }, []);
 
   const { accentColor, setAccentColor } = useAccentColor();
+
+  // CLAUDE-ADDED: Draft is a separate string from the saved bookFolder so typing doesn't fire a
+  // save (and its filesystem validation) on every keystroke -- only committed on blur/Enter, same
+  // moment the input's value is next allowed to be overwritten by a fresh fetch/save result.
+  const { bookFolder, saveBookFolder, isSaving, error: bookFolderError } = useBookFolder();
+  const [bookFolderDraft, setBookFolderDraft] = useState(bookFolder);
+  const [bookFolderSaved, setBookFolderSaved] = useState(false);
+
+  useEffect(() => {
+    setBookFolderDraft(bookFolder);
+  }, [bookFolder]);
+
+  const commitBookFolder = async () => {
+    if (bookFolderDraft === bookFolder) return;
+
+    setBookFolderSaved(false);
+    const ok = await saveBookFolder(bookFolderDraft);
+    if (ok) {
+      setBookFolderSaved(true);
+      onBookFolderSaved?.();
+    }
+  };
 
   const toggleTheme = () => {
     setTheme((prev) => {
       const next = prev === "dark" ? "light" : "dark";
       localStorage.setItem(THEME_STORAGE_KEY, next);
+      saveLibraryPrefsToServer({ theme: next });
       if (next === "dark") {
         document.documentElement.setAttribute("data-theme", "dark");
       } else {
@@ -235,6 +278,43 @@ export const StatefulLibraryMenu = ({
                     thumb: { className: styles.coverSizeThumb }
                   }}
                 />
+              </DisclosurePanel>
+            </Disclosure>
+
+            <Disclosure className={ styles.nestedDisclosure }>
+              <Heading className={ styles.disclosureHeading }>
+                <Button slot="trigger" className={ styles.disclosureTrigger }>
+                  <span className={ styles.disclosureLabel }>Book Folder</span>
+                  <ChevronDown aria-hidden="true" focusable="false" className={ styles.disclosureChevron } />
+                </Button>
+              </Heading>
+
+              <DisclosurePanel className={ styles.disclosurePanel }>
+                <label className={ styles.bookFolderRow }>
+                  <span>Folder to scan for books</span>
+                  <input
+                    type="text"
+                    className={ styles.bookFolderInput }
+                    value={ bookFolderDraft }
+                    onChange={ (e) => {
+                      setBookFolderDraft(e.target.value);
+                      setBookFolderSaved(false);
+                    } }
+                    onBlur={ commitBookFolder }
+                    onKeyDown={ (e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                    } }
+                    aria-label="Book folder path"
+                    spellCheck={ false }
+                  />
+                </label>
+                { isSaving && <p className={ styles.bookFolderStatus }>Saving…</p> }
+                { !isSaving && bookFolderError && (
+                  <p className={ styles.bookFolderStatusError }>{ bookFolderError }</p>
+                ) }
+                { !isSaving && !bookFolderError && bookFolderSaved && (
+                  <p className={ styles.bookFolderStatus }>Saved</p>
+                ) }
               </DisclosurePanel>
             </Disclosure>
           </DisclosurePanel>

@@ -9,6 +9,7 @@ import Image from "next/image";
 import { isManifestRouteEnabled } from "./ManifestRouteEnabled";
 import { getBookProgressPercent } from "@/helpers/getBookProgress";
 import { useCoverSize } from "./useCoverSize";
+import { fetchLibraryPrefsFromServer, saveLibraryPrefsToServer } from "@/lib/userData/libraryPrefsApi";
 import {
   DEFAULT_SHELF_ORDER,
   DEFAULT_SHELF_PREFS,
@@ -117,6 +118,7 @@ export default function Home() {
     setShelfPrefs((prev) => {
       const next = { ...prev, [key]: !prev[key] };
       localStorage.setItem(SHELF_PREFS_STORAGE_KEY, JSON.stringify(next));
+      saveLibraryPrefsToServer({ shelfPrefs: next });
       return next;
     });
   };
@@ -139,7 +141,29 @@ export default function Home() {
   const reorderShelves = (nextOrder: ShelfKey[]) => {
     setShelfOrder(nextOrder);
     localStorage.setItem(SHELF_ORDER_STORAGE_KEY, JSON.stringify(nextOrder));
+    saveLibraryPrefsToServer({ shelfOrder: nextOrder });
   };
+
+  // CLAUDE-ADDED: Same hydrateFromServer pattern the reader settings use -- one fetch after mount,
+  // reconciling both shelf preferences at once since they're both owned here. The server copy wins
+  // over whatever the localStorage-seeded effects above already set, same as Redux's own merge.
+  useEffect(() => {
+    fetchLibraryPrefsFromServer().then((server) => {
+      if (!server) return;
+
+      if (server.shelfPrefs && typeof server.shelfPrefs === "object") {
+        const next = { ...DEFAULT_SHELF_PREFS, ...(server.shelfPrefs as ShelfPrefs) };
+        setShelfPrefs(next);
+        localStorage.setItem(SHELF_PREFS_STORAGE_KEY, JSON.stringify(next));
+      }
+
+      if (server.shelfOrder) {
+        const next = mergeShelfOrder(server.shelfOrder);
+        setShelfOrder(next);
+        localStorage.setItem(SHELF_ORDER_STORAGE_KEY, JSON.stringify(next));
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const checkManifestRoute = async () => {
@@ -155,17 +179,17 @@ export default function Home() {
     checkManifestRoute();
   }, []);
 
-  useEffect(() => {
-    const fetchMyLibrary = async () => {
-      try {
-        const res = await fetch("/api/books");
-        const data = await res.json();
-        setMyLibraryBooks(data.books || []);
-      } catch (error) {
-        console.error("Error fetching library books:", error);
-      }
-    };
+  const fetchMyLibrary = async () => {
+    try {
+      const res = await fetch("/api/books");
+      const data = await res.json();
+      setMyLibraryBooks(data.books || []);
+    } catch (error) {
+      console.error("Error fetching library books:", error);
+    }
+  };
 
+  useEffect(() => {
     fetchMyLibrary();
   }, []);
 
@@ -264,6 +288,7 @@ export default function Home() {
         onReorderShelves={ reorderShelves }
         coverSize={ coverSize }
         onChangeCoverSize={ setCoverSize }
+        onBookFolderSaved={ fetchMyLibrary }
       />
 
       <header className="header">

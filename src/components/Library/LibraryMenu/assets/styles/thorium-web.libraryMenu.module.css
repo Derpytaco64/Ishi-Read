@@ -378,6 +378,43 @@
   flex-shrink: 0;
 }
 
+.bookFolderRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--th-color-text);
+}
+
+.bookFolderInput {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  color: var(--th-color-text);
+  background: var(--th-color-background);
+  border: 1px solid var(--th-color-primary);
+  border-radius: 6px;
+}
+
+.bookFolderInput:focus-visible {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 1px;
+}
+
+.bookFolderStatus {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: var(--th-color-text-secondary);
+}
+
+.bookFolderStatusError {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: #d64545;
+}
+
 /* CLAUDE-ADDED: ThSlider's own wrapper div (compounds.wrapper, unstyled here) holds the output
    (current px value), track, and thumb as siblings in normal flow -- this just stacks them with a
    little breathing room, no positioning of its own needed. */

@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 
-import { PUBLICATIONS_DIR, READIUM_SERVER_URL } from "./publicationsConfig";
+import { getPublicationsDir, READIUM_SERVER_URL } from "./publicationsConfig";
 import { computePartialMD5 } from "./kosyncHash";
 
 // CLAUDE-ADDED: In-memory hash cache keyed by resolved file path, stamped with mtime so an
@@ -34,10 +34,11 @@ function resolveLocalFile(manifestUrl: string): string | null {
     return null;
   }
 
-  const resolved = path.join(PUBLICATIONS_DIR, filename);
-  const relative = path.relative(PUBLICATIONS_DIR, resolved);
+  const publicationsDir = getPublicationsDir();
+  const resolved = path.join(publicationsDir, filename);
+  const relative = path.relative(publicationsDir, resolved);
 
-  // Guard against the decoded name escaping PUBLICATIONS_DIR via ../
+  // Guard against the decoded name escaping the publications dir via ../
   if (relative.startsWith("..") || path.isAbsolute(relative)) return null;
 
   return fs.existsSync(resolved) ? resolved : null;

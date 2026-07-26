@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { ACCENT_COLOR_STORAGE_KEY, DEFAULT_ACCENT_COLOR } from "./accentColorStorage";
 import { isLightColor } from "@/preferences/helpers/themeGeneration";
+import { fetchLibraryPrefsFromServer, saveLibraryPrefsToServer } from "@/lib/userData/libraryPrefsApi";
 
 // CLAUDE-ADDED: Applies both --th-color-accent and its WCAG-contrast text counterpart to <html> --
 // shared by the color picker (StatefulLibraryMenu) so a live edit updates every accent-colored
@@ -23,12 +24,25 @@ export const useAccentColor = () => {
 
   useEffect(() => {
     setAccentColorState(localStorage.getItem(ACCENT_COLOR_STORAGE_KEY) || DEFAULT_ACCENT_COLOR);
+
+    // CLAUDE-ADDED: Same hydrateFromServer pattern the reader settings use. Unlike the localStorage
+    // seed above (already applied by layout.tsx's blocking init script before this ever runs), a
+    // value that arrives from the server here can genuinely differ, so it has to actually repaint.
+    fetchLibraryPrefsFromServer().then((server) => {
+      const fromServer = server?.accentColor;
+      if (typeof fromServer === "string" && fromServer) {
+        setAccentColorState(fromServer);
+        localStorage.setItem(ACCENT_COLOR_STORAGE_KEY, fromServer);
+        applyAccentColor(fromServer);
+      }
+    });
   }, []);
 
   const setAccentColor = (hex: string) => {
     setAccentColorState(hex);
     localStorage.setItem(ACCENT_COLOR_STORAGE_KEY, hex);
     applyAccentColor(hex);
+    saveLibraryPrefsToServer({ accentColor: hex });
   };
 
   return { accentColor, setAccentColor };

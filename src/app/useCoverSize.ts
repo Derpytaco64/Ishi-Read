@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { COVER_SIZE_STORAGE_KEY, DEFAULT_COVER_SIZE, MIN_COVER_SIZE, MAX_COVER_SIZE } from "./coverSizeStorage";
+import { fetchLibraryPrefsFromServer, saveLibraryPrefsToServer } from "@/lib/userData/libraryPrefsApi";
 
 // CLAUDE-ADDED: Same pattern as useAccentColor.ts -- defaults to DEFAULT_COVER_SIZE on the server
 // render (so SSR/first paint always matches, same as every other library-page preference here),
@@ -19,11 +20,22 @@ export const useCoverSize = () => {
     if (Number.isFinite(stored) && stored >= MIN_COVER_SIZE && stored <= MAX_COVER_SIZE) {
       setCoverSizeState(stored);
     }
+
+    // CLAUDE-ADDED: Same hydrateFromServer pattern the reader settings use -- the server copy
+    // becomes authoritative shortly after mount so this preference follows across devices/reinstalls.
+    fetchLibraryPrefsFromServer().then((server) => {
+      const fromServer = Number(server?.coverSize);
+      if (Number.isFinite(fromServer) && fromServer >= MIN_COVER_SIZE && fromServer <= MAX_COVER_SIZE) {
+        setCoverSizeState(fromServer);
+        localStorage.setItem(COVER_SIZE_STORAGE_KEY, String(fromServer));
+      }
+    });
   }, []);
 
   const setCoverSize = (size: number) => {
     setCoverSizeState(size);
     localStorage.setItem(COVER_SIZE_STORAGE_KEY, String(size));
+    saveLibraryPrefsToServer({ coverSize: size });
   };
 
   return { coverSize, setCoverSize };
