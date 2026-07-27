@@ -9,7 +9,6 @@ I cloned the thorium repository and have been vibecodin the fuck out of it so th
 ![](./screenshots/Screenshot_20260725_011446.png)
 ![](./screenshots/Screenshot_20260725_011514.png)
 ![](./screenshots/Screenshot_20260725_011536.png)
-![](./screenshots/Screencast_20260726_190344.mp4)
 
 # Planned Features
 ## Progress Tracking
