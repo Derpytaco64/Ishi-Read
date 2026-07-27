@@ -1,0 +1,238 @@
+.wrapper {
+  margin-bottom: 2.5rem;
+  padding-inline: 2rem;
+}
+
+.slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 0.75rem 0.5rem 1rem;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  color: var(--th-color-text);
+  font: inherit;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 150ms ease;
+}
+
+.slot:hover {
+  background-color: var(--th-color-primary);
+}
+
+.slot:focus-visible {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 2px;
+}
+
+/* CLAUDE-ADDED: Fixed-height stage for the fanned covers -- --fan-height (set inline per the
+   cover-size slider, see StatefulSeriesView) gives the ±20deg-rotated left/right covers room to
+   sit without being clipped by the slot's own box. */
+.fan {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: var(--fan-height, 210px);
+}
+
+.fanCoverSide {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--fan-cover-width, 110px);
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--th-color-primary);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  background: var(--th-color-background);
+  z-index: 1;
+}
+
+.fanCoverLeft {
+  transform: translate(calc(-50% - var(--fan-offset, 40px) + 7px), calc(-50% - 4px)) rotate(-20deg);
+}
+
+.fanCoverRight {
+  transform: translate(calc(-50% + var(--fan-offset, 40px) - 7px), calc(-50% - 4px)) rotate(20deg);
+}
+
+/* CLAUDE-ADDED: Unlike the plain-<img> side covers, the center cover needs its own clipped,
+   positioned wrapper (mirroring PublicationGrid's .card/.cover) so the sliding title (.fanTitle)
+   has something to be clipped behind until hovered. */
+.fanCoverCenterWrap {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: var(--fan-cover-width, 110px);
+  aspect-ratio: 2 / 3;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--th-color-primary);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  background: var(--th-color-background);
+  z-index: 2;
+}
+
+.fanCoverCenterImage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* CLAUDE-ADDED: Same slide-up-on-hover title treatment as PublicationGrid's .info/.title -- hidden
+   below the cover's own clipped frame by default, sliding up over it on hover/focus. */
+.fanTitle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.5rem;
+  background: rgba(128, 128, 128, 0.5);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  transform: translateY(100%);
+  transition: transform 0.25s ease;
+}
+
+.fanCoverCenterWrap:hover .fanTitle,
+.slot:focus-visible .fanTitle {
+  transform: translateY(0);
+}
+
+/* CLAUDE-ADDED: The shared "header" class (home.css) only centers text -- position:relative here
+   lets .backButton anchor to this header's own box rather than the viewport. The compound
+   selector (:global(.header) combined with this module's own class) beats home.css's plain
+   .header on specificity regardless of CSS load order, so margin-top/margin-bottom reliably
+   override its defaults here: pushed down further (title now lower, in line with a taller logo)
+   and pulled in tighter below (the sort dropdown sits close under the title instead of home.css's
+   generous 4.5rem gap meant for a page's opening blurb). */
+.seriesDetailHeader {
+  position: relative;
+}
+
+:global(.header).seriesDetailHeader {
+  margin-top: 3rem;
+  margin-bottom: 1.25rem;
+}
+
+.backButton {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: var(--th-color-text);
+  background: none;
+  border: 1px solid var(--th-color-text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+}
+
+.backButton:hover {
+  background-color: var(--th-color-primary);
+}
+
+.backButton:focus-visible {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 2px;
+}
+
+.backIcon {
+  width: 1rem;
+  height: 1rem;
+  fill: currentColor;
+}
+
+.sortPicker {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 2rem;
+}
+
+.sortPickerButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  color: var(--th-color-text);
+  background: var(--th-color-background);
+  border: 1px solid var(--th-color-text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+}
+
+.sortPickerButton svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: currentColor;
+}
+
+.sortPickerButton[data-focus-visible] {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 2px;
+}
+
+/* CLAUDE-ADDED: React Aria's Popover portals to document.body, outside #home's DOM subtree -- same
+   self-contained --th-color-* redefinition as the other picker popovers in the library views. */
+.sortPickerPopover {
+  --th-color-background: #fff;
+  --th-color-text: #333;
+  --th-color-text-secondary: #666;
+  --th-color-primary: #e0e0e0;
+
+  background: var(--th-color-background);
+  color: var(--th-color-text);
+  border: 1px solid var(--th-color-text-secondary);
+  border-radius: 8px;
+  overflow-y: auto;
+  max-height: 300px;
+  z-index: 1000000;
+}
+
+:global(html[data-theme="dark"]) .sortPickerPopover {
+  --th-color-background: #2b2b2b;
+  --th-color-text: #e8e8e8;
+  --th-color-text-secondary: #b3b3b3;
+  --th-color-primary: #5a5a5a;
+}
+
+.sortPickerListbox {
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+
+.sortPickerListboxItem {
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+}
+
+.sortPickerListboxItem[data-selected] {
+  color: var(--th-color-text-secondary);
+}
+
+.sortPickerListboxItem[data-hovered],
+.sortPickerListboxItem[data-focus-visible] {
+  background-color: var(--th-color-primary);
+  color: var(--th-color-text);
+}

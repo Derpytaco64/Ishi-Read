@@ -17,7 +17,8 @@ export const useCoverSize = () => {
 
   useEffect(() => {
     const stored = Number(localStorage.getItem(COVER_SIZE_STORAGE_KEY));
-    if (Number.isFinite(stored) && stored >= MIN_COVER_SIZE && stored <= MAX_COVER_SIZE) {
+    const storedValid = Number.isFinite(stored) && stored >= MIN_COVER_SIZE && stored <= MAX_COVER_SIZE;
+    if (storedValid) {
       setCoverSizeState(stored);
     }
 
@@ -28,6 +29,12 @@ export const useCoverSize = () => {
       if (Number.isFinite(fromServer) && fromServer >= MIN_COVER_SIZE && fromServer <= MAX_COVER_SIZE) {
         setCoverSizeState(fromServer);
         localStorage.setItem(COVER_SIZE_STORAGE_KEY, String(fromServer));
+      } else if (storedValid) {
+        // CLAUDE-ADDED: The server has never been told this value -- e.g. it was set back when this
+        // was localStorage-only, before library-prefs synced to the server at all. Seed it now so a
+        // later cleared-storage load has something real to restore instead of falling back to
+        // DEFAULT_COVER_SIZE.
+        saveLibraryPrefsToServer({ coverSize: stored });
       }
     });
   }, []);

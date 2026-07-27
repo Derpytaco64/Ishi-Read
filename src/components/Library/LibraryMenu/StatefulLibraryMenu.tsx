@@ -10,8 +10,14 @@ import {
   GridList,
   GridListItem,
   Heading,
+  Menu,
+  MenuItem,
+  MenuTrigger,
+  Popover,
   useDragAndDrop
 } from "react-aria-components";
+
+import classNames from "classnames";
 
 import { ThModal } from "@/core/Components/Containers/ThModal";
 import { ThContainerBody } from "@/core/Components/Containers/ThContainerBody";
@@ -21,20 +27,39 @@ import { ThSlider } from "@/core/Components/Settings/ThSlider";
 
 import { THEME_STORAGE_KEY } from "@/app/themeStorage";
 import { SHELF_LABELS, ShelfKey, ShelfPrefs } from "@/app/shelfPrefs";
+import { LibraryView } from "@/app/libraryView";
+import { CustomShelf, ShelfIcon } from "@/app/customShelves";
 import { useAccentColor } from "@/app/useAccentColor";
 import { MIN_COVER_SIZE, MAX_COVER_SIZE } from "@/app/coverSizeStorage";
 import { useBookFolder } from "@/app/useBookFolder";
 import { fetchLibraryPrefsFromServer, saveLibraryPrefsToServer } from "@/lib/userData/libraryPrefsApi";
+
+import { StatefulShelfFormModal } from "@/components/Library/CustomShelves/StatefulShelfFormModal";
 
 import logo from "@/assets/ishamel.png";
 import floofLogo from "@/assets/foof_ishmael.png";
 import ChevronDown from "./assets/icons/chevron_down.svg";
 import Gear from "./assets/icons/gear.svg";
 import DragIndicator from "./assets/icons/drag_indicator.svg";
+import HomeIcon from "./assets/icons/home.svg";
+import BookIcon from "./assets/icons/book.svg";
+import LibraryBooksIcon from "./assets/icons/library_books.svg";
+import FolderIcon from "./assets/icons/folder.svg";
+import AddIcon from "./assets/icons/add.svg";
+import CloseIcon from "./assets/icons/close.svg";
 
 import styles from "./assets/styles/thorium-web.libraryMenu.module.css";
 
 export interface StatefulLibraryMenuProps {
+  activeView: LibraryView;
+  onNavigate: (view: LibraryView) => void;
+  shelves: CustomShelf[];
+  onCreateShelf: (name: string, icon: ShelfIcon) => void;
+  onUpdateShelf: (shelfId: string, patch: { name?: string; icon?: ShelfIcon }) => void;
+  onDeleteShelf: (shelfId: string) => void;
+  onReorderCustomShelves: (shelves: CustomShelf[]) => void;
+  activeShelfId: string | null;
+  onSelectShelf: (shelfId: string) => void;
   shelfPrefs: ShelfPrefs;
   onToggleShelf: (key: ShelfKey) => void;
   shelfOrder: ShelfKey[];
@@ -45,6 +70,15 @@ export interface StatefulLibraryMenuProps {
 }
 
 export const StatefulLibraryMenu = ({
+  activeView,
+  onNavigate,
+  shelves,
+  onCreateShelf,
+  onUpdateShelf,
+  onDeleteShelf,
+  onReorderCustomShelves,
+  activeShelfId,
+  onSelectShelf,
   shelfPrefs,
   onToggleShelf,
   shelfOrder,
@@ -53,6 +87,21 @@ export const StatefulLibraryMenu = ({
   onChangeCoverSize,
   onBookFolderSaved
 }: StatefulLibraryMenuProps) => {
+  // CLAUDE-ADDED: One modal, two modes -- "create" has no shelfId, "edit" carries which shelf to
+  // prefill (see StatefulShelfFormModal).
+  const [shelfModalState, setShelfModalState] = useState<{ mode: "create" } | { mode: "edit"; shelfId: string } | null>(null);
+
+  // CLAUDE-ADDED: Right-click-on-a-shelf-tab context menu (Edit/Delete), positioned at the cursor
+  // the same way StatefulBookContextMenu does -- an invisible anchor Button placed at the click
+  // coordinates, since react-aria-components has no built-in "open at cursor" trigger.
+  const [shelfContextMenu, setShelfContextMenu] = useState<{ shelfId: string; x: number; y: number } | null>(null);
+
+  // CLAUDE-ADDED: Same confirm-before-delete pattern as StatefulAnnotationsContainer's
+  // highlight/bookmark/note deletion -- a centered ThModal (not a native window.confirm) asking
+  // "are you sure" before onDeleteShelf actually runs.
+  const [pendingDeleteShelfId, setPendingDeleteShelfId] = useState<string | null>(null);
+  const pendingDeleteShelfName = shelves.find((shelf) => shelf.id === pendingDeleteShelfId)?.name;
+
   const [isOpen, setIsOpen] = useState(false);
 
   // Defaults to light on the server render; the mount effect below reads back what the
@@ -61,14 +110,22 @@ export const StatefulLibraryMenu = ({
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
-    setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
+    const current = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+    setTheme(current);
 
     // CLAUDE-ADDED: Same hydrateFromServer pattern the reader settings use. Unlike the localStorage
     // seed above (already applied by layout.tsx's blocking init script before this ever runs), a
     // value that arrives from the server here can genuinely differ, so it has to actually repaint.
     fetchLibraryPrefsFromServer().then((server) => {
       const fromServer = server?.theme;
-      if (fromServer !== "dark" && fromServer !== "light") return;
+      if (fromServer !== "dark" && fromServer !== "light") {
+        // CLAUDE-ADDED: The server has never been told this value -- e.g. it was set back when this
+        // was localStorage-only, before library-prefs synced to the server at all. Seed it now so a
+        // later cleared-storage load has something real to restore instead of falling back to the
+        // system preference.
+        saveLibraryPrefsToServer({ theme: current });
+        return;
+      }
 
       setTheme(fromServer);
       localStorage.setItem(THEME_STORAGE_KEY, fromServer);
@@ -140,6 +197,31 @@ export const StatefulLibraryMenu = ({
     }
   });
 
+  // CLAUDE-ADDED: Same drag-to-reorder pattern as the Settings > Shelves list above, but reorders
+  // the CustomShelf objects themselves (their own array order *is* the display order) instead of a
+  // separate ShelfKey order array, since these are user-created shelves rather than a fixed set.
+  const { dragAndDropHooks: customShelvesDragAndDropHooks } = useDragAndDrop({
+    getItems: (keys) => [...keys].map((key) => ({ "text/plain": String(key) })),
+    onReorder(e) {
+      const draggedId = [...e.keys][0] as string;
+      const targetId = e.target.key as string;
+      if (draggedId === targetId) return;
+
+      const dragged = shelves.find((shelf) => shelf.id === draggedId);
+      if (!dragged) return;
+
+      const withoutDragged = shelves.filter((shelf) => shelf.id !== draggedId);
+      const targetIndex = withoutDragged.findIndex((shelf) => shelf.id === targetId);
+      const insertIndex = e.target.dropPosition === "before" ? targetIndex : targetIndex + 1;
+
+      onReorderCustomShelves([
+        ...withoutDragged.slice(0, insertIndex),
+        dragged,
+        ...withoutDragged.slice(insertIndex)
+      ]);
+    }
+  });
+
   return (
     <>
     <Button
@@ -179,7 +261,113 @@ export const StatefulLibraryMenu = ({
           <Image src={ floofLogo } alt="" className={ styles.logoLarge } />
         </div>
 
-        <Disclosure className={ styles.disclosure }>
+        <nav className={ styles.navList } aria-label="Library views">
+          <Button
+            className={ classNames(styles.navButton, activeView === "home" && styles.navButtonActive) }
+            aria-current={ activeView === "home" ? "page" : undefined }
+            onPress={ () => {
+              onNavigate("home");
+              setIsOpen(false);
+            } }
+          >
+            <HomeIcon aria-hidden="true" focusable="false" className={ styles.navIcon } />
+            <span className={ styles.navLabel }>Home</span>
+          </Button>
+
+          <Button
+            className={ classNames(styles.navButton, activeView === "library" && styles.navButtonActive) }
+            aria-current={ activeView === "library" ? "page" : undefined }
+            onPress={ () => {
+              onNavigate("library");
+              setIsOpen(false);
+            } }
+          >
+            <BookIcon aria-hidden="true" focusable="false" className={ styles.navIcon } />
+            <span className={ styles.navLabel }>My Library</span>
+          </Button>
+
+          <Button
+            className={ classNames(styles.navButton, activeView === "series" && styles.navButtonActive) }
+            aria-current={ activeView === "series" ? "page" : undefined }
+            onPress={ () => {
+              onNavigate("series");
+              setIsOpen(false);
+            } }
+          >
+            <LibraryBooksIcon aria-hidden="true" focusable="false" className={ styles.navIcon } />
+            <span className={ styles.navLabel }>Series</span>
+          </Button>
+        </nav>
+
+        <Disclosure className={ classNames(styles.disclosure, styles.shelvesDisclosure) } defaultExpanded>
+          <Heading className={ styles.disclosureHeading }>
+            <Button slot="trigger" className={ styles.disclosureTrigger }>
+              <FolderIcon aria-hidden="true" focusable="false" className={ styles.disclosureIcon } />
+              <span className={ styles.disclosureLabel }>Custom Shelves</span>
+              <ChevronDown aria-hidden="true" focusable="false" className={ styles.disclosureChevron } />
+            </Button>
+          </Heading>
+
+          <DisclosurePanel className={ styles.disclosurePanel }>
+            { shelves.length > 0 && (
+              <GridList
+                aria-label="Custom shelf order"
+                items={ shelves.map((shelf) => ({ key: shelf.id, shelf })) }
+                dragAndDropHooks={ customShelvesDragAndDropHooks }
+                className={ styles.shelfList }
+              >
+                { (item) => (
+                  <GridListItem
+                    id={ item.key }
+                    textValue={ item.shelf.name }
+                    className={ styles.shelfRow }
+                  >
+                    <Button
+                      slot="drag"
+                      className={ styles.shelfDragHandle }
+                      aria-label={ `Reorder ${ item.shelf.name }` }
+                    >
+                      <DragIndicator aria-hidden="true" focusable="false" />
+                    </Button>
+                    <Button
+                      className={ classNames(
+                        styles.navButton,
+                        styles.nestedNavButton,
+                        styles.shelfTabButton,
+                        activeView === "shelf" && activeShelfId === item.shelf.id && styles.navButtonActive
+                      ) }
+                      aria-current={ activeView === "shelf" && activeShelfId === item.shelf.id ? "page" : undefined }
+                      onPress={ () => {
+                        onSelectShelf(item.shelf.id);
+                        setIsOpen(false);
+                      } }
+                      onContextMenu={ (e) => {
+                        e.preventDefault();
+                        setShelfContextMenu({ shelfId: item.shelf.id, x: e.clientX, y: e.clientY });
+                      } }
+                    >
+                      <span className={ styles.navEmoji } aria-hidden="true">{ item.shelf.icon }</span>
+                      <span className={ styles.navLabel }>{ item.shelf.name }</span>
+                    </Button>
+                  </GridListItem>
+                ) }
+              </GridList>
+            ) }
+
+            <Button
+              className={ classNames(styles.navButton, styles.nestedNavButton, styles.createShelfButton) }
+              onPress={ () => {
+                setIsOpen(false);
+                setShelfModalState({ mode: "create" });
+              } }
+            >
+              <AddIcon aria-hidden="true" focusable="false" className={ styles.navIcon } />
+              <span className={ styles.navLabel }>Create a new shelf</span>
+            </Button>
+          </DisclosurePanel>
+        </Disclosure>
+
+        <Disclosure className={ classNames(styles.disclosure, styles.settingsDisclosure) }>
           <Heading className={ styles.disclosureHeading }>
             <Button slot="trigger" className={ styles.disclosureTrigger }>
               <Gear aria-hidden="true" focusable="false" className={ styles.disclosureIcon } />
@@ -332,6 +520,112 @@ export const StatefulLibraryMenu = ({
           />
         </div>
       </ThContainerBody>
+    </ThModal>
+
+    { /* CLAUDE-ADDED: Same "invisible anchor positioned at click coordinates" recipe as
+         StatefulBookContextMenu -- key forces a fresh mount per right-click so the popover
+         repositions instead of trying to reflow an already-open instance. */ }
+    { shelfContextMenu && (
+      <MenuTrigger
+        key={ `${ shelfContextMenu.shelfId }-${ shelfContextMenu.x }-${ shelfContextMenu.y }` }
+        isOpen
+        onOpenChange={ (open) => {
+          if (!open) setShelfContextMenu(null);
+        } }
+      >
+        <Button
+          className={ styles.shelfContextAnchor }
+          style={{ left: shelfContextMenu.x, top: shelfContextMenu.y }}
+        />
+
+        <Popover placement="bottom start" className={ styles.shelfContextPopover }>
+          <Menu className={ styles.shelfContextMenuList }>
+            <MenuItem
+              className={ styles.shelfContextMenuItem }
+              onAction={ () => {
+                setShelfModalState({ mode: "edit", shelfId: shelfContextMenu.shelfId });
+                setShelfContextMenu(null);
+                setIsOpen(false);
+              } }
+            >
+              Edit
+            </MenuItem>
+            <MenuItem
+              className={ classNames(styles.shelfContextMenuItem, styles.shelfContextMenuItemDanger) }
+              onAction={ () => {
+                setPendingDeleteShelfId(shelfContextMenu.shelfId);
+                setShelfContextMenu(null);
+              } }
+            >
+              Delete
+            </MenuItem>
+          </Menu>
+        </Popover>
+      </MenuTrigger>
+    ) }
+
+    <StatefulShelfFormModal
+      isOpen={ shelfModalState !== null }
+      shelf={ shelfModalState?.mode === "edit" ? shelves.find((shelf) => shelf.id === shelfModalState.shelfId) : null }
+      onOpenChange={ (open) => {
+        if (!open) setShelfModalState(null);
+      } }
+      onSubmit={ (name, icon) => {
+        if (shelfModalState?.mode === "edit") {
+          onUpdateShelf(shelfModalState.shelfId, { name, icon });
+        } else {
+          onCreateShelf(name, icon);
+        }
+        setShelfModalState(null);
+      } }
+    />
+
+    { /* CLAUDE-ADDED: Same confirm-before-delete dialog shape/CSS as StatefulAnnotationsContainer's
+         highlight/bookmark/note deletion -- a centered ThModal, not a native window.confirm. */ }
+    <ThModal
+      isOpen={ pendingDeleteShelfId !== null }
+      onOpenChange={ (open) => {
+        if (!open) setPendingDeleteShelfId(null);
+      } }
+      isDismissable
+      className={ styles.confirmBackdrop }
+      compounds={{
+        dialog: {
+          className: styles.confirmDialog,
+          "aria-label": pendingDeleteShelfName ? `Delete "${ pendingDeleteShelfName }"?` : "Delete this shelf?"
+        }
+      }}
+    >
+      <div className={ styles.confirmText }>
+        <button
+          type="button"
+          className={ styles.confirmClose }
+          aria-label="Close"
+          onClick={ () => setPendingDeleteShelfId(null) }
+        >
+          <CloseIcon aria-hidden="true" focusable="false" />
+        </button>
+        This can't be undone. The books on it stay in your library.
+      </div>
+      <div className={ styles.confirmActions }>
+        <button
+          type="button"
+          className={ styles.confirmButton }
+          onClick={ () => setPendingDeleteShelfId(null) }
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={ classNames(styles.confirmButton, styles.confirmButtonPrimary) }
+          onClick={ () => {
+            if (pendingDeleteShelfId) onDeleteShelf(pendingDeleteShelfId);
+            setPendingDeleteShelfId(null);
+          } }
+        >
+          Delete
+        </button>
+      </div>
     </ThModal>
     </>
   );

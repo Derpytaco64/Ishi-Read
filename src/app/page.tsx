@@ -1,15 +1,23 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import type { MouseEvent } from "react";
 import { Publication, PublicationGrid } from "@/components/Misc/PublicationGrid";
 import { StatefulLibraryMenu } from "@/components/Library/LibraryMenu/StatefulLibraryMenu";
 import { StatefulBookSheet } from "@/components/Library/BookSheet/StatefulBookSheet";
+import { StatefulSeriesView } from "@/components/Library/SeriesView/StatefulSeriesView";
+import { StatefulMyLibraryView } from "@/components/Library/MyLibrary/StatefulMyLibraryView";
+import { StatefulShelfView } from "@/components/Library/CustomShelves/StatefulShelfView";
+import { StatefulBookContextMenu, BookContextMenuState } from "@/components/Library/BookContextMenu/StatefulBookContextMenu";
 import Image from "next/image";
 
 import { isManifestRouteEnabled } from "./ManifestRouteEnabled";
 import { getBookProgressPercent } from "@/helpers/getBookProgress";
 import { useCoverSize } from "./useCoverSize";
+import { useCustomShelves } from "./useCustomShelves";
 import { fetchLibraryPrefsFromServer, saveLibraryPrefsToServer } from "@/lib/userData/libraryPrefsApi";
+import { DEFAULT_LIBRARY_VIEW, LIBRARY_VIEW_STORAGE_KEY, LibraryView } from "./libraryView";
+import { ACTIVE_SHELF_ID_STORAGE_KEY } from "./customShelves";
 import {
   DEFAULT_SHELF_ORDER,
   DEFAULT_SHELF_PREFS,
@@ -89,6 +97,92 @@ export default function Home() {
   const [selectedBook, setSelectedBook] = useState<Publication | null>(null);
   const [isBookSheetOpen, setIsBookSheetOpen] = useState(false);
 
+  // CLAUDE-ADDED: Which top-level library view is showing -- Home (the shelves below) or Series
+  // (StatefulSeriesView). Persisted the same way as the other library-page prefs so it survives a
+  // reload, hydrated from localStorage first (mount effect below) then reconciled against the
+  // server copy in the shared hydrate effect further down.
+  const [activeView, setActiveView] = useState<LibraryView>(DEFAULT_LIBRARY_VIEW);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(LIBRARY_VIEW_STORAGE_KEY);
+      if (stored === "home" || stored === "library" || stored === "series" || stored === "shelf") {
+        setActiveView(stored);
+      }
+    } catch (error) {
+      console.error("Error reading library view:", error);
+    }
+  }, []);
+
+  const navigateTo = (view: LibraryView) => {
+    setActiveView(view);
+    localStorage.setItem(LIBRARY_VIEW_STORAGE_KEY, view);
+    saveLibraryPrefsToServer({ activeView: view });
+  };
+
+  // CLAUDE-ADDED: Which custom shelf is showing when activeView === "shelf" -- persisted the same
+  // way as activeView itself, hydrated alongside it below.
+  const [activeShelfId, setActiveShelfId] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(ACTIVE_SHELF_ID_STORAGE_KEY);
+      if (stored) setActiveShelfId(stored);
+    } catch (error) {
+      console.error("Error reading active shelf id:", error);
+    }
+  }, []);
+
+  const navigateToShelf = (shelfId: string) => {
+    setActiveView("shelf");
+    setActiveShelfId(shelfId);
+    localStorage.setItem(LIBRARY_VIEW_STORAGE_KEY, "shelf");
+    localStorage.setItem(ACTIVE_SHELF_ID_STORAGE_KEY, shelfId);
+    saveLibraryPrefsToServer({ activeView: "shelf", activeShelfId: shelfId });
+  };
+
+  // CLAUDE-ADDED: One-shot navigation intent for the book context menu's "Go to Series" -- not
+  // persisted (unlike activeView/activeShelfId) since it's just "land on this series once", not a
+  // preference. StatefulSeriesView only reads it as its initial selectedSeries state, which works
+  // because it's conditionally rendered on activeView -- switching into "series" always mounts it
+  // fresh, so a plain initial value (no effect needed) is enough to land on the right series.
+  const [seriesToOpen, setSeriesToOpen] = useState<string | null>(null);
+
+  const navigateToSeries = (seriesName: string) => {
+    setSeriesToOpen(seriesName);
+    navigateTo("series");
+  };
+
+  // CLAUDE-ADDED: Custom (user-created) shelves -- owned here so both the menu (lists/creates/
+  // edits/deletes them) and the book context menu (adds/removes a book) share the same live list,
+  // same reasoning as coverSize/shelfPrefs above.
+  const {
+    shelves,
+    createShelf,
+    addBookToShelf,
+    removeBookFromShelf,
+    updateShelf,
+    deleteShelf,
+    reorderShelves: reorderCustomShelves
+  } = useCustomShelves();
+
+  // CLAUDE-ADDED: If the shelf currently being viewed is the one deleted, bounce back to Home
+  // instead of leaving the shelf view showing its "this shelf no longer exists" fallback.
+  const deleteShelfAndNavigateHome = (shelfId: string) => {
+    deleteShelf(shelfId);
+    if (activeView === "shelf" && activeShelfId === shelfId) {
+      navigateTo("home");
+    }
+  };
+
+  // CLAUDE-ADDED: Right-click-on-a-book-cover context menu ("Add to shelf"). Null when closed; set
+  // to the clicked book + cursor position by any PublicationGrid's onContextMenu below.
+  const [contextMenuState, setContextMenuState] = useState<BookContextMenuState | null>(null);
+
+  const openContextMenu = (e: MouseEvent, publication: Publication) => {
+    setContextMenuState({ publication, x: e.clientX, y: e.clientY });
+  };
+
   // CLAUDE-ADDED: Defaults to all shelves visible on the server render; the mount effect below
   // reads back the persisted choice, mirroring the theme state's hydration pattern above.
   const [shelfPrefs, setShelfPrefs] = useState<ShelfPrefs>(DEFAULT_SHELF_PREFS);
@@ -149,18 +243,48 @@ export default function Home() {
   // over whatever the localStorage-seeded effects above already set, same as Redux's own merge.
   useEffect(() => {
     fetchLibraryPrefsFromServer().then((server) => {
-      if (!server) return;
+      if (server?.activeView === "home" || server?.activeView === "library" || server?.activeView === "series" || server?.activeView === "shelf") {
+        setActiveView(server.activeView);
+        localStorage.setItem(LIBRARY_VIEW_STORAGE_KEY, server.activeView);
+      }
 
-      if (server.shelfPrefs && typeof server.shelfPrefs === "object") {
+      if (typeof server?.activeShelfId === "string") {
+        setActiveShelfId(server.activeShelfId);
+        localStorage.setItem(ACTIVE_SHELF_ID_STORAGE_KEY, server.activeShelfId);
+      }
+
+      if (server?.shelfPrefs && typeof server.shelfPrefs === "object") {
         const next = { ...DEFAULT_SHELF_PREFS, ...(server.shelfPrefs as ShelfPrefs) };
         setShelfPrefs(next);
         localStorage.setItem(SHELF_PREFS_STORAGE_KEY, JSON.stringify(next));
+      } else {
+        // CLAUDE-ADDED: The server has never been told this value -- e.g. it was set back when this
+        // was localStorage-only, before library-prefs synced to the server at all. Seed it now so a
+        // later cleared-storage load has something real to restore instead of falling back to
+        // DEFAULT_SHELF_PREFS.
+        const stored = localStorage.getItem(SHELF_PREFS_STORAGE_KEY);
+        if (stored) {
+          try {
+            saveLibraryPrefsToServer({ shelfPrefs: { ...DEFAULT_SHELF_PREFS, ...JSON.parse(stored) } });
+          } catch (error) {
+            console.error("Error parsing cached shelf preferences:", error);
+          }
+        }
       }
 
-      if (server.shelfOrder) {
+      if (server?.shelfOrder) {
         const next = mergeShelfOrder(server.shelfOrder);
         setShelfOrder(next);
         localStorage.setItem(SHELF_ORDER_STORAGE_KEY, JSON.stringify(next));
+      } else {
+        const stored = localStorage.getItem(SHELF_ORDER_STORAGE_KEY);
+        if (stored) {
+          try {
+            saveLibraryPrefsToServer({ shelfOrder: mergeShelfOrder(JSON.parse(stored)) });
+          } catch (error) {
+            console.error("Error parsing cached shelf order:", error);
+          }
+        }
       }
     });
   }, []);
@@ -282,6 +406,15 @@ export default function Home() {
     <main id="home">
       { /* Logo doubles as the trigger for the left-docked library menu (settings, etc.). */ }
       <StatefulLibraryMenu
+        activeView={ activeView }
+        onNavigate={ navigateTo }
+        shelves={ shelves }
+        onCreateShelf={ createShelf }
+        onUpdateShelf={ updateShelf }
+        onDeleteShelf={ deleteShelfAndNavigateHome }
+        onReorderCustomShelves={ reorderCustomShelves }
+        activeShelfId={ activeShelfId }
+        onSelectShelf={ navigateToShelf }
         shelfPrefs={ shelfPrefs }
         onToggleShelf={ toggleShelf }
         shelfOrder={ shelfOrder }
@@ -291,6 +424,49 @@ export default function Home() {
         onBookFolderSaved={ fetchMyLibrary }
       />
 
+      { activeView === "library" && (
+        <StatefulMyLibraryView
+          books={ myLibraryBooks }
+          coverSize={ coverSize }
+          progressByUrl={ progressByUrl }
+          onSelectBook={ (publication) => {
+            setSelectedBook(publication);
+            setIsBookSheetOpen(true);
+          } }
+          onContextMenu={ openContextMenu }
+        />
+      ) }
+
+      { activeView === "series" && (
+        <StatefulSeriesView
+          books={ myLibraryBooks }
+          coverSize={ coverSize }
+          progressByUrl={ progressByUrl }
+          onSelectBook={ (publication) => {
+            setSelectedBook(publication);
+            setIsBookSheetOpen(true);
+          } }
+          onContextMenu={ openContextMenu }
+          initialSelectedSeries={ seriesToOpen }
+        />
+      ) }
+
+      { activeView === "shelf" && (
+        <StatefulShelfView
+          shelf={ shelves.find((shelf) => shelf.id === activeShelfId) }
+          books={ myLibraryBooks }
+          coverSize={ coverSize }
+          progressByUrl={ progressByUrl }
+          onSelectBook={ (publication) => {
+            setSelectedBook(publication);
+            setIsBookSheetOpen(true);
+          } }
+          onContextMenu={ openContextMenu }
+        />
+      ) }
+
+      { activeView === "home" && (
+      <>
       <header className="header">
         <h1>Library Home Page</h1>
 
@@ -329,6 +505,7 @@ export default function Home() {
                 setSelectedBook(publication);
                 setIsBookSheetOpen(true);
               } }
+              onContextMenu={ openContextMenu }
             />
           </Fragment>
         );
@@ -368,11 +545,38 @@ export default function Home() {
         </div>
         </>
       ) } */}
+      </>
+      ) }
 
       <StatefulBookSheet
         publication={ selectedBook }
         isOpen={ isBookSheetOpen }
         onOpenChange={ setIsBookSheetOpen }
+      />
+
+      { /* CLAUDE-ADDED: key forces a fresh mount per right-click so the popover repositions against
+           the new cursor coordinates instead of trying to animate/reflow an already-open instance. */ }
+      <StatefulBookContextMenu
+        key={ contextMenuState ? `${ contextMenuState.publication.url }-${ contextMenuState.x }-${ contextMenuState.y }` : "closed" }
+        state={ contextMenuState }
+        shelves={ shelves }
+        onAddToShelf={ (shelfId, bookUrl) => {
+          addBookToShelf(shelfId, bookUrl);
+          setContextMenuState(null);
+        } }
+        onRemoveFromShelf={ (shelfId, bookUrl) => {
+          removeBookFromShelf(shelfId, bookUrl);
+          setContextMenuState(null);
+        } }
+        onGoToSeries={ (publication) => {
+          if (publication.series?.name) {
+            navigateToSeries(publication.series.name);
+          }
+          setContextMenuState(null);
+        } }
+        onOpenChange={ (open) => {
+          if (!open) setContextMenuState(null);
+        } }
       />
     </main>
   );

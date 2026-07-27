@@ -23,7 +23,8 @@ export const useAccentColor = () => {
   const [accentColor, setAccentColorState] = useState(DEFAULT_ACCENT_COLOR);
 
   useEffect(() => {
-    setAccentColorState(localStorage.getItem(ACCENT_COLOR_STORAGE_KEY) || DEFAULT_ACCENT_COLOR);
+    const stored = localStorage.getItem(ACCENT_COLOR_STORAGE_KEY);
+    setAccentColorState(stored || DEFAULT_ACCENT_COLOR);
 
     // CLAUDE-ADDED: Same hydrateFromServer pattern the reader settings use. Unlike the localStorage
     // seed above (already applied by layout.tsx's blocking init script before this ever runs), a
@@ -34,6 +35,12 @@ export const useAccentColor = () => {
         setAccentColorState(fromServer);
         localStorage.setItem(ACCENT_COLOR_STORAGE_KEY, fromServer);
         applyAccentColor(fromServer);
+      } else if (stored) {
+        // CLAUDE-ADDED: The server has never been told this value -- e.g. it was set back when this
+        // was localStorage-only, before library-prefs synced to the server at all. Seed it now so a
+        // later cleared-storage load has something real to restore instead of falling back to
+        // DEFAULT_ACCENT_COLOR.
+        saveLibraryPrefsToServer({ accentColor: stored });
       }
     });
   }, []);

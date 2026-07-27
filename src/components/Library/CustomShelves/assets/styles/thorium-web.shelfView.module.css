@@ -1,0 +1,85 @@
+.titleEmoji {
+  /* CLAUDE-ADDED: The body font (next/font's Inter, see layout.tsx) is inherited by default and
+     has no color-emoji glyphs -- see the identical fix in the library menu's .navEmoji. */
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+  margin-inline-end: 0.5rem;
+}
+
+.sortPicker {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 2.5rem;
+}
+
+.sortPickerButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  color: var(--th-color-text);
+  background: var(--th-color-background);
+  border: 1px solid var(--th-color-text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+}
+
+.sortPickerButton svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: currentColor;
+}
+
+.sortPickerButton[data-focus-visible] {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 2px;
+}
+
+/* CLAUDE-ADDED: React Aria's Popover portals to document.body, outside #home's DOM subtree -- same
+   self-contained --th-color-* redefinition as the Series tab's picker popover. */
+.sortPickerPopover {
+  --th-color-background: #fff;
+  --th-color-text: #333;
+  --th-color-text-secondary: #666;
+  --th-color-primary: #e0e0e0;
+
+  background: var(--th-color-background);
+  color: var(--th-color-text);
+  border: 1px solid var(--th-color-text-secondary);
+  border-radius: 8px;
+  overflow-y: auto;
+  max-height: 300px;
+  z-index: 1000000;
+}
+
+:global(html[data-theme="dark"]) .sortPickerPopover {
+  --th-color-background: #2b2b2b;
+  --th-color-text: #e8e8e8;
+  --th-color-text-secondary: #b3b3b3;
+  --th-color-primary: #5a5a5a;
+}
+
+.sortPickerListbox {
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+
+.sortPickerListboxItem {
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+}
+
+.sortPickerListboxItem[data-selected] {
+  color: var(--th-color-text-secondary);
+}
+
+.sortPickerListboxItem[data-hovered],
+.sortPickerListboxItem[data-focus-visible] {
+  background-color: var(--th-color-primary);
+  color: var(--th-color-text);
+}

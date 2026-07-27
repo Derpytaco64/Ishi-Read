@@ -84,6 +84,8 @@
         "yellow": "Yellow"
       },
       "delete": "Delete",
+      "deleteConfirmTitle": "Delete this {{ kind }}?",
+      "deleteConfirmText": "This can't be undone.",
       "emptyState": "Highlights, bookmarks, and notes added while reading will show up here.",
       "lastEdited": "Last edited {{ date }}",
       "notePlaceholder": "Add a note…",

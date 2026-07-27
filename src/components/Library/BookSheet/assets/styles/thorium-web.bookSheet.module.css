@@ -89,6 +89,10 @@
    by .scroller's own overflow-y: auto if .cover were still inside .body/.heroRow (.scroller clips
    independently of .container's overflow: visible) -- rendering it inside .header instead, a
    sibling of .scroller rather than a descendant, is what lets it actually escape the card. */
+/* CLAUDE-ADDED: transform (updated live from .scroller's own scrollTop -- see the onScroll listener
+   in StatefulBookSheet.tsx's handleBodyRef) keeps this moving in lockstep with the content once it's
+   scrolled, instead of staying pinned in its rest position and floating over whatever's scrolled up
+   underneath it. Defaults to 0px (its normal overhang position) until that listener sets it. */
 .cover {
   position: absolute;
   left: 1.75rem;
@@ -101,6 +105,7 @@
   background-color: var(--th-color-secondary);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.15);
+  transform: translateY(var(--th-booksheet-cover-scroll-offset, 0px));
 }
 
 .coverImage {
@@ -131,6 +136,8 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   text-decoration: none;
   cursor: pointer;
+  /* CLAUDE-ADDED: Same live scroll-follow as .cover -- see its own comment above. */
+  transform: translateY(var(--th-booksheet-cover-scroll-offset, 0px));
 }
 
 .playButton svg {
@@ -164,8 +171,20 @@
    clipped anything rendering outside this element's own box, which broke both the cover/play
    button's overhang and the content-scroller's own ability to reveal content past its bottom edge
    once the card is fully expanded. */
+/* CLAUDE-ADDED: scrollbar-width/-ms-overflow-style plus the ::-webkit-scrollbar rule below hide the
+   native scrollbar (Firefox/older Edge, then Chrome/Safari respectively) without touching
+   overflow-y -- wheeling still natively scrolls this element once the sheet is fully raised and
+   handleBodyRef's onWheel stops intercepting it (see that comment for when/why), it just does so
+   without a visible scrollbar track sitting on top of a custom drag-to-open popup, which read as
+   broken UI chrome rather than "the same popup, just scrolled a bit further". */
 .scroller {
   contain: none !important;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scroller::-webkit-scrollbar {
+  display: none;
 }
 
 .visuallyHidden {
@@ -457,6 +476,241 @@
   white-space: nowrap;
 }
 
+/* CLAUDE-ADDED: The "Annotations" section's own collapsible header -- deliberately lighter-weight
+   than StatefulLibraryMenu's own .disclosure (no bordered card, no background-on-hover fill), since
+   every other section here (Reading Timer, Completed Read, Description) is just a plain heading with
+   no chrome around it -- this should read as "the same kind of section, just collapsible", not as an
+   unrelated settings-panel-style control dropped into the middle of the sheet. */
+.disclosure {
+  outline: none;
+}
+
+.disclosureHeading {
+  margin: 0;
+}
+
+.disclosureTrigger {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0;
+  margin: 0 0 0.5rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  outline: none;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--th-color-text);
+}
+
+.disclosureTrigger[data-focus-visible] {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.disclosureLabel {
+  flex: 1;
+  text-align: left;
+}
+
+.disclosureChevron {
+  width: 1rem;
+  height: 1rem;
+  fill: var(--th-color-text-secondary);
+  flex-shrink: 0;
+  transition: transform 150ms ease;
+}
+
+.disclosure[data-expanded] .disclosureChevron {
+  transform: rotate(180deg);
+  fill: var(--th-color-text);
+}
+
+.disclosurePanel {
+  outline: none;
+}
+
+/* Same reasoning as StatefulLibraryMenu's own .disclosurePanel[hidden] -- React Aria marks a
+   collapsed panel hidden="until-found" (content-visibility: hidden), which hides content but not
+   the panel's own box, leaving an empty strip below the trigger unless forced out of layout. */
+.disclosurePanel[hidden] {
+  display: none;
+}
+
+.annotationsTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.85rem;
+}
+
+.annotationsTab {
+  border: none;
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  background-color: var(--th-color-secondary);
+  color: var(--th-color-text-secondary);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.annotationsTab:hover {
+  color: var(--th-color-text);
+}
+
+.annotationsTab[data-selected] {
+  background-color: var(--th-color-accent, #2f6fed);
+  color: var(--th-color-accent-text, #fff);
+  font-weight: 600;
+}
+
+.annotationsEmpty {
+  margin: 0;
+  color: var(--th-color-text-secondary);
+  font-size: 0.9rem;
+}
+
+/* CLAUDE-ADDED: The "Annotations" section's list -- one row per highlight/bookmark/note, in book
+   order (see the bookOrder sort in StatefulBookSheet.tsx). A plain flex column, unlike
+   .sessionsList's fixed-column grid above -- each row's excerpt text wraps to its own height instead
+   of needing every row to share column widths. */
+.annotationsList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.annotationItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+/* CLAUDE-ADDED: Fixed-size regardless of kind (see the transparent-background fallback in
+   StatefulBookSheet.tsx) so every row's .annotationBody starts at the same x position. */
+.annotationSwatch {
+  flex-shrink: 0;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-top: 0.35rem;
+  border-radius: 50%;
+}
+
+/* CLAUDE-ADDED: flex: 1 1 auto (matching .annotationEdit's own) -- without it, this only takes up
+   its own content width in the row, leaving .annotationActions sitting immediately after the text
+   instead of pinned to the row's right edge. */
+.annotationBody {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+/* CLAUDE-ADDED: Clamped to 3 lines -- a highlight/bookmark's quoted passage or a note's own text can
+   run long, and this is a summary list, not the reader's own full-text panel. */
+.annotationExcerpt {
+  margin: 0;
+  color: var(--th-color-text);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* CLAUDE-ADDED: A note's own attached quote (the passage it's pinned to) -- secondary to
+   .annotationExcerpt (the note's actual text) the same way AnnotationsContent.tsx's own
+   listItemQuote is secondary to listItemExcerpt. */
+.annotationQuote {
+  margin: 0;
+  color: var(--th-color-text-secondary);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+/* CLAUDE-ADDED: Edit/delete affordances for a row -- shrink-to-content and right-aligned (matching
+   AnnotationsContent.tsx's own listItemEditButton/listItemDelete placement), separate from
+   .annotationBody so they don't get squeezed by its flex: 1 sizing. */
+.annotationActions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.annotationIconButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--th-color-text-secondary);
+  cursor: pointer;
+}
+
+.annotationIconButton svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: currentColor;
+}
+
+.annotationIconButton:hover {
+  color: var(--th-color-text);
+  background-color: var(--th-color-secondary);
+}
+
+.annotationIconButton[data-focus-visible],
+.annotationIconButton:focus-visible {
+  outline: 2px solid #6ba4ff;
+  outline-offset: -2px;
+}
+
+/* CLAUDE-ADDED: Replaces .annotationBody + .annotationActions while a note is being edited --
+   same "textarea + save/cancel" shape as AnnotationsContent.tsx's own listItemEdit/noteTextarea. */
+.annotationEdit {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.annotationTextarea {
+  width: 100%;
+  min-height: 4.5em;
+  box-sizing: border-box;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--th-color-primary);
+  background-color: var(--th-color-secondary);
+  color: var(--th-color-text);
+  font: inherit;
+  resize: vertical;
+}
+
+.annotationTextarea:focus-visible {
+  outline: 2px solid #6ba4ff;
+}
+
+.annotationEditActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+}
+
 .descriptionHeading {
   margin: 0 0 0.5rem;
   font-size: 1.1rem;
@@ -470,4 +724,127 @@
   font-size: 0.95rem;
   line-height: 1.5;
   white-space: pre-line;
+}
+
+/* CLAUDE-ADDED: Delete confirmation dialog for the Annotations section -- standalone centered
+   ThModal, same treatment the reader's own delete confirmation gets (see
+   thorium-web.annotations.module.css's own confirm* rules), just built on this file's own
+   --th-color-* tokens instead of the reader's --th-theme-* and --th-layout-* ones, since this
+   sheet lives on the library page and has no ThPreferencesProvider ancestor to supply those.
+
+   The --th-color-* values themselves are re-declared here (same as .root's own, at the top of this
+   file) rather than just inherited from .root -- react-aria-components' Modal portals its content
+   straight to document.body, a sibling of .root in the actual DOM (not a descendant of it), so
+   .root's custom properties -- and its :global(html[data-theme="dark"]) override -- never reach
+   anything rendered inside this backdrop. Without this, the dialog's background/text resolved to
+   var()'s implicit fallback (transparent background, default black text) in both themes, identical
+   regardless of light/dark. */
+.confirmBackdrop {
+  --th-color-text: #333;
+  --th-color-text-secondary: #666;
+  --th-color-background: #fff;
+  --th-color-primary: #e0e0e0;
+  --th-color-secondary: #fafafa;
+
+  position: fixed;
+  inset: 0;
+  z-index: 1000000 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+:global(html[data-theme="dark"]) .confirmBackdrop {
+  --th-color-text: #e8e8e8;
+  --th-color-text-secondary: #b3b3b3;
+  --th-color-background: #2b2b2b;
+  --th-color-primary: #5a5a5a;
+  --th-color-secondary: #3d3d3d;
+}
+
+.confirmDialog {
+  position: relative;
+  outline: none;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 420px;
+  max-height: 90dvh;
+  overflow-y: auto;
+  background-color: var(--th-color-background);
+  color: var(--th-color-text);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  padding: 1.5rem;
+  padding-top: 2.75rem;
+}
+
+.confirmClose {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--th-color-text);
+  cursor: pointer;
+}
+
+.confirmClose svg {
+  width: 1.4rem;
+  height: 1.4rem;
+  fill: currentColor;
+}
+
+.confirmClose:hover {
+  background-color: var(--th-color-secondary);
+}
+
+.confirmText {
+  margin: 0 0 1.25rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--th-color-text);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.confirmButton {
+  box-sizing: border-box;
+  border: 1px solid var(--th-color-primary);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--th-color-text);
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.confirmButton:hover {
+  background-color: var(--th-color-secondary);
+}
+
+/* CLAUDE-ADDED: Unlike ReadingTimer's own confirmButtonPrimary (which reuses --th-theme-text since
+   it's shared by a non-destructive "save & reset" action too), this dialog is delete-only, so a red
+   accent for the actual delete button reads more clearly as the destructive choice than bold text
+   alone would. */
+.confirmButtonPrimary {
+  border-color: #d64545;
+  color: #d64545;
+  font-weight: 600;
+}
+
+.confirmButtonPrimary:hover {
+  background-color: rgba(214, 69, 69, 0.12);
 }

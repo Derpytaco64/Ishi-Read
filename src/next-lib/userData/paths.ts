@@ -58,6 +58,10 @@ export function getWordCountFilePath(userId: string, bookHash: string): string {
   return path.join(getUserDir(userId), "wordCount", `${ bookHash }.json`);
 }
 
+export function getPageCountFilePath(userId: string, bookHash: string): string {
+  return path.join(getUserDir(userId), "pageCount", `${ bookHash }.json`);
+}
+
 export function getReadingSpeedSamplesFilePath(userId: string, bookHash: string): string {
   return path.join(getUserDir(userId), "readingSpeedSamples", `${ bookHash }.json`);
 }

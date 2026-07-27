@@ -1,0 +1,204 @@
+.underlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.3);
+  transition: opacity 200ms ease;
+}
+
+.underlay[data-entering] {
+  animation: fadeIn 200ms ease;
+}
+
+.underlay[data-exiting] {
+  animation: fadeOut 200ms ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* CLAUDE-ADDED: React Aria's Modal portals to document.body, outside #home's DOM subtree, so this
+   can't inherit #home's --th-color-* custom properties -- same self-contained treatment as the
+   library menu's own portaled .dialog. */
+.dialog {
+  --th-color-background: #fff;
+  --th-color-text: #333;
+  --th-color-text-secondary: #666;
+  --th-color-primary: #e0e0e0;
+
+  box-sizing: border-box;
+  width: 360px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  background-color: var(--th-color-background);
+  color: var(--th-color-text);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  outline: none;
+}
+
+:global(html[data-theme="dark"]) .dialog {
+  --th-color-background: #2b2b2b;
+  --th-color-text: #e8e8e8;
+  --th-color-text-secondary: #b3b3b3;
+  --th-color-primary: #5a5a5a;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1rem 0;
+}
+
+.heading {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.closeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--th-color-text);
+  cursor: pointer;
+}
+
+.closeButton svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: currentColor;
+}
+
+.closeButton[data-hovered] {
+  background-color: var(--th-color-primary);
+}
+
+.closeButton[data-focus-visible] {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 2px;
+}
+
+.body {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--th-color-text-secondary);
+}
+
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--th-color-text);
+  background: var(--th-color-background);
+  border: 1px solid var(--th-color-text-secondary);
+  border-radius: 6px;
+}
+
+.input:focus-visible {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 1px;
+}
+
+.iconField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.iconGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+.iconOption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem;
+  border: 2px solid var(--th-color-text-secondary);
+  border-radius: 8px;
+  color: var(--th-color-text-secondary);
+  cursor: pointer;
+  outline: none;
+}
+
+.iconOptionEmoji {
+  /* CLAUDE-ADDED: See .navEmoji in the library menu's CSS -- forces the OS's real color-emoji font
+     instead of inheriting the body's Inter font, which has no emoji glyphs of its own. */
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.iconOption[data-hovered] {
+  border-color: var(--th-color-text);
+  color: var(--th-color-text);
+}
+
+.iconOption[data-selected] {
+  border-color: #6ba4ff;
+  color: #6ba4ff;
+}
+
+.iconOption[data-focus-visible] {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 2px;
+}
+
+.createButton {
+  padding: 0.6rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fff;
+  background: #6ba4ff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.createButton[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.createButton[data-hovered]:not([data-disabled]) {
+  opacity: 0.9;
+}
+
+.createButton[data-focus-visible] {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 2px;
+}

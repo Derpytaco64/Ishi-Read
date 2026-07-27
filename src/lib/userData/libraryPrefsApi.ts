@@ -5,16 +5,31 @@
 // coverSize/accentColor/theme can't live there without tripping combineReducers' unknown-key
 // warning.
 
-export async function fetchLibraryPrefsFromServer(): Promise<Record<string, unknown> | null> {
-  try {
-    const res = await fetch("/api/userdata/library-prefs");
-    if (!res.ok) return null;
-    const { libraryPrefs } = await res.json();
-    return libraryPrefs ?? null;
-  } catch (err) {
-    console.error("Failed to load library preferences from server:", err);
-    return null;
-  }
+// CLAUDE-ADDED: accentColor, coverSize, theme, and shelfPrefs/shelfOrder are each owned by a
+// different hook/component, but they all fetch this same endpoint on mount -- without dedup that's
+// up to four redundant round trips for identical data on every page load. Sharing one in-flight
+// promise collapses concurrent callers onto a single request; it clears once settled so a later
+// remount still gets a fresh fetch.
+let inFlightFetch: Promise<Record<string, unknown> | null> | null = null;
+
+export function fetchLibraryPrefsFromServer(): Promise<Record<string, unknown> | null> {
+  if (inFlightFetch) return inFlightFetch;
+
+  inFlightFetch = (async () => {
+    try {
+      const res = await fetch("/api/userdata/library-prefs");
+      if (!res.ok) return null;
+      const { libraryPrefs } = await res.json();
+      return libraryPrefs ?? null;
+    } catch (err) {
+      console.error("Failed to load library preferences from server:", err);
+      return null;
+    }
+  })();
+
+  inFlightFetch.finally(() => { inFlightFetch = null; });
+
+  return inFlightFetch;
 }
 
 export function saveLibraryPrefsToServer(patch: Record<string, unknown>): void {

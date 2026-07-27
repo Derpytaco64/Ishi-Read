@@ -1,0 +1,95 @@
+/* CLAUDE-ADDED: Invisible, zero-footprint anchor -- the actual "trigger" MenuTrigger/Popover need
+   to exist, positioned at the right-click coordinates via fixed positioning (see
+   StatefulBookContextMenu's inline left/top style), but nothing about it should be visible or
+   intercept pointer events itself. */
+.anchor {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* CLAUDE-ADDED: React Aria's Popover portals to document.body, outside #home's DOM subtree, so it
+   can't inherit #home's --th-color-* custom properties -- same self-contained redefinition used by
+   the other portaled popovers/dialogs in this app. */
+.popover {
+  --th-color-background: #fff;
+  --th-color-text: #333;
+  --th-color-text-secondary: #666;
+  --th-color-primary: #e0e0e0;
+
+  background: var(--th-color-background);
+  color: var(--th-color-text);
+  border: 1px solid var(--th-color-text-secondary);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  min-width: 160px;
+  z-index: 1000000;
+}
+
+:global(html[data-theme="dark"]) .popover {
+  --th-color-background: #2b2b2b;
+  --th-color-text: #e8e8e8;
+  --th-color-text-secondary: #b3b3b3;
+  --th-color-primary: #5a5a5a;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  padding: 0.35rem;
+  outline: none;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+}
+
+.menuItem[data-focused],
+.menuItem[data-hovered] {
+  background-color: var(--th-color-primary);
+}
+
+.menuItem[data-disabled] {
+  color: var(--th-color-text-secondary);
+  cursor: default;
+}
+
+.menuItem[data-has-submenu]::after {
+  content: "\203A";
+  margin-inline-start: auto;
+  padding-inline-start: 0.75rem;
+  color: var(--th-color-text-secondary);
+}
+
+.menuItemEmoji {
+  /* CLAUDE-ADDED: See .navEmoji in the library menu's CSS -- forces the OS's real color-emoji font
+     instead of inheriting the body's Inter font, which has no emoji glyphs of its own. */
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+  font-size: 1.1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.menuItemLabel {
+  flex: 1;
+}
+
+.menuItemCheck {
+  width: 1rem;
+  height: 1rem;
+  fill: currentColor;
+  flex-shrink: 0;
+}

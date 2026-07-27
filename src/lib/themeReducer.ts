@@ -30,7 +30,9 @@ export interface ThemeReducerState {
   containerBreakpoint?: ThBreakpoints;
 }
 
-const initialState: ThemeReducerState = {
+// CLAUDE-ADDED: Exported so store.ts can merge this in behind a persisted `theme` choice on boot --
+// see buildPersistedState's comment for why only `theme` is ever persisted, not the rest of this slice.
+export const initialState: ThemeReducerState = {
   monochrome: false,
   colorScheme: ThColorScheme.light,
   theme: {

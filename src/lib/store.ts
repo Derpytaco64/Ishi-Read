@@ -4,7 +4,7 @@ import { combineReducers, configureStore, Reducer } from "@reduxjs/toolkit";
 
 import readerReducer, { ReaderReducerState } from "@/lib/readerReducer";
 import settingsReducer, { SettingsReducerState } from "@/lib/settingsReducer";
-import themeReducer, { ThemeReducerState } from "@/lib/themeReducer";
+import themeReducer, { ThemeReducerState, initialState as themeInitialState } from "@/lib/themeReducer";
 import actionsReducer, { ActionsReducerState, ActionStateObject } from "@/lib/actionsReducer";
 import publicationReducer, { PublicationReducerState } from "./publicationReducer";
 import annotationsReducer, { AnnotationsReducerState } from "./annotationsReducer";
@@ -235,7 +235,14 @@ const buildPersistedState = (state: any, externalReducers: Record<string, Extern
   // Internal reducers to persist
   if (state.actions) stateToPersist.actions = state.actions;
   if (state.settings) stateToPersist.settings = state.settings;
-  if (state.theming) stateToPersist.theming = state.theming;
+  // CLAUDE-ADDED: theming mixes one real user choice (theme.reflow/fxl/audio) with fields that are
+  // pure live environment detection -- monochrome, colorScheme, prefersContrast, forcedColors,
+  // prefersReducedMotion/Transparency, breakpoint, containerBreakpoint. Those get redetected from
+  // matchMedia/ResizeObserver every time a reader mounts (see useTheming's onXChange callbacks in
+  // StatefulReaderWrapper.tsx), so persisting them was pure churn: every OS dark-mode flip or window
+  // resize re-saved (and re-uploaded) the whole settings blob for a value that gets overwritten again
+  // on the very next load anyway. Only the actual choice is worth keeping.
+  if (state.theming) stateToPersist.theming = { theme: state.theming.theme };
   if (state.preferences) stateToPersist.preferences = state.preferences;
   if (state.globalPreferences) stateToPersist.globalPreferences = state.globalPreferences;
   if (state.webPubSettings) stateToPersist.webPubSettings = state.webPubSettings;
@@ -251,10 +258,9 @@ const buildPersistedState = (state: any, externalReducers: Record<string, Extern
   return stateToPersist;
 };
 
-const saveState = (state: any, storageKey?: string, externalReducers: Record<string, ExternalReducerConfig> = {}) => {
+const persistState = (stateToPersist: any, storageKey?: string) => {
   try {
     const resolvedKey = storageKey || DEFAULT_STORAGE_KEY;
-    const stateToPersist = buildPersistedState(state, externalReducers);
 
     localStorage.setItem(resolvedKey, JSON.stringify(stateToPersist));
     // CLAUDE-ADDED: localStorage remains the instant synchronous boot path (see makeStore); the
@@ -301,10 +307,17 @@ export const makeStore = (storageKey?: string, externalReducers: Record<string, 
   const persistedState = loadState(storageKey);
   
   // Create preloaded state with persisted values
+  // CLAUDE-ADDED: Merge over themeInitialState rather than using persistedState.theming as-is --
+  // only `theme` is ever persisted now (see buildPersistedState), and any older cache still holding
+  // the full slice (colorScheme, monochrome, breakpoint, ...) shouldn't seed those either, since
+  // they're liable to be stale (e.g. an OS dark-mode flip since the last save) until useTheming's
+  // onXChange callbacks redetect and correct them moments later anyway.
+  const persistedTheme = persistedState.theming?.theme;
+
   const preloadedState: any = {
     actions: persistedState.actions,
     settings: persistedState.settings,
-    theming: persistedState.theming,
+    theming: persistedTheme ? { ...themeInitialState, theme: persistedTheme } : undefined,
     preferences: persistedState.preferences,
     globalPreferences: persistedState.globalPreferences,
     webPubSettings: persistedState.webPubSettings,
@@ -324,7 +337,17 @@ export const makeStore = (storageKey?: string, externalReducers: Record<string, 
   const appReducer = combineReducers(combinedReducers) as unknown as Reducer<RootState>;
   const rootReducer: Reducer<RootState> = (state, action) => {
     if (action.type === HYDRATE_FROM_SERVER && state) {
-      state = { ...state, ...(action as unknown as { payload: Partial<RootState> }).payload };
+      const payload = (action as unknown as { payload: Partial<RootState> }).payload;
+      state = {
+        ...state,
+        ...payload,
+        // CLAUDE-ADDED: theming needs a narrower merge than every other slice here -- the server's
+        // copy only ever carries the persisted `theme` choice (buildPersistedState strips the rest),
+        // never the live-detected fields (colorScheme, monochrome, breakpoint, ...) that useTheming
+        // may have already set by the time this hydrate lands. A wholesale spread would blow those
+        // back to undefined instead of leaving them alone.
+        ...(payload.theming ? { theming: { ...state.theming, theme: payload.theming.theme } } : {})
+      };
     }
     return appReducer(state, action);
   };
@@ -334,8 +357,19 @@ export const makeStore = (storageKey?: string, externalReducers: Record<string, 
     preloadedState,
   });
 
+  // CLAUDE-ADDED: store.subscribe fires on every dispatch, including ones that only touch
+  // non-persisted slices (e.g. publication's fontLanguage/coverTheme) -- skip the write entirely
+  // when the persisted subset hasn't actually changed, instead of re-saving identical data to
+  // localStorage and re-uploading it to the server on every unrelated action.
+  let lastPersistedSnapshot: string | null = null;
+
   const saveStateDebounced = debounce(() => {
-    saveState(store.getState(), storageKey, externalReducers);
+    const stateToPersist = buildPersistedState(store.getState(), externalReducers);
+    const serialized = JSON.stringify(stateToPersist);
+    if (serialized === lastPersistedSnapshot) return;
+
+    lastPersistedSnapshot = serialized;
+    persistState(stateToPersist, storageKey);
   }, 250);
 
   store.subscribe(saveStateDebounced);

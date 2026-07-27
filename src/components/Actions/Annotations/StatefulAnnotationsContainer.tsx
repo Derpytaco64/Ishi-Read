@@ -8,6 +8,7 @@ import { focusReadingContainer } from "@/core/Helpers/focusUtilities";
 import { StatefulActionContainerProps } from "../models/actions";
 
 import { StatefulSheetWrapper } from "../../Sheets/StatefulSheetWrapper";
+import { ThModal } from "@/core/Components/Containers/ThModal";
 
 import { useNavigator } from "@/core/Navigator";
 import { useDocking } from "../../Docking/hooks/useDocking";
@@ -21,6 +22,8 @@ import { deleteHighlight, deleteBookmark, deleteNote, addOrUpdateNote, addBookma
 import { AnnotationsContent, AnnotationListEntry, AnnotationsTab } from "./AnnotationsContent";
 
 import panelStyles from "./assets/styles/thorium-web.annotations.module.css";
+
+import CloseIcon from "./assets/icons/close.svg";
 
 export const StatefulAnnotationsContainer = ({ triggerRef }: StatefulActionContainerProps) => {
   const { t } = useI18n();
@@ -40,6 +43,12 @@ export const StatefulAnnotationsContainer = ({ triggerRef }: StatefulActionConta
 
   const [activeTab, setActiveTab] = useState<AnnotationsTab>("all");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
+  // CLAUDE-ADDED: Delete now confirms first (same standalone centered ThModal pattern
+  // StatefulReadingTimerContainer.tsx uses for its own delete/reset flows) instead of deleting the
+  // moment the trash icon is pressed -- a highlight/bookmark/note has no undo once it's gone from
+  // both Redux and the server file.
+  const [pendingDelete, setPendingDelete] = useState<AnnotationListEntry | null>(null);
 
   const toggleSortDirection = useCallback(() => {
     setSortDirection(direction => direction === "asc" ? "desc" : "asc");
@@ -106,12 +115,22 @@ export const StatefulAnnotationsContainer = ({ triggerRef }: StatefulActionConta
     });
   }, [go, currentLocator, dispatch, closeIfTransient]);
 
-  const handleDelete = useCallback((entry: AnnotationListEntry) => {
-    if (!manifestUrl) return;
-    if (entry.kind === "highlight") dispatch(deleteHighlight(manifestUrl, entry.id));
-    else if (entry.kind === "bookmark") dispatch(deleteBookmark(manifestUrl, entry.id));
-    else dispatch(deleteNote(manifestUrl, entry.id));
-  }, [manifestUrl, dispatch]);
+  // CLAUDE-ADDED: Opens the confirm dialog rather than deleting directly -- see pendingDelete above.
+  const handleDeletePress = useCallback((entry: AnnotationListEntry) => {
+    setPendingDelete(entry);
+  }, []);
+
+  const closeDeleteConfirm = useCallback(() => setPendingDelete(null), []);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (manifestUrl && pendingDelete) {
+      const entry = pendingDelete;
+      if (entry.kind === "highlight") dispatch(deleteHighlight(manifestUrl, entry.id));
+      else if (entry.kind === "bookmark") dispatch(deleteBookmark(manifestUrl, entry.id));
+      else dispatch(deleteNote(manifestUrl, entry.id));
+    }
+    setPendingDelete(null);
+  }, [manifestUrl, pendingDelete, dispatch]);
 
   const handleUpdateNote = useCallback((entry: AnnotationListEntry, text: string) => {
     if (!manifestUrl) return;
@@ -140,6 +159,7 @@ export const StatefulAnnotationsContainer = ({ triggerRef }: StatefulActionConta
   const isDocked = sheetType === ThSheetTypes.dockedStart || sheetType === ThSheetTypes.dockedEnd;
 
   return (
+    <>
     <StatefulSheetWrapper
       sheetType={ sheetType }
       sheetProps={ {
@@ -159,12 +179,50 @@ export const StatefulAnnotationsContainer = ({ triggerRef }: StatefulActionConta
         activeTab={ activeTab }
         onTabChange={ setActiveTab }
         onSelect={ handleSelect }
-        onDelete={ handleDelete }
+        onDelete={ handleDeletePress }
         onUpdateNote={ handleUpdateNote }
         onBookmarkPage={ handleBookmarkPage }
         sortDirection={ sortDirection }
         onToggleSortDirection={ toggleSortDirection }
       />
     </StatefulSheetWrapper>
+
+    { /* CLAUDE-ADDED: Standalone centered ThModal, not routed through the sheet system, same as
+         StatefulReadingTimerContainer's own delete/reset confirmations -- needs to appear "in the
+         middle of the screen" regardless of whether the Annotations panel is currently a popover,
+         bottom sheet, or docked. */ }
+    <ThModal
+      isOpen={ pendingDelete !== null }
+      onOpenChange={ open => { if (!open) closeDeleteConfirm(); } }
+      isDismissable={ true }
+      className={ panelStyles.confirmBackdrop }
+      compounds={ {
+        dialog: {
+          className: panelStyles.confirmDialog,
+          "aria-label": pendingDelete ? t("reader.annotations.deleteConfirmTitle", { kind: pendingDelete.kind }) : undefined
+        }
+      } }
+    >
+      <div className={ panelStyles.confirmText }>
+        <button
+          type="button"
+          className={ panelStyles.confirmClose }
+          aria-label={ t("common.actions.close") }
+          onClick={ closeDeleteConfirm }
+        >
+          <CloseIcon aria-hidden="true" focusable="false" />
+        </button>
+        { t("reader.annotations.deleteConfirmText") }
+      </div>
+      <div className={ panelStyles.confirmActions }>
+        <button type="button" className={ panelStyles.confirmButton } onClick={ closeDeleteConfirm }>
+          { t("common.actions.cancel") }
+        </button>
+        <button type="button" className={ `${ panelStyles.confirmButton } ${ panelStyles.confirmButtonPrimary }` } onClick={ handleConfirmDelete }>
+          { t("reader.annotations.delete") }
+        </button>
+      </div>
+    </ThModal>
+    </>
   );
 };

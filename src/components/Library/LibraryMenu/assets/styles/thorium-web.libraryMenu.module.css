@@ -22,7 +22,7 @@
 }
 
 .logo {
-  height: 60px;
+  height: 96px;
   width: auto;
   pointer-events: none;
 }
@@ -81,6 +81,11 @@
   pointer-events: auto;
   outline: none;
   overflow-y: auto;
+
+  /* CLAUDE-ADDED: Firefox/standard themed scrollbar -- matches the drawer's own light/dark
+     palette instead of the browser's default (often stark white/grey) scrollbar. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--th-color-text-secondary) var(--th-color-background);
 }
 
 :global(html[data-theme="dark"]) .dialog {
@@ -88,6 +93,26 @@
   --th-color-text: #e8e8e8;
   --th-color-text-secondary: #b3b3b3;
   --th-color-primary: #5a5a5a;
+}
+
+/* CLAUDE-ADDED: WebKit/Blink (Chrome, Safari, Edge) equivalent of the scrollbar-color/width above
+   -- these browsers ignore the standard properties and need the vendor pseudo-elements instead. */
+.dialog::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dialog::-webkit-scrollbar-track {
+  background: var(--th-color-background);
+}
+
+.dialog::-webkit-scrollbar-thumb {
+  background-color: var(--th-color-primary);
+  border-radius: 8px;
+  border: 2px solid var(--th-color-background);
+}
+
+.dialog::-webkit-scrollbar-thumb:hover {
+  background-color: var(--th-color-text-secondary);
 }
 
 .underlay[data-entering] .dialog {
@@ -183,6 +208,100 @@
   flex-shrink: 0;
 }
 
+.navList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0.75rem 1rem 0;
+  flex-shrink: 0;
+}
+
+.navButton {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--th-color-text);
+  border: none;
+  border-radius: 12px;
+  background: none;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 150ms ease;
+}
+
+.navButton[data-hovered] {
+  background-color: var(--th-color-primary);
+}
+
+.navButton[data-focus-visible] {
+  outline: 2px solid #6ba4ff;
+  outline-offset: -2px;
+}
+
+.navButtonActive {
+  background-color: var(--th-color-primary);
+}
+
+.navIcon {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: var(--th-color-text-secondary);
+  flex-shrink: 0;
+  transition: fill 150ms ease;
+}
+
+.navButton[data-hovered] .navIcon,
+.navButtonActive .navIcon {
+  fill: var(--th-color-text);
+}
+
+/* CLAUDE-ADDED: Custom shelves use a plain emoji character (see ShelfIcon) rather than an SVG, so
+   this sizes as text (font-size) instead of .navIcon's width/height + fill. */
+.navEmoji {
+  /* CLAUDE-ADDED: The body font (next/font's Inter, see layout.tsx) is inherited by default and
+     has no color-emoji glyphs, so without this the emoji renders as Inter's flat/monochrome
+     fallback glyph instead of the platform's real emoji. This stack forces the OS's actual emoji
+     font regardless of what the page's body font is. */
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+  font-size: 1.15rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.navLabel {
+  flex: 1;
+  text-align: left;
+}
+
+/* Custom-shelf nav buttons nested inside the "Custom Shelves" disclosure panel -- lighter weight
+   than the top-level Home/Series buttons, matching how .nestedDisclosure's own trigger is lighter
+   than the top-level Settings trigger. */
+.nestedNavButton {
+  padding: 0.6rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--th-color-text-secondary);
+}
+
+.nestedNavButton[data-hovered] {
+  color: var(--th-color-text);
+}
+
+.nestedNavButton.navButtonActive {
+  color: var(--th-color-text);
+}
+
+.createShelfButton {
+  margin-top: 0.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--th-color-primary);
+  color: var(--th-color-text);
+}
+
 .disclosure {
   margin: 0.75rem 1rem 0;
   border: 1px solid var(--th-color-primary);
@@ -193,6 +312,27 @@
 
 .disclosure[data-expanded] {
   border-color: var(--th-color-text-secondary);
+}
+
+/* CLAUDE-ADDED: Custom Shelves sits right above Settings, so the gap between them is really the
+   gap *below* Custom Shelves -- .disclosure's own margin-top (0.75rem) is what separates Custom
+   Shelves from the nav list above it, so trimming Settings' own top margin down to .navList's own
+   inter-button gap (0.15rem) is what makes the two disclosures read as evenly spaced as
+   Home/My Library/Series are. Border dropped too, same reasoning as .shelvesDisclosure below --
+   flush with the flat nav buttons instead of its own boxed-in card. */
+.settingsDisclosure {
+  margin-top: 0.15rem;
+  border: none;
+}
+
+/* CLAUDE-ADDED: Custom Shelves is expanded by default (unlike Settings), so its bordered "card"
+   box would otherwise sit permanently open around the shelf list -- dropping the border here
+   keeps it visually flush with the flat Home/Series nav buttons above instead of reading as its
+   own boxed-in section. Top margin trimmed to .navList's own inter-button gap (0.15rem) too, so
+   the gap above Custom Shelves matches the gap between Home/My Library/Series. */
+.shelvesDisclosure {
+  border: none;
+  margin-top: 0.15rem;
 }
 
 .disclosureHeading {
@@ -353,6 +493,14 @@
 
 .shelfRow .switch {
   flex: 1;
+}
+
+/* CLAUDE-ADDED: Custom-shelf tab rows reuse .shelfRow/.shelfDragHandle from the Settings > Shelves
+   drag list above, but the row's other element is a nav Button (click to open the shelf) instead
+   of a ThSwitch -- same flex:1 treatment so it fills the remaining row width next to the handle. */
+.shelfRow .shelfTabButton {
+  flex: 1;
+  width: auto;
 }
 
 .colorPickerRow {
@@ -522,4 +670,200 @@
 .switch[data-focus-visible] .switchIndicator {
   outline: 2px solid #6ba4ff;
   outline-offset: 2px;
+}
+
+/* Shelf tab right-click menu (Edit / Delete) */
+
+/* CLAUDE-ADDED: Invisible, zero-footprint anchor -- see StatefulBookContextMenu's identical
+   .anchor for why this exists (there's no native "open at cursor position" trigger). */
+.shelfContextAnchor {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* CLAUDE-ADDED: React Aria's Popover portals to document.body, outside #home's DOM subtree, so it
+   can't inherit #home's --th-color-* custom properties -- same self-contained redefinition used by
+   the other portaled popovers/dialogs in this app (.dialog above, StatefulBookContextMenu's
+   .popover). */
+.shelfContextPopover {
+  --th-color-background: #fff;
+  --th-color-text: #333;
+  --th-color-text-secondary: #666;
+  --th-color-primary: #e0e0e0;
+
+  background: var(--th-color-background);
+  color: var(--th-color-text);
+  border: 1px solid var(--th-color-text-secondary);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  min-width: 140px;
+  z-index: 1000000;
+}
+
+:global(html[data-theme="dark"]) .shelfContextPopover {
+  --th-color-background: #2b2b2b;
+  --th-color-text: #e8e8e8;
+  --th-color-text-secondary: #b3b3b3;
+  --th-color-primary: #5a5a5a;
+}
+
+.shelfContextMenuList {
+  display: flex;
+  flex-direction: column;
+  padding: 0.35rem;
+  outline: none;
+}
+
+.shelfContextMenuItem {
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+}
+
+.shelfContextMenuItem[data-focused],
+.shelfContextMenuItem[data-hovered] {
+  background-color: var(--th-color-primary);
+}
+
+.shelfContextMenuItemDanger {
+  color: #d64545;
+}
+
+/* Delete-shelf confirmation -- same shape/CSS as StatefulAnnotationsContainer's
+   highlight/bookmark/note delete confirmation (confirmBackdrop/confirmDialog/confirmClose/
+   confirmText/confirmActions/confirmButton/confirmButtonPrimary), ported to this module's own
+   --th-color-* palette instead of the reader's --th-theme-* one. */
+
+.confirmBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.confirmDialog {
+  --th-color-background: #fff;
+  --th-color-text: #333;
+  --th-color-text-secondary: #666;
+  --th-color-primary: #e0e0e0;
+
+  position: relative;
+  outline: none;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 420px;
+  max-height: 90dvh;
+  overflow-y: auto;
+  background-color: var(--th-color-background);
+  color: var(--th-color-text);
+  border-radius: 12px;
+  border: 1px solid var(--th-color-primary);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  padding: 1rem;
+  padding-top: 2.5rem;
+
+  /* CLAUDE-ADDED: Same themed-scrollbar treatment as .dialog above. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--th-color-text-secondary) var(--th-color-background);
+}
+
+.confirmDialog::-webkit-scrollbar {
+  width: 8px;
+}
+
+.confirmDialog::-webkit-scrollbar-track {
+  background: var(--th-color-background);
+}
+
+.confirmDialog::-webkit-scrollbar-thumb {
+  background-color: var(--th-color-primary);
+  border-radius: 8px;
+  border: 2px solid var(--th-color-background);
+}
+
+.confirmDialog::-webkit-scrollbar-thumb:hover {
+  background-color: var(--th-color-text-secondary);
+}
+
+:global(html[data-theme="dark"]) .confirmDialog {
+  --th-color-background: #2b2b2b;
+  --th-color-text: #e8e8e8;
+  --th-color-text-secondary: #b3b3b3;
+  --th-color-primary: #5a5a5a;
+}
+
+.confirmClose {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--th-color-text);
+  cursor: pointer;
+  padding: 0;
+}
+
+.confirmClose svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: currentColor;
+}
+
+.confirmClose:hover,
+.confirmClose:focus-visible {
+  background-color: var(--th-color-primary);
+  outline: none;
+}
+
+.confirmText {
+  margin: 0 0 1rem;
+  color: var(--th-color-text);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.confirmButton {
+  box-sizing: border-box;
+  border: 2px solid var(--th-color-primary);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--th-color-text);
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 0.4rem 0.85rem;
+  cursor: pointer;
+}
+
+.confirmButton:hover,
+.confirmButton:focus-visible {
+  background-color: var(--th-color-primary);
+  outline: none;
+}
+
+.confirmButtonPrimary {
+  border-color: var(--th-color-text);
+  font-weight: bold;
 }

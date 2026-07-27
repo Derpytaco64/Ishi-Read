@@ -25,6 +25,10 @@ html[data-theme="dark"] body {
 
 .header {
   text-align: center;
+  /* CLAUDE-ADDED: Lines the title up with the logo/menu-trigger in the top-left corner (see
+     .logo in the library menu's CSS) -- without this the header sat flush against the very top
+     of #home while the (now-larger) logo's vertical center sits lower. */
+  margin-top: 1.75rem;
   margin-bottom: 4.5rem;
 }
 
@@ -41,8 +45,9 @@ html[data-theme="dark"] body {
 
 h1 {
   font-size: 2rem;
-  margin: 0 0 1rem;
+  margin: 0 0 0.5rem;
   color: var(--th-color-text);
+  padding-top: 1rem;
 }
 
 .subtitle {
@@ -50,11 +55,12 @@ h1 {
   color: var(--th-color-text-secondary);
   max-width: 800px;
   margin: 0 auto;
+  margin-bottom: -3.5rem;
 }
 
 h2 {
-  font-size: 1.25rem;
-  margin-top: 3rem;
+  font-size: 1.5rem;
+  margin-top: 2.75rem;
   /* CLAUDE-ADDED: h2 had no color rule, so it stayed black text in dark mode; wire it to the same var as h1. */
   color: var(--th-color-text);
 }

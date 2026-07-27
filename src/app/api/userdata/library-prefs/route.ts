@@ -14,6 +14,14 @@ export async function GET() {
 // accentColor, and theme each save independently (see the hooks in src/app -- useCoverSize,
 // useAccentColor, page.tsx, StatefulLibraryMenu), so a plain overwrite would let whichever saves
 // last wipe out the others' keys.
+//
+// CLAUDE-ADDED: The read-modify-write itself is serialized through this module-level queue -- those
+// same independent hooks can all patch different fields within the same tick (e.g. on first load,
+// each seeding the server with a field it found missing), and without serializing, two concurrent
+// requests could both read the same pre-patch `existing` and each write back a version missing the
+// other's field, silently dropping it.
+let writeQueue: Promise<unknown> = Promise.resolve();
+
 export async function POST(request: Request) {
   const patch = await request.json().catch(() => null);
 
@@ -24,8 +32,11 @@ export async function POST(request: Request) {
   ensureUsersRegistry();
 
   const filePath = getLibraryPrefsFilePath(CURRENT_USER_ID);
-  const existing = readJsonFile<Record<string, unknown>>(filePath) ?? {};
-  writeJsonFileAtomic(filePath, { ...existing, ...patch });
+  writeQueue = writeQueue.then(() => {
+    const existing = readJsonFile<Record<string, unknown>>(filePath) ?? {};
+    writeJsonFileAtomic(filePath, { ...existing, ...patch });
+  });
+  await writeQueue;
 
   return NextResponse.json({ ok: true });
 }

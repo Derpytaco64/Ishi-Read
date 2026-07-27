@@ -145,6 +145,10 @@ export interface PublicationGridProps {
   // of navigating straight to the reader -- modifier-clicks (ctrl/cmd/shift/alt) and middle-clicks
   // still fall through to the normal link navigation so "open in new tab" keeps working.
   onSelect?: (publication: Publication) => void;
+  // CLAUDE-ADDED: Right-clicking a card opens the caller's context menu (e.g. "Add to shelf")
+  // instead of the browser's native one -- only suppressed when a handler is actually provided, so
+  // callers that don't pass this prop keep the native menu.
+  onContextMenu?: (e: React.MouseEvent, publication: Publication) => void;
 }
 
 export const PublicationGrid = ({
@@ -160,6 +164,7 @@ export const PublicationGrid = ({
   ),
   progressByUrl: providedProgressByUrl,
   onSelect,
+  onContextMenu,
 }: PublicationGridProps) => {
   // CLAUDE-ADDED: Progress now comes from the server (see getBookProgress.ts). Only fetched here
   // when the caller hasn't already provided it via the progressByUrl prop.
@@ -229,6 +234,10 @@ export const PublicationGrid = ({
             e.preventDefault();
             onSelect(publication);
           } }
+          onContextMenu={ onContextMenu ? (e) => {
+            e.preventDefault();
+            onContextMenu(e, publication);
+          } : undefined }
         >
           <figure className={ publicationGridStyles.cover }>
             { renderCoverWithClass(publication) }

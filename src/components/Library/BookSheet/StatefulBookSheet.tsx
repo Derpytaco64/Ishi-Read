@@ -4,10 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 
+import { Button, Disclosure, DisclosurePanel, Heading } from "react-aria-components";
+
+import { Locator } from "@readium/shared";
+
 import { ThBottomSheet } from "@/core/Components/Containers/ThBottomSheet";
 import { ThContainerHeader } from "@/core/Components/Containers/ThContainerHeader";
 import { ThContainerBody } from "@/core/Components/Containers/ThContainerBody";
 import { ThCloseButton } from "@/core/Components/Buttons/ThCloseButton";
+import { ThModal } from "@/core/Components/Containers/ThModal";
 
 import { Publication } from "@/components/Misc/PublicationGrid";
 
@@ -15,25 +20,38 @@ import { getManifestUrlFromBookUrl } from "@/helpers/getBookProgress";
 import { fetchPositionFromServer } from "@/lib/userData/positionApi";
 import { fetchReadingTimeFromServer } from "@/lib/userData/readingTimeApi";
 import { fetchWordCountFromServer } from "@/lib/userData/wordCountApi";
+import { fetchPageCountFromServer } from "@/lib/userData/pageCountApi";
 import { fetchReadingSpeedSamplesFromServer } from "@/lib/userData/readingSpeedApi";
 import { fetchCompletedReadTimesFromServer } from "@/lib/userData/completedReadTimesApi";
+import { fetchHighlightsFromServer, deleteHighlightFromServer } from "@/lib/userData/highlightsApi";
+import { fetchBookmarksFromServer, deleteBookmarkFromServer } from "@/lib/userData/bookmarksApi";
+import { fetchNotesFromServer, saveNoteToServer, deleteNoteFromServer } from "@/lib/userData/notesApi";
 import { StoredCompletedReadTime } from "@/lib/userData/readingTimeTypes";
+import { StoredNote } from "@/lib/userData/annotationTypes";
 import { computeCurrentWpm, estimateSecondsLeft } from "@/components/Actions/ReadingTimer/helpers/computeReadingSpeed";
 import { formatFullReadingTime, formatEstimatedTime, ReadingTimeUnitLabels } from "@/components/Actions/ReadingTimer/helpers/formatReadingTime";
 import { formatTimestamp, formatDateOnly } from "@/components/Actions/Annotations/helpers/formatTimestamp";
+import { getHighlightColorHex } from "@/components/Actions/Annotations/helpers/highlightColors";
 
 import PlayIcon from "./assets/icons/play_arrow.svg";
+import ChevronDown from "./assets/icons/chevron_down.svg";
+import EditIcon from "./assets/icons/edit.svg";
+import DeleteIcon from "./assets/icons/delete.svg";
+import CheckIcon from "./assets/icons/check.svg";
+import CloseIcon from "./assets/icons/close.svg";
 
 import styles from "./assets/styles/thorium-web.bookSheet.module.css";
 
 import type { SheetRef } from "react-modal-sheet";
 
 // CLAUDE-ADDED: Index into the snapPoints array below ([0, 0.5, 1]) that the sheet opens at --
-// cover/title/author/series only, per snap value 0.5. There's no equivalent FULL_SNAP index
-// anymore: wheel-scrolling moves the sheet by directly setting its underlying motion value (see
-// handleBodyRef below) rather than animating to a fixed snap, so "fully open" is just wherever
-// that continuous tracking ends up (y reaching 0), not a discrete state.
+// cover/title/author/series only, per snap value 0.5. Wheel-scrolling itself doesn't use a discrete
+// FULL_SNAP index (see handleBodyRef below) -- it moves the sheet by directly setting its underlying
+// motion value, so "fully open" from a wheel drag is just wherever that continuous tracking ends up
+// (y reaching 0). FULL_SNAP below is only used for the one discrete jump-to-full case (expanding the
+// Annotations disclosure -- see its onExpandedChange), not for wheel-driven movement.
 const PEEK_SNAP = 1;
+const FULL_SNAP = 2;
 
 // CLAUDE-ADDED: StatefulBookSheet doesn't use the app's i18n system (see formatDate below, and every
 // other hardcoded English label in this file) -- plain literals here match that existing convention
@@ -104,6 +122,34 @@ interface ReadingStats {
   lastCompletedRead: StoredCompletedReadTime | null;
 }
 
+// CLAUDE-ADDED: Merges highlights/bookmarks/notes into one list, same union AnnotationListEntry
+// represents in the reader's own panel (AnnotationsContent.tsx). id/updatedAt are carried (unlike
+// the original display-only version of this shape) so edit/delete here can round-trip back to the
+// same server records those APIs already key by id -- see handleDeleteAnnotation/saveEditingNote.
+interface AnnotationDisplayEntry {
+  key: string;
+  id: string;
+  kind: "highlight" | "bookmark" | "note";
+  locator: Locator;
+  color?: string;
+  noteText?: string;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+// CLAUDE-ADDED: Same tab set as the reader's own AnnotationsContent.tsx (its AnnotationsTab type),
+// just re-declared locally rather than importing that component's type -- this sheet has its own,
+// much simpler tab bar (no sort toggle, no bookmark-this-page action) and shouldn't pull in that
+// panel's whole prop surface just for the tab name union.
+type AnnotationsTab = "all" | "highlights" | "bookmarks" | "notes";
+
+const ANNOTATIONS_TABS: { key: AnnotationsTab; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "highlights", label: "Highlights" },
+  { key: "bookmarks", label: "Bookmarks" },
+  { key: "notes", label: "Notes" }
+];
+
 export interface StatefulBookSheetProps {
   publication: Publication | null;
   isOpen: boolean;
@@ -165,8 +211,39 @@ export const StatefulBookSheet = ({
   // new one's title -- an empty section while loading reads better than a wrong one.
   const [readingStats, setReadingStats] = useState<ReadingStats | null>(null);
 
+  // CLAUDE-ADDED: The "Annotations" section, between Reading Timer and Completed Read -- a read-only
+  // view of the book's highlights/bookmarks/notes, fetched in the same Promise.all as everything
+  // above (these are cheap cache reads, same cost as position/wordCount/etc, unlike pageCount's own
+  // separate effect below which can trigger an expensive first-time server computation). null while
+  // loading (or no manifestUrl) so the section is simply absent rather than showing a stale book's
+  // list; [] once loaded with nothing to show, which the render below also treats as "don't show the
+  // section".
+  const [annotations, setAnnotations] = useState<AnnotationDisplayEntry[] | null>(null);
+
+  // CLAUDE-ADDED: Nested tab filter within the Annotations section (all/highlights/bookmarks/notes),
+  // same tab set as the reader's own panel. Reset alongside annotations on every book change --
+  // otherwise switching from a book you'd left on "Notes" to one with no notes at all would land on
+  // an empty-looking section instead of showing what that book actually has.
+  const [annotationsTab, setAnnotationsTab] = useState<AnnotationsTab>("all");
+
+  // CLAUDE-ADDED: Inline note editing -- same editingKey/editDraft pattern as the reader's own
+  // AnnotationsContent.tsx, keyed the same way each <li> is (`${kind}-${id}`) so only one row's
+  // identity needs tracking at a time. Reset alongside annotations/annotationsTab on book change so
+  // a stale edit-in-progress can't survive into a different book's list.
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+
+  // CLAUDE-ADDED: Delete now confirms first (standalone centered ThModal, same pattern the reader's
+  // own StatefulAnnotationsContainer.tsx uses) instead of deleting the moment the trash icon is
+  // pressed -- see handleDeleteAnnotation/confirmDeleteAnnotation below.
+  const [pendingDeleteAnnotation, setPendingDeleteAnnotation] = useState<AnnotationDisplayEntry | null>(null);
+
   useEffect(() => {
     setReadingStats(null);
+    setAnnotations(null);
+    setAnnotationsTab("all");
+    setEditingKey(null);
+    setPendingDeleteAnnotation(null);
 
     if (!displayed) return;
     const manifestUrl = getManifestUrlFromBookUrl(displayed.url);
@@ -179,8 +256,11 @@ export const StatefulBookSheet = ({
       fetchReadingTimeFromServer(manifestUrl),
       fetchWordCountFromServer(manifestUrl),
       fetchReadingSpeedSamplesFromServer(manifestUrl),
-      fetchCompletedReadTimesFromServer(manifestUrl)
-    ]).then(([locator, totalSeconds, wordCount, speedSamples, completedReadTimes]) => {
+      fetchCompletedReadTimesFromServer(manifestUrl),
+      fetchHighlightsFromServer(manifestUrl),
+      fetchBookmarksFromServer(manifestUrl),
+      fetchNotesFromServer(manifestUrl)
+    ]).then(([locator, totalSeconds, wordCount, speedSamples, completedReadTimes, highlights, bookmarks, notes]) => {
       if (cancelled) return;
 
       const totalProgression = locator?.locations.totalProgression;
@@ -199,6 +279,70 @@ export const StatefulBookSheet = ({
         : null;
 
       setReadingStats({ percent, totalSeconds, wpm, secondsLeft, lastCompletedRead });
+
+      // CLAUDE-ADDED: Same deserialize-and-drop-unparseable-entries pattern as
+      // StatefulAnnotationsContainer.tsx's own `entries` memo (the reader's interactive panel this
+      // read-only section summarizes) -- locator is stored as an opaque serialized blob, Locator.
+      // deserialize turns it back into something with .text/.title/.locations to actually display.
+      const highlightEntries: AnnotationDisplayEntry[] = highlights.flatMap(item => {
+        const itemLocator = Locator.deserialize(item.locator);
+        if (!itemLocator) return [];
+        return [{ key: `highlight-${ item.id }`, id: item.id, kind: "highlight" as const, locator: itemLocator, color: item.color, createdAt: item.createdAt }];
+      });
+
+      const bookmarkEntries: AnnotationDisplayEntry[] = bookmarks.flatMap(item => {
+        const itemLocator = Locator.deserialize(item.locator);
+        if (!itemLocator) return [];
+        return [{ key: `bookmark-${ item.id }`, id: item.id, kind: "bookmark" as const, locator: itemLocator, createdAt: item.createdAt }];
+      });
+
+      const noteEntries: AnnotationDisplayEntry[] = notes.flatMap(item => {
+        const itemLocator = Locator.deserialize(item.locator);
+        if (!itemLocator) return [];
+        return [{ key: `note-${ item.id }`, id: item.id, kind: "note" as const, locator: itemLocator, noteText: item.text, createdAt: item.createdAt, updatedAt: item.updatedAt }];
+      });
+
+      // CLAUDE-ADDED: Book order (start to end), same as StatefulAnnotationsContainer's default
+      // ascending sort -- reads better for "browsing this book's annotations" than creation order,
+      // since it lines up with the order you'd actually encounter them while reading.
+      const bookOrder = (entry: AnnotationDisplayEntry) => [
+        entry.locator.locations.position ?? entry.locator.locations.totalProgression ?? 0,
+        entry.locator.locations.progression ?? 0
+      ];
+
+      const combinedAnnotations = [...highlightEntries, ...bookmarkEntries, ...noteEntries].sort((a, b) => {
+        const [aPos, aProg] = bookOrder(a);
+        const [bPos, bProg] = bookOrder(b);
+        return aPos - bPos || aProg - bProg;
+      });
+
+      setAnnotations(combinedAnnotations);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [displayed]);
+
+  // CLAUDE-ADDED: Deliberately its own effect/state, not bundled into the Promise.all above -- unlike
+  // every other value there (which just reads back something already cached), fetching this can
+  // itself *trigger* a first-ever server-side computation (see the pageCount route), which walks
+  // every reading-order resource and can take a few seconds for a long book. Bundling it in would
+  // hold up the progress dial and reading-timer stats, which are otherwise cheap cache reads, behind
+  // that. Letting it resolve independently means the rest of the sheet renders immediately and the
+  // pages chip just pops in once it's ready.
+  const [pageCount, setPageCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    setPageCount(null);
+
+    if (!displayed) return;
+    const manifestUrl = getManifestUrlFromBookUrl(displayed.url);
+    if (!manifestUrl) return;
+
+    let cancelled = false;
+    fetchPageCountFromServer(manifestUrl).then((count) => {
+      if (!cancelled) setPageCount(count);
     });
 
     return () => {
@@ -259,10 +403,93 @@ export const StatefulBookSheet = ({
     };
 
     scroller.addEventListener("wheel", onWheel, { passive: false });
-    wheelCleanupRef.current = () => scroller.removeEventListener("wheel", onWheel);
+
+    // CLAUDE-ADDED: .cover/.playButton overhang above .container's rounded top corner (see their own
+    // CSS) -- deliberately positioned outside .scroller entirely so that overhang isn't clipped by
+    // .scroller's own overflow-y: auto (see the .header comment in the stylesheet). That also means
+    // they don't naturally scroll away with the rest of the content once the sheet is fully raised
+    // and .scroller starts scrolling on its own (once content is taller than one viewport -- see the
+    // Annotations section) -- without this, they stay pinned in place, floating over whatever content
+    // has scrolled up underneath them instead of scrolling off with the header area they belong to.
+    // Mirroring .scroller's own scrollTop onto a CSS var both elements read via transform: translateY
+    // (see the stylesheet) keeps them moving in lockstep with the content, same as if they were
+    // actually part of it -- .closeButton is deliberately left out of this (no matching CSS var
+    // reference), staying reachable at any scroll position instead of scrolling away too.
+    const container = scroller.closest<HTMLElement>(`.${ styles.container }`);
+    const onScroll = () => {
+      container?.style.setProperty("--th-booksheet-cover-scroll-offset", `${ -scroller.scrollTop }px`);
+    };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+
+    wheelCleanupRef.current = () => {
+      scroller.removeEventListener("wheel", onWheel);
+      scroller.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
+  // CLAUDE-ADDED: Computed once per render rather than inline twice in the JSX below (once for the
+  // empty-tab check, once for the actual list) -- these arrays are small (a book's own annotations),
+  // so this doesn't need useMemo, just a single shared value instead of two duplicate filter calls.
+  const filteredAnnotations = !annotations ? [] : annotationsTab === "all"
+    ? annotations
+    : annotations.filter(entry => `${ entry.kind }s` === annotationsTab);
+
+  // CLAUDE-ADDED: Opens the confirm dialog rather than deleting directly -- see
+  // pendingDeleteAnnotation above and confirmDeleteAnnotation below.
+  const handleDeleteAnnotation = (entry: AnnotationDisplayEntry) => {
+    setPendingDeleteAnnotation(entry);
+  };
+
+  const closeDeleteConfirm = () => setPendingDeleteAnnotation(null);
+
+  // CLAUDE-ADDED: Deletes locally first (so the row disappears immediately) then fires the matching
+  // server delete -- same bundled local-update + server-persist shape annotationsReducer.ts's own
+  // deleteHighlight/deleteBookmark/deleteNote thunks use for the reader's own panel, just without a
+  // Redux round-trip since this sheet never loads annotations into the store to begin with.
+  const confirmDeleteAnnotation = () => {
+    const entry = pendingDeleteAnnotation;
+    const manifestUrl = displayed ? getManifestUrlFromBookUrl(displayed.url) : null;
+
+    if (entry && manifestUrl) {
+      setAnnotations((prev) => prev?.filter((item) => item.key !== entry.key) ?? prev);
+      if (editingKey === entry.key) setEditingKey(null);
+
+      if (entry.kind === "highlight") deleteHighlightFromServer(manifestUrl, entry.id);
+      else if (entry.kind === "bookmark") deleteBookmarkFromServer(manifestUrl, entry.id);
+      else deleteNoteFromServer(manifestUrl, entry.id);
+    }
+
+    setPendingDeleteAnnotation(null);
+  };
+
+  const beginEditingNote = (entry: AnnotationDisplayEntry) => {
+    setEditingKey(entry.key);
+    setEditDraft(entry.noteText ?? "");
+  };
+
+  const cancelEditingNote = () => setEditingKey(null);
+
+  const saveEditingNote = (entry: AnnotationDisplayEntry) => {
+    const manifestUrl = displayed ? getManifestUrlFromBookUrl(displayed.url) : null;
+    if (!manifestUrl || !editDraft.trim()) return;
+
+    const updatedNote: StoredNote = {
+      id: entry.id,
+      locator: entry.locator.serialize(),
+      text: editDraft,
+      createdAt: entry.createdAt,
+      updatedAt: Date.now()
+    };
+
+    setAnnotations((prev) => prev?.map((item) =>
+      item.key === entry.key ? { ...item, noteText: updatedNote.text, updatedAt: updatedNote.updatedAt } : item
+    ) ?? prev);
+    saveNoteToServer(manifestUrl, updatedNote);
+    setEditingKey(null);
+  };
+
   return (
+    <>
     <ThBottomSheet
       ref={ sheetRef }
       isOpen={ isOpen }
@@ -366,7 +593,7 @@ export const StatefulBookSheet = ({
           <div className={ styles.details }>
             <div className={ styles.detailsTop }>
               <div className={ styles.detailsChips }>
-                { (displayed.calibreId || displayed.uuid || displayed.addedAt || displayed.modified || displayed.fileSize) && (
+                { (displayed.calibreId || displayed.uuid || displayed.addedAt || displayed.modified || displayed.fileSize || pageCount) && (
                   <div className={ styles.chipRow }>
                     { displayed.calibreId && (
                       <span className={ styles.chip }><strong>ID:</strong> { displayed.calibreId }</span>
@@ -387,6 +614,13 @@ export const StatefulBookSheet = ({
                     ) }
                     { displayed.fileSize && (
                       <span className={ styles.chip }><strong>File size:</strong> { displayed.fileSize }</span>
+                    ) }
+                    { /* CLAUDE-ADDED: The original Thorium Reader's own 1024-character-per-page
+                         estimate, computed server-side on demand (see pageCountCompute.ts) -- no
+                         reader needed. 0 (a real but uninformative result for a pathological
+                         empty-text book) is excluded the same way percent > 0 is gated on above. */ }
+                    { !!pageCount && (
+                      <span className={ styles.chip }><strong># of pages:</strong> { pageCount }</span>
                     ) }
                   </div>
                 ) }
@@ -465,6 +699,141 @@ export const StatefulBookSheet = ({
               </div>
             ) }
 
+            { /* CLAUDE-ADDED: Read-only view of the book's highlights/bookmarks/notes -- the reader's
+                 own interactive panel is AnnotationsContent.tsx (edit/delete/jump-to); this is the
+                 same "summary popup, not a replacement" treatment Reading Timer/Completed Read above
+                 and below already get. Sorted book order (start to end), not creation order -- see
+                 the bookOrder sort in the fetch effect above. Collapsible (same Disclosure pattern
+                 StatefulLibraryMenu's Settings panel uses) since a book with a lot of annotations
+                 could otherwise make this an awfully long sheet to scroll past just to reach
+                 Completed Read below it -- collapsed by default, same as that Settings panel. */ }
+            { annotations && annotations.length > 0 && (
+              <Disclosure
+                className={ styles.disclosure }
+                // CLAUDE-ADDED: The annotations list can be taller than the sheet's peek-open reveal
+                // area, and this sheet's own wheel handler (see handleBodyRef) only hands wheel input
+                // off to native content scrolling once the sheet is fully raised (current === fullY)
+                // -- expanding this disclosure while still peeked left the content-scroller sized to
+                // that smaller reveal area but overflowing, so the browser showed its own scrollbar
+                // there instead of the wheel drag doing anything. Snapping to fully open the moment
+                // this expands sidesteps that entirely: by the time there's anything to scroll, the
+                // sheet is already at the one position where native scrolling is the intended handoff.
+                onExpandedChange={ (isExpanded) => { if (isExpanded) sheetRef.current?.snapTo(FULL_SNAP); } }
+              >
+                <Heading className={ styles.disclosureHeading }>
+                  <Button slot="trigger" className={ styles.disclosureTrigger }>
+                    <span className={ styles.disclosureLabel }>Annotations</span>
+                    <ChevronDown aria-hidden="true" focusable="false" className={ styles.disclosureChevron } />
+                  </Button>
+                </Heading>
+
+                <DisclosurePanel className={ styles.disclosurePanel }>
+                  <div className={ styles.annotationsTabs } role="tablist">
+                    { ANNOTATIONS_TABS.map(({ key, label }) => (
+                      <button
+                        key={ key }
+                        type="button"
+                        role="tab"
+                        className={ styles.annotationsTab }
+                        data-selected={ annotationsTab === key || undefined }
+                        aria-selected={ annotationsTab === key }
+                        onClick={ () => setAnnotationsTab(key) }
+                      >
+                        { label }
+                      </button>
+                    )) }
+                  </div>
+
+                  { /* CLAUDE-ADDED: annotations is already known non-empty here (see the gate above),
+                       but a specific tab's filtered slice can still be empty -- e.g. a book with
+                       highlights but no notes, viewed on the Notes tab. */ }
+                  { filteredAnnotations.length === 0 ? (
+                    <p className={ styles.annotationsEmpty }>Nothing here yet.</p>
+                  ) : (
+                    <ul className={ styles.annotationsList }>
+                      { filteredAnnotations.map((entry) => {
+                        const isEditing = editingKey === entry.key;
+
+                        return (
+                        <li key={ entry.key } className={ styles.annotationItem }>
+                          { /* CLAUDE-ADDED: Always rendered (transparent for non-highlights) rather
+                               than only for highlight rows -- keeps every row's body starting at the
+                               same x position instead of bookmark/note rows sitting flush left while
+                               highlight rows are indented past the swatch. */ }
+                          <span
+                            className={ styles.annotationSwatch }
+                            style={ { backgroundColor: entry.kind === "highlight" ? getHighlightColorHex(entry.color ?? "") : "transparent" } }
+                            aria-hidden="true"
+                          />
+
+                          { isEditing ? (
+                            <div className={ styles.annotationEdit } onClick={ (event) => event.stopPropagation() }>
+                              <textarea
+                                className={ styles.annotationTextarea }
+                                value={ editDraft }
+                                onChange={ (event) => setEditDraft(event.target.value) }
+                                autoFocus
+                              />
+                              <div className={ styles.annotationEditActions }>
+                                <button type="button" className={ styles.annotationIconButton } aria-label="Save" onClick={ () => saveEditingNote(entry) }>
+                                  <CheckIcon aria-hidden="true" focusable="false" />
+                                </button>
+                                <button type="button" className={ styles.annotationIconButton } aria-label="Cancel" onClick={ cancelEditingNote }>
+                                  <CloseIcon aria-hidden="true" focusable="false" />
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                            <div className={ styles.annotationBody }>
+                              <p className={ styles.annotationExcerpt }>
+                                { entry.kind === "note" ? entry.noteText : (entry.locator.text?.highlight || entry.locator.title || entry.locator.href) }
+                              </p>
+                              { entry.kind === "note" && entry.locator.text?.highlight && (
+                                <p className={ styles.annotationQuote }>“{ entry.locator.text.highlight }”</p>
+                              ) }
+                              <div className={ styles.statsRow }>
+                                <span className={ styles.chip }>
+                                  { entry.kind === "highlight" ? "Highlight" : entry.kind === "bookmark" ? "Bookmark" : "Note" }
+                                </span>
+                                { typeof entry.locator.locations?.totalProgression === "number" && (
+                                  <span className={ styles.chip }>{ (entry.locator.locations.totalProgression * 100).toFixed(1) }%</span>
+                                ) }
+                                <span className={ styles.chip }>{ formatTimestamp(entry.createdAt) }</span>
+                              </div>
+                            </div>
+
+                            <div className={ styles.annotationActions }>
+                              { entry.kind === "note" && (
+                                <button
+                                  type="button"
+                                  className={ styles.annotationIconButton }
+                                  aria-label="Edit note"
+                                  onClick={ () => beginEditingNote(entry) }
+                                >
+                                  <EditIcon aria-hidden="true" focusable="false" />
+                                </button>
+                              ) }
+                              <button
+                                type="button"
+                                className={ styles.annotationIconButton }
+                                aria-label={ `Delete ${ entry.kind }` }
+                                onClick={ () => handleDeleteAnnotation(entry) }
+                              >
+                                <DeleteIcon aria-hidden="true" focusable="false" />
+                              </button>
+                            </div>
+                            </>
+                          ) }
+                        </li>
+                        );
+                      }) }
+                    </ul>
+                  ) }
+                </DisclosurePanel>
+              </Disclosure>
+            ) }
+
             { /* CLAUDE-ADDED: The most recent entry from the reader's own Completed tab (see
                  lastCompletedRead in the effect above) -- created whenever the in-reader timer is
                  reset with "save", archiving everything accumulated since the previous reset/save as
@@ -523,5 +892,43 @@ export const StatefulBookSheet = ({
         ) }
       </ThContainerBody>
     </ThBottomSheet>
+
+    { /* CLAUDE-ADDED: Standalone centered ThModal, not routed through react-modal-sheet's own
+         overlay -- needs to appear "in the middle of the screen" above the book-detail sheet
+         itself, same treatment the reader's own StatefulAnnotationsContainer.tsx gives its
+         equivalent delete confirmation. */ }
+    <ThModal
+      isOpen={ pendingDeleteAnnotation !== null }
+      onOpenChange={ open => { if (!open) closeDeleteConfirm(); } }
+      isDismissable={ true }
+      className={ styles.confirmBackdrop }
+      compounds={ {
+        dialog: {
+          className: styles.confirmDialog,
+          "aria-label": pendingDeleteAnnotation ? `Delete this ${ pendingDeleteAnnotation.kind }?` : undefined
+        }
+      } }
+    >
+      <div className={ styles.confirmText }>
+        <button
+          type="button"
+          className={ styles.confirmClose }
+          aria-label="Close"
+          onClick={ closeDeleteConfirm }
+        >
+          <CloseIcon aria-hidden="true" focusable="false" />
+        </button>
+        This can't be undone.
+      </div>
+      <div className={ styles.confirmActions }>
+        <button type="button" className={ styles.confirmButton } onClick={ closeDeleteConfirm }>
+          Cancel
+        </button>
+        <button type="button" className={ `${ styles.confirmButton } ${ styles.confirmButtonPrimary }` } onClick={ confirmDeleteAnnotation }>
+          Delete
+        </button>
+      </div>
+    </ThModal>
+    </>
   );
 };
