@@ -10,6 +10,7 @@ import { StatefulMyLibraryView } from "@/components/Library/MyLibrary/StatefulMy
 import { StatefulShelfView } from "@/components/Library/CustomShelves/StatefulShelfView";
 import { StatefulShelfFormModal } from "@/components/Library/CustomShelves/StatefulShelfFormModal";
 import { StatefulBookContextMenu, BookContextMenuState } from "@/components/Library/BookContextMenu/StatefulBookContextMenu";
+import { StatefulUserMenu } from "@/components/Library/UserMenu/StatefulUserMenu";
 import Image from "next/image";
 
 import { isManifestRouteEnabled } from "./ManifestRouteEnabled";
@@ -426,8 +427,9 @@ export default function Home() {
         onReorderShelves={ reorderShelves }
         coverSize={ coverSize }
         onChangeCoverSize={ setCoverSize }
-        onLibrarySourceChanged={ fetchMyLibrary }
       />
+
+      <StatefulUserMenu />
 
       { activeView === "library" && (
         <StatefulMyLibraryView

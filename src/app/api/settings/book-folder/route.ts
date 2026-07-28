@@ -3,14 +3,23 @@ import fs from "fs";
 import { NextResponse } from "next/server";
 
 import { getPublicationsDir, setPublicationsDir } from "@/next-lib/userData/publicationsConfig";
+import { getCurrentUser } from "@/next-lib/userData/session";
 
 export const runtime = "nodejs";
 
+// CLAUDE-ADDED: Server-wide config (where books are read from for everyone), so admin-only in a
+// multi-user setup -- same reasoning as readium-url and user-data-folder.
 export async function GET() {
+  const user = await getCurrentUser();
+  if (!user?.isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   return NextResponse.json({ bookFolder: getPublicationsDir() });
 }
 
 export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (!user?.isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   const body = await request.json().catch(() => null);
   const bookFolder = body?.bookFolder;
 

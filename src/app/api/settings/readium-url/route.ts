@@ -1,14 +1,22 @@
 import { NextResponse } from "next/server";
 
-import { getReadiumServerUrl, setReadiumServerUrl } from "@/next-lib/userData/publicationsConfig";
+import { getReadiumServerUrl, setReadiumServerUrl, normalizeReadiumUrl } from "@/next-lib/userData/publicationsConfig";
+import { getCurrentUser } from "@/next-lib/userData/session";
 
 export const runtime = "nodejs";
 
+// CLAUDE-ADDED: Admin-only -- same reasoning as book-folder.
 export async function GET() {
+  const user = await getCurrentUser();
+  if (!user?.isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   return NextResponse.json({ readiumUrl: getReadiumServerUrl() });
 }
 
 export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (!user?.isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   const body = await request.json().catch(() => null);
   const readiumUrl = body?.readiumUrl;
 
@@ -16,22 +24,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A URL is required" }, { status: 400 });
   }
 
-  // CLAUDE-ADDED: Trailing slash stripped so it concatenates cleanly with the "/webpub/..." path
-  // api/books/route.ts builds (a trailing slash would otherwise produce a double slash there).
-  const trimmed = readiumUrl.trim().replace(/\/+$/, "");
+  const { url: trimmed, error } = normalizeReadiumUrl(readiumUrl);
+  if (error) return NextResponse.json({ error }, { status: 400 });
 
-  let parsed: URL;
-  try {
-    parsed = new URL(trimmed);
-  } catch {
-    return NextResponse.json({ error: "That doesn't look like a valid URL" }, { status: 400 });
-  }
-
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return NextResponse.json({ error: "The URL must start with http:// or https://" }, { status: 400 });
-  }
-
-  setReadiumServerUrl(trimmed);
+  setReadiumServerUrl(trimmed!);
 
   return NextResponse.json({ readiumUrl: trimmed });
 }

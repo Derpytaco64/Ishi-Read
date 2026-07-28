@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { CURRENT_USER_ID, ensureUsersRegistry, getLibraryPrefsFilePath } from "@/next-lib/userData/paths";
+import { getLibraryPrefsFilePath } from "@/next-lib/userData/paths";
 import { readJsonFile, writeJsonFileAtomic } from "@/next-lib/userData/jsonStore";
+import { getCurrentUserId } from "@/next-lib/userData/session";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const libraryPrefs = readJsonFile(getLibraryPrefsFilePath(CURRENT_USER_ID));
+  const userId = await getCurrentUserId();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const libraryPrefs = readJsonFile(getLibraryPrefsFilePath(userId));
   return NextResponse.json({ libraryPrefs });
 }
 
@@ -23,15 +27,16 @@ export async function GET() {
 let writeQueue: Promise<unknown> = Promise.resolve();
 
 export async function POST(request: Request) {
+  const userId = await getCurrentUserId();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const patch = await request.json().catch(() => null);
 
   if (!patch || typeof patch !== "object") {
     return NextResponse.json({ error: "A JSON object is required" }, { status: 400 });
   }
 
-  ensureUsersRegistry();
-
-  const filePath = getLibraryPrefsFilePath(CURRENT_USER_ID);
+  const filePath = getLibraryPrefsFilePath(userId);
   writeQueue = writeQueue.then(() => {
     const existing = readJsonFile<Record<string, unknown>>(filePath) ?? {};
     writeJsonFileAtomic(filePath, { ...existing, ...patch });

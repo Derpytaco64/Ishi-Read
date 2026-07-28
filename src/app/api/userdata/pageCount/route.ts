@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { resolveBookIdentity } from "@/next-lib/userData/bookIdentity";
-import { CURRENT_USER_ID, ensureUsersRegistry, getPageCountFilePath } from "@/next-lib/userData/paths";
+import { getPageCountFilePath } from "@/next-lib/userData/paths";
 import { readJsonFile, writeJsonFileAtomic } from "@/next-lib/userData/jsonStore";
 import { computePageCountForManifest } from "@/next-lib/userData/pageCountCompute";
+import { getCurrentUserId } from "@/next-lib/userData/session";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,9 @@ export const runtime = "nodejs";
 // derived the first time anyone asks -- e.g. opening the library's book-detail sheet -- without ever
 // requiring the reader to have been opened.
 export async function GET(request: Request) {
+  const userId = await getCurrentUserId();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { searchParams } = new URL(request.url);
   const manifestUrl = searchParams.get("manifestUrl");
 
@@ -21,7 +25,7 @@ export async function GET(request: Request) {
   }
 
   const hash = resolveBookIdentity(manifestUrl);
-  const filePath = getPageCountFilePath(CURRENT_USER_ID, hash);
+  const filePath = getPageCountFilePath(userId, hash);
   const cached = readJsonFile<number>(filePath);
   if (cached !== null) {
     return NextResponse.json({ pageCount: cached });
@@ -29,7 +33,6 @@ export async function GET(request: Request) {
 
   try {
     const pageCount = await computePageCountForManifest(manifestUrl);
-    ensureUsersRegistry();
     writeJsonFileAtomic(filePath, pageCount);
     return NextResponse.json({ pageCount });
   } catch (err) {

@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 
 import { resolveBookIdentity } from "@/next-lib/userData/bookIdentity";
-import { CURRENT_USER_ID, ensureUsersRegistry, getBookmarksFilePath } from "@/next-lib/userData/paths";
+import { getBookmarksFilePath } from "@/next-lib/userData/paths";
 import { readItemList, upsertItem, removeItem } from "@/next-lib/userData/listStore";
+import { getCurrentUserId } from "@/next-lib/userData/session";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
+  const userId = await getCurrentUserId();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { searchParams } = new URL(request.url);
   const manifestUrl = searchParams.get("manifestUrl");
 
@@ -15,12 +19,15 @@ export async function GET(request: Request) {
   }
 
   const hash = resolveBookIdentity(manifestUrl);
-  const items = readItemList(getBookmarksFilePath(CURRENT_USER_ID, hash));
+  const items = readItemList(getBookmarksFilePath(userId, hash));
 
   return NextResponse.json({ items });
 }
 
 export async function POST(request: Request) {
+  const userId = await getCurrentUserId();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await request.json().catch(() => null);
   const manifestUrl = body?.manifestUrl;
   const item = body?.item;
@@ -29,14 +36,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "manifestUrl and item (with an id) are required" }, { status: 400 });
   }
 
-  ensureUsersRegistry();
   const hash = resolveBookIdentity(manifestUrl);
-  upsertItem(getBookmarksFilePath(CURRENT_USER_ID, hash), item);
+  upsertItem(getBookmarksFilePath(userId, hash), item);
 
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(request: Request) {
+  const userId = await getCurrentUserId();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { searchParams } = new URL(request.url);
   const manifestUrl = searchParams.get("manifestUrl");
   const id = searchParams.get("id");
@@ -46,7 +55,7 @@ export async function DELETE(request: Request) {
   }
 
   const hash = resolveBookIdentity(manifestUrl);
-  removeItem(getBookmarksFilePath(CURRENT_USER_ID, hash), id);
+  removeItem(getBookmarksFilePath(userId, hash), id);
 
   return NextResponse.json({ ok: true });
 }

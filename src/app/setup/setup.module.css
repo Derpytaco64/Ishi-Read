@@ -1,0 +1,113 @@
+/* CLAUDE-ADDED: Same single-screen/no-scrollbar/accent-color pattern as login.module.css's .page --
+   see that file's comments for why (fixed height + overflow: hidden, colors driven by CSS vars set
+   inline by the server-component wrapper). */
+.page {
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1rem, 3vh, 1.5rem);
+  padding: clamp(1rem, 4vh, 2rem) 1.5rem;
+  text-align: center;
+
+  --th-color-background: #fff;
+  --th-color-text: #333;
+  --th-color-text-secondary: #666;
+  --th-color-input-border: #ccc;
+
+  background-color: var(--th-color-background);
+  color: var(--th-color-text);
+}
+
+html[data-theme="dark"] .page {
+  --th-color-background: #2b2b2b;
+  --th-color-text: #e8e8e8;
+  --th-color-text-secondary: #b3b3b3;
+  --th-color-input-border: #555;
+}
+
+.logo {
+  height: clamp(48px, 10vh, 80px);
+  width: auto;
+  max-width: 100%;
+}
+
+.heading {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.hint {
+  color: var(--th-color-text-secondary);
+  margin: -0.75rem 0 0;
+  max-width: 480px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1rem;
+  width: 100%;
+  max-width: 480px;
+  max-height: 100%;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.fieldRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.fieldHint {
+  color: var(--th-color-text-secondary);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem 0.85rem;
+  border-radius: 6px;
+  border: 1px solid var(--th-color-input-border);
+  background-color: var(--th-color-background);
+  color: var(--th-color-text);
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--th-color-accent, #6ba4ff);
+  outline-offset: 1px;
+}
+
+.error {
+  color: #e05252;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.primaryButton {
+  padding: 0.65rem 1rem;
+  border-radius: 6px;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  background-color: var(--th-color-accent, #6ba4ff);
+  color: var(--th-color-accent-text, #101010);
+}
+
+.primaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

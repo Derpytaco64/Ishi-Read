@@ -31,9 +31,6 @@ import { LibraryView } from "@/app/libraryView";
 import { CustomShelf, ShelfModalState } from "@/app/customShelves";
 import { useAccentColor } from "@/app/useAccentColor";
 import { MIN_COVER_SIZE, MAX_COVER_SIZE } from "@/app/coverSizeStorage";
-import { useBookFolder } from "@/app/useBookFolder";
-import { useReadiumUrl } from "@/app/useReadiumUrl";
-import { useUserDataFolder } from "@/app/useUserDataFolder";
 import { fetchLibraryPrefsFromServer, saveLibraryPrefsToServer } from "@/lib/userData/libraryPrefsApi";
 
 import logo from "@/assets/ishamel.png";
@@ -69,9 +66,6 @@ export interface StatefulLibraryMenuProps {
   onReorderShelves: (order: ShelfKey[]) => void;
   coverSize: number;
   onChangeCoverSize: (size: number) => void;
-  // CLAUDE-ADDED: Fired after either the book folder or the Readium URL is saved -- both change
-  // where/how books are fetched from, so the caller (page.tsx) re-fetches the library either way.
-  onLibrarySourceChanged?: () => void;
 }
 
 export const StatefulLibraryMenu = ({
@@ -88,8 +82,7 @@ export const StatefulLibraryMenu = ({
   shelfOrder,
   onReorderShelves,
   coverSize,
-  onChangeCoverSize,
-  onLibrarySourceChanged
+  onChangeCoverSize
 }: StatefulLibraryMenuProps) => {
   // CLAUDE-ADDED: Right-click-on-a-shelf-tab context menu (Edit/Delete), positioned at the cursor
   // the same way StatefulBookContextMenu does -- an invisible anchor Button placed at the click
@@ -139,79 +132,10 @@ export const StatefulLibraryMenu = ({
 
   const { accentColor, setAccentColor } = useAccentColor();
 
-  // CLAUDE-ADDED: Draft is a separate string from the saved bookFolder so typing doesn't fire a
-  // save (and its filesystem validation) on every keystroke -- only committed on blur/Enter, same
-  // moment the input's value is next allowed to be overwritten by a fresh fetch/save result.
-  const { bookFolder, saveBookFolder, isSaving, error: bookFolderError } = useBookFolder();
-  const [bookFolderDraft, setBookFolderDraft] = useState(bookFolder);
-  const [bookFolderSaved, setBookFolderSaved] = useState(false);
-
-  useEffect(() => {
-    setBookFolderDraft(bookFolder);
-  }, [bookFolder]);
-
-  const commitBookFolder = async () => {
-    if (bookFolderDraft === bookFolder) return;
-
-    setBookFolderSaved(false);
-    const ok = await saveBookFolder(bookFolderDraft);
-    if (ok) {
-      setBookFolderSaved(true);
-      onLibrarySourceChanged?.();
-    }
-  };
-
-  // CLAUDE-ADDED: Same draft/commit-on-blur pattern as Book Folder above.
-  const { readiumUrl, saveReadiumUrl, isSaving: isSavingReadiumUrl, error: readiumUrlError } = useReadiumUrl();
-  const [readiumUrlDraft, setReadiumUrlDraft] = useState(readiumUrl);
-  const [readiumUrlSaved, setReadiumUrlSaved] = useState(false);
-
-  useEffect(() => {
-    setReadiumUrlDraft(readiumUrl);
-  }, [readiumUrl]);
-
-  const commitReadiumUrl = async () => {
-    if (readiumUrlDraft === readiumUrl) return;
-
-    setReadiumUrlSaved(false);
-    const ok = await saveReadiumUrl(readiumUrlDraft);
-    if (ok) {
-      setReadiumUrlSaved(true);
-      onLibrarySourceChanged?.();
-    }
-  };
-
-  // CLAUDE-ADDED: Same draft/commit-on-blur pattern as Book Folder above -- committing here also
-  // migrates any existing data on disk into the new folder (see the API route), which is why
-  // "Saving…" can take noticeably longer than the other text settings.
-  const {
-    userDataFolder,
-    saveUserDataFolder,
-    isSaving: isSavingUserDataFolder,
-    error: userDataFolderError
-  } = useUserDataFolder();
-  const [userDataFolderDraft, setUserDataFolderDraft] = useState(userDataFolder);
-  const [userDataFolderSaved, setUserDataFolderSaved] = useState(false);
-
-  useEffect(() => {
-    setUserDataFolderDraft(userDataFolder);
-  }, [userDataFolder]);
-
-  const commitUserDataFolder = async () => {
-    if (userDataFolderDraft === userDataFolder) return;
-
-    setUserDataFolderSaved(false);
-    const ok = await saveUserDataFolder(userDataFolderDraft);
-    if (ok) {
-      setUserDataFolderSaved(true);
-      onLibrarySourceChanged?.();
-    }
-  };
-
   // CLAUDE-ADDED: Lets the cover-size number be typed directly instead of only dragged on the
-  // slider -- same draft/commit-on-blur pattern as Book Folder/Readium URL above, so keystrokes
-  // (including a temporarily out-of-range value while typing, e.g. "1" on the way to "160") don't
-  // immediately clamp/commit and fight the user mid-entry.
+  // slider -- draft is a separate value from the committed coverSize so typing doesn't clamp/commit
+  // on every keystroke (including a temporarily out-of-range value while typing, e.g. "1" on the
+  // way to "160") and fight the user mid-entry; only committed on blur/Enter.
   const [coverSizeDraft, setCoverSizeDraft] = useState(String(coverSize));
 
   useEffect(() => {
@@ -554,116 +478,6 @@ export const StatefulLibraryMenu = ({
               </DisclosurePanel>
             </Disclosure>
 
-            <Disclosure className={ styles.nestedDisclosure }>
-              <Heading className={ styles.disclosureHeading }>
-                <Button slot="trigger" className={ styles.disclosureTrigger }>
-                  <span className={ styles.disclosureLabel }>Book Folder</span>
-                  <ChevronDown aria-hidden="true" focusable="false" className={ styles.disclosureChevron } />
-                </Button>
-              </Heading>
-
-              <DisclosurePanel className={ styles.disclosurePanel }>
-                <label className={ styles.textSettingRow }>
-                  <span>Folder to scan for books</span>
-                  <input
-                    type="text"
-                    className={ styles.textSettingInput }
-                    value={ bookFolderDraft }
-                    onChange={ (e) => {
-                      setBookFolderDraft(e.target.value);
-                      setBookFolderSaved(false);
-                    } }
-                    onBlur={ commitBookFolder }
-                    onKeyDown={ (e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
-                    } }
-                    aria-label="Book folder path"
-                    spellCheck={ false }
-                  />
-                </label>
-                { isSaving && <p className={ styles.textSettingStatus }>Saving…</p> }
-                { !isSaving && bookFolderError && (
-                  <p className={ styles.textSettingStatusError }>{ bookFolderError }</p>
-                ) }
-                { !isSaving && !bookFolderError && bookFolderSaved && (
-                  <p className={ styles.textSettingStatus }>Saved</p>
-                ) }
-              </DisclosurePanel>
-            </Disclosure>
-
-            <Disclosure className={ styles.nestedDisclosure }>
-              <Heading className={ styles.disclosureHeading }>
-                <Button slot="trigger" className={ styles.disclosureTrigger }>
-                  <span className={ styles.disclosureLabel }>Readium URL</span>
-                  <ChevronDown aria-hidden="true" focusable="false" className={ styles.disclosureChevron } />
-                </Button>
-              </Heading>
-
-              <DisclosurePanel className={ styles.disclosurePanel }>
-                <label className={ styles.textSettingRow }>
-                  <span>Readium Web Publication Server URL</span>
-                  <input
-                    type="text"
-                    className={ styles.textSettingInput }
-                    value={ readiumUrlDraft }
-                    onChange={ (e) => {
-                      setReadiumUrlDraft(e.target.value);
-                      setReadiumUrlSaved(false);
-                    } }
-                    onBlur={ commitReadiumUrl }
-                    onKeyDown={ (e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
-                    } }
-                    aria-label="Readium Web Publication Server URL"
-                    spellCheck={ false }
-                  />
-                </label>
-                { isSavingReadiumUrl && <p className={ styles.textSettingStatus }>Saving…</p> }
-                { !isSavingReadiumUrl && readiumUrlError && (
-                  <p className={ styles.textSettingStatusError }>{ readiumUrlError }</p>
-                ) }
-                { !isSavingReadiumUrl && !readiumUrlError && readiumUrlSaved && (
-                  <p className={ styles.textSettingStatus }>Saved</p>
-                ) }
-              </DisclosurePanel>
-            </Disclosure>
-
-            <Disclosure className={ styles.nestedDisclosure }>
-              <Heading className={ styles.disclosureHeading }>
-                <Button slot="trigger" className={ styles.disclosureTrigger }>
-                  <span className={ styles.disclosureLabel }>User Data Folder</span>
-                  <ChevronDown aria-hidden="true" focusable="false" className={ styles.disclosureChevron } />
-                </Button>
-              </Heading>
-
-              <DisclosurePanel className={ styles.disclosurePanel }>
-                <label className={ styles.textSettingRow }>
-                  <span>Folder for reading progress, annotations, and other saved data</span>
-                  <input
-                    type="text"
-                    className={ styles.textSettingInput }
-                    value={ userDataFolderDraft }
-                    onChange={ (e) => {
-                      setUserDataFolderDraft(e.target.value);
-                      setUserDataFolderSaved(false);
-                    } }
-                    onBlur={ commitUserDataFolder }
-                    onKeyDown={ (e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
-                    } }
-                    aria-label="User data folder path"
-                    spellCheck={ false }
-                  />
-                </label>
-                { isSavingUserDataFolder && <p className={ styles.textSettingStatus }>Moving existing data…</p> }
-                { !isSavingUserDataFolder && userDataFolderError && (
-                  <p className={ styles.textSettingStatusError }>{ userDataFolderError }</p>
-                ) }
-                { !isSavingUserDataFolder && !userDataFolderError && userDataFolderSaved && (
-                  <p className={ styles.textSettingStatus }>Saved</p>
-                ) }
-              </DisclosurePanel>
-            </Disclosure>
           </DisclosurePanel>
         </Disclosure>
 

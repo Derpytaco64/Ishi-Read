@@ -1,13 +1,8 @@
-import fs from "fs";
 import path from "path";
 
 import { getUserDataDir } from "./publicationsConfig";
 
 export { getUserDataDir };
-
-// CLAUDE-ADDED: No auth system yet -- every request is attributed to this single stand-in user
-// until real sessions land. Isolated here so swapping it for a session lookup later is a small diff.
-export const CURRENT_USER_ID = "DT";
 
 export function getUserDir(userId: string): string {
   return path.join(getUserDataDir(), userId);
@@ -66,19 +61,3 @@ export function getDailyReadingHistoryFilePath(userId: string, bookHash: string)
   return path.join(getUserDir(userId), "dailyReadingHistory", `${ bookHash }.json`);
 }
 
-function getUsersRegistryPath(): string {
-  return path.join(getUserDataDir(), "users.json");
-}
-
-// CLAUDE-ADDED: Stub registry for a future auth system -- one real entry (DT) today, shape ready
-// for more rows later. Created lazily on first write so a fresh install doesn't need manual setup.
-export function ensureUsersRegistry(): void {
-  const registryPath = getUsersRegistryPath();
-  if (fs.existsSync(registryPath)) return;
-
-  fs.mkdirSync(getUserDataDir(), { recursive: true });
-  fs.writeFileSync(
-    registryPath,
-    JSON.stringify([{ id: CURRENT_USER_ID, name: "DT" }], null, 2)
-  );
-}

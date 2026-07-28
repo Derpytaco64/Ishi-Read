@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { resolveBookIdentity } from "@/next-lib/userData/bookIdentity";
-import { CURRENT_USER_ID, ensureUsersRegistry, getDailyReadingHistoryFilePath } from "@/next-lib/userData/paths";
+import { getDailyReadingHistoryFilePath } from "@/next-lib/userData/paths";
 import { readJsonFile, writeJsonFileAtomic } from "@/next-lib/userData/jsonStore";
 import { DailyReadingBucket } from "@/lib/userData/readingTimeTypes";
+import { getCurrentUserId } from "@/next-lib/userData/session";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
+  const userId = await getCurrentUserId();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { searchParams } = new URL(request.url);
   const manifestUrl = searchParams.get("manifestUrl");
 
@@ -16,12 +20,15 @@ export async function GET(request: Request) {
   }
 
   const hash = resolveBookIdentity(manifestUrl);
-  const buckets = readJsonFile<DailyReadingBucket[]>(getDailyReadingHistoryFilePath(CURRENT_USER_ID, hash));
+  const buckets = readJsonFile<DailyReadingBucket[]>(getDailyReadingHistoryFilePath(userId, hash));
 
   return NextResponse.json({ buckets: buckets ?? [] });
 }
 
 export async function POST(request: Request) {
+  const userId = await getCurrentUserId();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await request.json().catch(() => null);
   const manifestUrl = body?.manifestUrl;
   const buckets = body?.buckets;
@@ -30,9 +37,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "manifestUrl and buckets are required" }, { status: 400 });
   }
 
-  ensureUsersRegistry();
   const hash = resolveBookIdentity(manifestUrl);
-  writeJsonFileAtomic(getDailyReadingHistoryFilePath(CURRENT_USER_ID, hash), buckets);
+  writeJsonFileAtomic(getDailyReadingHistoryFilePath(userId, hash), buckets);
 
   return NextResponse.json({ ok: true });
 }

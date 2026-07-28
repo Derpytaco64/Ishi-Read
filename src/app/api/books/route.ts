@@ -3,7 +3,8 @@ import fs from "fs";
 import path from "path";
 import { getPublicationsDir, getReadiumServerUrl } from "@/next-lib/userData/publicationsConfig";
 import { resolveBookIdentity } from "@/next-lib/userData/bookIdentity";
-import { CURRENT_USER_ID, getPositionFilePath } from "@/next-lib/userData/paths";
+import { getPositionFilePath } from "@/next-lib/userData/paths";
+import { getCurrentUserId } from "@/next-lib/userData/session";
 
 export const runtime = "nodejs";
 
@@ -86,10 +87,10 @@ function extractAuthor(author: unknown): string {
 // CLAUDE-ADDED: The position file is rewritten every time the reader saves reading progress, so its
 // mtime doubles as a de facto "last read" timestamp -- there's no dedicated field for this anywhere
 // else in UserData. Returns null for a book that's never been opened (no position file yet).
-function getLastReadAt(manifestUrl: string): number | null {
+function getLastReadAt(userId: string, manifestUrl: string): number | null {
   try {
     const bookHash = resolveBookIdentity(manifestUrl);
-    const positionPath = getPositionFilePath(CURRENT_USER_ID, bookHash);
+    const positionPath = getPositionFilePath(userId, bookHash);
     return fs.statSync(positionPath).mtimeMs;
   } catch {
     return null;
@@ -224,6 +225,9 @@ function findCoverHref(manifest: any): string | null {
 }
 
 export async function GET() {
+  const userId = await getCurrentUserId();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const publicationsDir = getPublicationsDir();
     const readiumServerUrl = getReadiumServerUrl();
@@ -333,7 +337,7 @@ export async function GET() {
           // CLAUDE-ADDED: birthtime isn't supported on every filesystem (some report 0 or fall back to
           // ctime); mtime is always populated, so it's the safety net for "date added".
           addedAt: stat.birthtimeMs || stat.mtimeMs,
-          lastReadAt: getLastReadAt(manifestUrl),
+          lastReadAt: getLastReadAt(userId, manifestUrl),
           series,
           description,
           publisher,
@@ -364,7 +368,7 @@ export async function GET() {
       try {
         addedAt = fs.statSync(path.join(publicationsDir, file)).mtimeMs;
         const manifestUrl = `${readiumServerUrl}/webpub/${base64UrlEncode(file)}/manifest.json`;
-        lastReadAt = getLastReadAt(manifestUrl);
+        lastReadAt = getLastReadAt(userId, manifestUrl);
       } catch {
         // Keep the defaults above.
       }
