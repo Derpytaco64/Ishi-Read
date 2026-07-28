@@ -434,6 +434,29 @@
   overflow-y: auto;
   /* TMP: Needs to be higher than bottom sheet, which requires hack for Safari iOS */
   z-index: 1000000 !important;
+
+  /* CLAUDE-ADDED: Themed scrollbar matching the reader's currently-applied theme (--th-theme-*),
+     same treatment as the shared Sheets module's scroll containers. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--th-theme-subdue) var(--th-theme-background);
+}
+
+.dropdownPopover::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dropdownPopover::-webkit-scrollbar-track {
+  background: var(--th-theme-background);
+}
+
+.dropdownPopover::-webkit-scrollbar-thumb {
+  background-color: var(--th-theme-subdue);
+  border-radius: 8px;
+  border: 2px solid var(--th-theme-background);
+}
+
+.dropdownPopover::-webkit-scrollbar-thumb:hover {
+  background-color: var(--th-theme-text);
 }
 
 .dropdownListbox {

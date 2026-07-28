@@ -28,6 +28,7 @@ export interface StatefulBookContextMenuProps {
   onAddToShelf: (shelfId: string, bookUrl: string) => void;
   onRemoveFromShelf: (shelfId: string, bookUrl: string) => void;
   onGoToSeries: (publication: Publication) => void;
+  onCreateShelf: (bookUrl: string) => void;
   onOpenChange: (open: boolean) => void;
 }
 
@@ -41,6 +42,7 @@ export const StatefulBookContextMenu = ({
   onAddToShelf,
   onRemoveFromShelf,
   onGoToSeries,
+  onCreateShelf,
   onOpenChange
 }: StatefulBookContextMenuProps) => {
   if (!state) return null;
@@ -68,36 +70,38 @@ export const StatefulBookContextMenu = ({
 
             <Popover placement="end top" className={ styles.popover }>
               <Menu className={ styles.menu }>
-                { shelves.length === 0 ? (
-                  <MenuItem isDisabled className={ styles.menuItem }>
-                    No shelves yet -- create one from the menu
-                  </MenuItem>
-                ) : (
-                  shelves.map((shelf) => {
-                    const isOnShelf = shelf.books.some((book) => book.url === state.publication.url);
+                { shelves.map((shelf) => {
+                  const isOnShelf = shelf.books.some((book) => book.url === state.publication.url);
 
-                    return (
-                      <MenuItem
-                        key={ shelf.id }
-                        id={ shelf.id }
-                        className={ styles.menuItem }
-                        onAction={ () => {
-                          if (isOnShelf) {
-                            onRemoveFromShelf(shelf.id, state.publication.url);
-                          } else {
-                            onAddToShelf(shelf.id, state.publication.url);
-                          }
-                        } }
-                      >
-                        <span className={ styles.menuItemEmoji } aria-hidden="true">{ shelf.icon }</span>
-                        <span className={ styles.menuItemLabel }>{ shelf.name }</span>
-                        { isOnShelf && (
-                          <CheckIcon aria-hidden="true" focusable="false" className={ styles.menuItemCheck } />
-                        ) }
-                      </MenuItem>
-                    );
-                  })
-                ) }
+                  return (
+                    <MenuItem
+                      key={ shelf.id }
+                      id={ shelf.id }
+                      className={ styles.menuItem }
+                      onAction={ () => {
+                        if (isOnShelf) {
+                          onRemoveFromShelf(shelf.id, state.publication.url);
+                        } else {
+                          onAddToShelf(shelf.id, state.publication.url);
+                        }
+                      } }
+                    >
+                      <span className={ styles.menuItemEmoji } aria-hidden="true">{ shelf.icon }</span>
+                      <span className={ styles.menuItemLabel }>{ shelf.name }</span>
+                      { isOnShelf && (
+                        <CheckIcon aria-hidden="true" focusable="false" className={ styles.menuItemCheck } />
+                      ) }
+                    </MenuItem>
+                  );
+                }) }
+
+                <MenuItem
+                  id="__create_shelf__"
+                  className={ styles.menuItem }
+                  onAction={ () => onCreateShelf(state.publication.url) }
+                >
+                  <span className={ styles.menuItemLabel }>+ Create new shelf</span>
+                </MenuItem>
               </Menu>
             </Popover>
           </SubmenuTrigger>

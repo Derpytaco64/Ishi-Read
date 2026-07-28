@@ -1,6 +1,6 @@
 "use client";
 
-import React, { cloneElement, isValidElement, useEffect, useState } from "react";
+import React, { cloneElement, isValidElement, useEffect, useRef, useState } from "react";
 
 import publicationGridStyles from "./assets/styles/thorium-web.publicationGrid.module.css";
 
@@ -12,6 +12,9 @@ import type { Route } from "next";
 import { getBookProgressPercent } from "@/helpers/getBookProgress";
 
 import classNames from "classnames";
+
+import ChevronLeft from "./assets/icons/chevron_left.svg";
+import ChevronRight from "./assets/icons/chevron_right.svg";
 
 // CLAUDE-ADDED: Geometry for the corner progress ring at the reference cover width (160, the
 // original hardcoded columnWidth default before cover size became a slider) -- circumference
@@ -149,6 +152,10 @@ export interface PublicationGridProps {
   // instead of the browser's native one -- only suppressed when a handler is actually provided, so
   // callers that don't pass this prop keep the native menu.
   onContextMenu?: (e: React.MouseEvent, publication: Publication) => void;
+  // CLAUDE-ADDED: Renders as a single row that scrolls horizontally (with prev/next arrow buttons)
+  // instead of a multi-row wrapping grid -- for shelves like "Last Series Read"/"Recently Added"
+  // where the point is a short, scannable strip rather than a full library browse.
+  carousel?: boolean;
 }
 
 export const PublicationGrid = ({
@@ -165,11 +172,70 @@ export const PublicationGrid = ({
   progressByUrl: providedProgressByUrl,
   onSelect,
   onContextMenu,
+  carousel = false,
 }: PublicationGridProps) => {
   // CLAUDE-ADDED: Progress now comes from the server (see getBookProgress.ts). Only fetched here
   // when the caller hasn't already provided it via the progressByUrl prop.
   const [fetchedProgressByUrl, setFetchedProgressByUrl] = useState<Record<string, number>>({});
   const progressByUrl = providedProgressByUrl ?? fetchedProgressByUrl;
+
+  // CLAUDE-ADDED: Carousel-only scroll state -- tracks whether there's more content to either side
+  // so the arrow buttons can disable themselves at the ends instead of scrolling into nothing.
+  // hasOverflow additionally hides both arrows entirely when every card already fits without any
+  // scrolling at all, rather than showing a pair of permanently-disabled buttons.
+  const trackRef = useRef<HTMLUListElement>(null);
+  const [canScrollPrev, setCanScrollPrev] = useState(false);
+  const [canScrollNext, setCanScrollNext] = useState(false);
+  const [hasOverflow, setHasOverflow] = useState(false);
+
+  // CLAUDE-ADDED: ThGrid's own `repeat(auto-fill, minmax(columnWidth, 1fr))` stretches each card
+  // to fill any leftover row width, so a normal grid's cards usually render *wider* than the bare
+  // columnWidth. A carousel card fixed at exactly columnWidth therefore looked visibly smaller --
+  // this mirrors that same stretch math against the track's actual measured width so carousel
+  // cards match a real grid's rendered size instead of a magic/guessed constant.
+  const [carouselCardWidth, setCarouselCardWidth] = useState(columnWidth);
+
+  const updateScrollState = () => {
+    const el = trackRef.current;
+    if (!el) return;
+    setCanScrollPrev(el.scrollLeft > 1);
+    setCanScrollNext(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
+    setHasOverflow(el.scrollWidth > el.clientWidth + 1);
+  };
+
+  const updateCarouselCardWidth = () => {
+    const el = trackRef.current;
+    if (!el) return;
+
+    const gapPx = parseFloat(getComputedStyle(el).columnGap) || 0;
+    const availableWidth = el.clientWidth;
+    if (availableWidth <= 0) return;
+
+    const columns = Math.max(1, Math.floor((availableWidth + gapPx) / (columnWidth + gapPx)));
+    setCarouselCardWidth((availableWidth - (columns - 1) * gapPx) / columns);
+  };
+
+  useEffect(() => {
+    if (!carousel) return;
+    updateScrollState();
+    updateCarouselCardWidth();
+
+    const el = trackRef.current;
+    if (!el) return;
+
+    const observer = new ResizeObserver(() => {
+      updateScrollState();
+      updateCarouselCardWidth();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [carousel, publications, columnWidth]);
+
+  const scrollByPage = (direction: 1 | -1) => {
+    const el = trackRef.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * el.clientWidth * 0.9, behavior: "smooth" });
+  };
 
   useEffect(() => {
     if (providedProgressByUrl) return;
@@ -217,50 +283,103 @@ export const PublicationGrid = ({
     });
   };
 
+  // CLAUDE-ADDED: Shared between the wrapping-grid path (ThGrid's renderItem) and the carousel
+  // path below -- the card itself is identical either way, only the surrounding layout differs.
+  // cardWidth defaults to columnWidth (the grid path's own sizing) but the carousel path passes its
+  // measured carouselCardWidth instead, so the progress ring scales against the size the cover
+  // actually renders at rather than the un-stretched columnWidth.
+  const renderCard = (publication: Publication, index: number, cardWidth: number = columnWidth) => (
+    <Link
+      // CLAUDE-ADDED: Cast to Route since publication.url is a dynamically-built manifest path that next.config.mjs's typedRoutes can't statically verify.
+      href={ publication.url as Route }
+      key={ index }
+      className={ publicationGridStyles.card }
+      onClick={ (e) => {
+        if (!onSelect || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        onSelect(publication);
+      } }
+      onContextMenu={ onContextMenu ? (e) => {
+        e.preventDefault();
+        onContextMenu(e, publication);
+      } : undefined }
+    >
+      <figure className={ publicationGridStyles.cover }>
+        { renderCoverWithClass(publication) }
+      </figure>
+      { /* CLAUDE-ADDED: Sits in the bottom-right corner, same corner .info slides up to cover on hover -- .progressRing has a higher z-index so the ring stays visible on top of it instead of being hidden. Only shown once the book has actual saved progress. */ }
+      { progressByUrl[publication.url] !== undefined && (
+        <ProgressRing percent={ progressByUrl[publication.url] } coverWidth={ cardWidth } />
+      ) }
+      <div className={ publicationGridStyles.info }>
+        <h2 className={ publicationGridStyles.title }>
+          { publication.title }
+        </h2>
+        <p className={ publicationGridStyles.author }>
+          { publication.author }
+        </p>
+        { publication.rendition && (
+          <p className={ publicationGridStyles.rendition }>
+            { publication.rendition }
+          </p>
+        ) }
+      </div>
+    </Link>
+  );
+
+  if (carousel) {
+    return (
+      <div className={ classNames(publicationGridStyles.wrapper, publicationGridStyles.carouselWrapper) }>
+        { hasOverflow && (
+          <button
+            type="button"
+            className={ classNames(publicationGridStyles.carouselArrow, publicationGridStyles.carouselArrowLeft) }
+            onClick={ () => scrollByPage(-1) }
+            disabled={ !canScrollPrev }
+            aria-label="Scroll left"
+          >
+            <ChevronLeft aria-hidden="true" focusable="false" />
+          </button>
+        ) }
+
+        <ul
+          ref={ trackRef }
+          className={ publicationGridStyles.carouselTrack }
+          onScroll={ updateScrollState }
+        >
+          { publications.map((publication, index) => (
+            <li
+              key={ index }
+              className={ publicationGridStyles.carouselItem }
+              style={{ width: carouselCardWidth }}
+            >
+              { renderCard(publication, index, carouselCardWidth) }
+            </li>
+          )) }
+        </ul>
+
+        { hasOverflow && (
+          <button
+            type="button"
+            className={ classNames(publicationGridStyles.carouselArrow, publicationGridStyles.carouselArrowRight) }
+            onClick={ () => scrollByPage(1) }
+            disabled={ !canScrollNext }
+            aria-label="Scroll right"
+          >
+            <ChevronRight aria-hidden="true" focusable="false" />
+          </button>
+        ) }
+      </div>
+    );
+  }
+
   return (
     <ThGrid
       className={ publicationGridStyles.wrapper }
       items={ publications }
       columnWidth={ columnWidth }
       gap={ gap }
-      renderItem={ (publication, index) => (
-        <Link
-          // CLAUDE-ADDED: Cast to Route since publication.url is a dynamically-built manifest path that next.config.mjs's typedRoutes can't statically verify.
-          href={ publication.url as Route }
-          key={ index }
-          className={ publicationGridStyles.card }
-          onClick={ (e) => {
-            if (!onSelect || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-            e.preventDefault();
-            onSelect(publication);
-          } }
-          onContextMenu={ onContextMenu ? (e) => {
-            e.preventDefault();
-            onContextMenu(e, publication);
-          } : undefined }
-        >
-          <figure className={ publicationGridStyles.cover }>
-            { renderCoverWithClass(publication) }
-          </figure>
-          { /* CLAUDE-ADDED: Sits in the bottom-right corner, same corner .info slides up to cover on hover -- .progressRing has a higher z-index so the ring stays visible on top of it instead of being hidden. Only shown once the book has actual saved progress. */ }
-          { progressByUrl[publication.url] !== undefined && (
-            <ProgressRing percent={ progressByUrl[publication.url] } coverWidth={ columnWidth } />
-          ) }
-          <div className={ publicationGridStyles.info }>
-            <h2 className={ publicationGridStyles.title }>
-              { publication.title }
-            </h2>
-            <p className={ publicationGridStyles.author }>
-              { publication.author }
-            </p>
-            { publication.rendition && (
-              <p className={ publicationGridStyles.rendition }>
-                { publication.rendition }
-              </p>
-            ) }
-          </div>
-        </Link>
-      ) }
+      renderItem={ renderCard }
     />
   );
 };

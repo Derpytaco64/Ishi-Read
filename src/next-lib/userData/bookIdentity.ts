@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 
-import { getPublicationsDir, READIUM_SERVER_URL } from "./publicationsConfig";
+import { getPublicationsDir, getReadiumServerUrl } from "./publicationsConfig";
 import { computePartialMD5 } from "./kosyncHash";
 
 // CLAUDE-ADDED: In-memory hash cache keyed by resolved file path, stamped with mtime so an
@@ -16,11 +16,15 @@ function base64UrlDecode(str: string): string {
 }
 
 // CLAUDE-ADDED: Recovers the on-disk filename from a manifest URL built by api/books/route.ts's
-// `${READIUM_SERVER_URL}/webpub/${base64UrlEncode(file)}/manifest.json` scheme, so we can hash the
-// actual file instead of the URL. Returns null for anything that isn't a local library publication
-// (external manifest URLs, or a decoded name that doesn't resolve to a real file).
+// `${getReadiumServerUrl()}/webpub/${base64UrlEncode(file)}/manifest.json` scheme, so we can hash
+// the actual file instead of the URL. Returns null for anything that isn't a local library
+// publication (external manifest URLs, or a decoded name that doesn't resolve to a real file).
+// CLAUDE-ADDED: Read live (not cached in a module-level constant) since the Readium URL is now a
+// user-editable setting -- a manifest URL built before a change was saved must still resolve
+// against whatever the setting was at the time it was built, which this always reflects since
+// getReadiumServerUrl() itself is the single cached-until-changed source of truth.
 function resolveLocalFile(manifestUrl: string): string | null {
-  const prefix = `${ READIUM_SERVER_URL }/webpub/`;
+  const prefix = `${ getReadiumServerUrl() }/webpub/`;
   if (!manifestUrl.startsWith(prefix)) return null;
 
   const rest = manifestUrl.slice(prefix.length);

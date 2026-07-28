@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { getPublicationsDir, READIUM_SERVER_URL } from "@/next-lib/userData/publicationsConfig";
+import { getPublicationsDir, getReadiumServerUrl } from "@/next-lib/userData/publicationsConfig";
 import { resolveBookIdentity } from "@/next-lib/userData/bookIdentity";
 import { CURRENT_USER_ID, getPositionFilePath } from "@/next-lib/userData/paths";
 
@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 // This API route reads the publications directory and returns a list of books with their metadata so they can be added to the library view dynamically. It fetches the manifest for each publication to extract the title, author, and cover image. If the manifest cannot be fetched or does not contain the necessary metadata, it falls back to using the filename as the title and a generic cover image.
 
-// If connecting to thorium from anything besiges localhost, you will need to change READIUM_SERVER_URL to the URL of your Readium Web Publication Server (the book folder itself is configurable from the Settings panel). It will most likely need to be proxyed to https as well.
+// If connecting to thorium from anything besides localhost, you will need to change the Readium URL (now configurable from the Settings panel, same as the book folder) to the URL of your Readium Web Publication Server. It will most likely need to be proxied to https as well.
 
 // CLAUDE-ADDED: In-memory manifest cache, keyed by filename. Module-scope state survives across requests in the same server process, so revisiting the homepage doesn't re-hit the Readium server (and re-parse the EPUB) for books we've already resolved. Each entry is stamped with the file's mtime so an edited/replaced file is transparently re-fetched.
 type Series = { name: string; position?: number };
@@ -226,6 +226,7 @@ function findCoverHref(manifest: any): string | null {
 export async function GET() {
   try {
     const publicationsDir = getPublicationsDir();
+    const readiumServerUrl = getReadiumServerUrl();
     const files = fs.readdirSync(publicationsDir);
     const supportedExtensions = [".epub", ".pdf", ".cbz"];
 
@@ -237,7 +238,7 @@ export async function GET() {
     const results = await Promise.allSettled(
       epubFiles.map(async (file) => {
         const encodedFilename = base64UrlEncode(file);
-        const manifestUrl = `${READIUM_SERVER_URL}/webpub/${encodedFilename}/manifest.json`;
+        const manifestUrl = `${readiumServerUrl}/webpub/${encodedFilename}/manifest.json`;
         const encodedManifestUrl = encodeURIComponent(manifestUrl);
         const fallbackTitle = path.parse(file).name;
 
@@ -362,7 +363,7 @@ export async function GET() {
       let lastReadAt: number | null = null;
       try {
         addedAt = fs.statSync(path.join(publicationsDir, file)).mtimeMs;
-        const manifestUrl = `${READIUM_SERVER_URL}/webpub/${base64UrlEncode(file)}/manifest.json`;
+        const manifestUrl = `${readiumServerUrl}/webpub/${base64UrlEncode(file)}/manifest.json`;
         lastReadAt = getLastReadAt(manifestUrl);
       } catch {
         // Keep the defaults above.
@@ -372,7 +373,7 @@ export async function GET() {
         title: path.parse(file).name,
         author: "",
         cover: "/images/genericCover.png",
-        url: `/read/manifest/${encodeURIComponent(`${READIUM_SERVER_URL}/webpub/${base64UrlEncode(file)}/manifest.json`)}`,
+        url: `/read/manifest/${encodeURIComponent(`${readiumServerUrl}/webpub/${base64UrlEncode(file)}/manifest.json`)}`,
         rendition: "Reflowable EPUB",
         addedAt,
         lastReadAt,

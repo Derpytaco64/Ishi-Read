@@ -40,13 +40,17 @@ export function useCustomShelves() {
     });
   }, []);
 
-  const createShelf = (name: string, icon: ShelfIcon) => {
+  // CLAUDE-ADDED: Returns the new shelf's id -- lets a caller (the book context menu's "Create new
+  // shelf") immediately add the book it was opened for to the shelf it just created, in one step.
+  const createShelf = (name: string, icon: ShelfIcon): string => {
+    const id = crypto.randomUUID();
     setShelves((prev) => {
-      const next = [...prev, { id: crypto.randomUUID(), name, icon, books: [] }];
+      const next = [...prev, { id, name, icon, books: [] }];
       localStorage.setItem(CUSTOM_SHELVES_STORAGE_KEY, JSON.stringify(next));
       saveLibraryPrefsToServer({ customShelves: next });
       return next;
     });
+    return id;
   };
 
   const addBookToShelf = (shelfId: string, bookUrl: string) => {

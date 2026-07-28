@@ -140,3 +140,96 @@
   font-weight: 500;
   align-self: flex-start;
 }
+
+/* CLAUDE-ADDED: Single-row horizontally-scrollable variant (see PublicationGrid's carousel prop)
+   -- used for shelves like "Last Series Read"/"Recently Added" instead of the wrapping .wrapper
+   grid above. Shares .wrapper's own --th-color-* palette (applied via classNames combining both
+   classes on the same element) rather than redeclaring it here. Arrows are absolutely positioned
+   overlapping the track's own edges (not flex siblings pushing it inward) so the first card still
+   lands at the exact same x position it would in the plain wrapping grid. */
+.carouselWrapper {
+  position: relative;
+  /* CLAUDE-ADDED: .wrapper's own padding:1rem is meant for ThGrid's <ul>, but ThGrid always
+     overrides it right back to 0 via an inline style (higher precedence than any class) -- so a
+     normal grid's cards actually start flush with the container's edge, not inset by 1rem. This
+     wrapper isn't ThGrid, so without zeroing it here the carousel's first card would sit 1rem
+     further right than the grid's first card above it. */
+  padding: 0;
+}
+
+.carouselTrack {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 1.5rem;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+
+  /* CLAUDE-ADDED: Scrolling is arrow-driven -- hide the native scrollbar rather than showing a
+     redundant one directly under the cards. */
+  scrollbar-width: none;
+}
+
+.carouselTrack::-webkit-scrollbar {
+  display: none;
+}
+
+.carouselItem {
+  flex-shrink: 0;
+}
+
+.carouselArrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.9375rem;
+  height: 3.9375rem;
+  padding: 0;
+  border: 1px solid rgba(107, 164, 255, 0.6);
+  border: 1px solid color-mix(in srgb, var(--th-color-accent, #6ba4ff) 60%, transparent);
+  border-radius: 50%;
+  /* CLAUDE-ADDED: Plain rgba() first as a fallback for browsers without color-mix() support --
+     the second, color-mix()-based declaration overrides it wherever color-mix() is understood
+     (all current evergreen browsers), tinting the translucent background with the user's actual
+     accent color instead of a fixed blue. */
+  background: rgba(107, 164, 255, 0.45);
+  background: color-mix(in srgb, var(--th-color-accent, #6ba4ff) 45%, transparent);
+  color: var(--th-color-accent-text, #fff);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.carouselArrowLeft {
+  left: 0.5rem;
+}
+
+.carouselArrowRight {
+  right: 0.5rem;
+}
+
+.carouselArrow svg {
+  width: 2.5rem;
+  height: 2.5rem;
+  fill: currentColor;
+}
+
+.carouselArrow:hover:not(:disabled) {
+  background: rgba(107, 164, 255, 0.65);
+  background: color-mix(in srgb, var(--th-color-accent, #6ba4ff) 65%, transparent);
+}
+
+.carouselArrow:focus-visible {
+  outline: 2px solid var(--th-color-accent, #6ba4ff);
+  outline-offset: 2px;
+}
+
+.carouselArrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

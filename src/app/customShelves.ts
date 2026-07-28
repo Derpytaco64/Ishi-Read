@@ -26,3 +26,13 @@ export const CUSTOM_SHELVES_STORAGE_KEY = "th-library-custom-shelves";
 // separate from LibraryView itself since the set of shelf ids is dynamic (user-created), not a
 // fixed union.
 export const ACTIVE_SHELF_ID_STORAGE_KEY = "th-library-active-shelf-id";
+
+// CLAUDE-ADDED: Owned by page.tsx (the only thing both StatefulLibraryMenu -- create/edit from the
+// drawer -- and StatefulBookContextMenu -- create from a book's right-click menu -- can share) so
+// either trigger opens the same StatefulShelfFormModal instance. "create" carries an optional
+// addBookUrl: set when opened from a book's context menu, so the book gets added to the
+// newly-created shelf immediately instead of requiring a second right-click afterward.
+export type ShelfModalState =
+  | { mode: "create"; addBookUrl?: string }
+  | { mode: "edit"; shelfId: string }
+  | null;

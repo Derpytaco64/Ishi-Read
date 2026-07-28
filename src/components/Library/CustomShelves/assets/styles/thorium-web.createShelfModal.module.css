@@ -37,7 +37,7 @@
   --th-color-primary: #e0e0e0;
 
   box-sizing: border-box;
-  width: 360px;
+  width: 400px;
   max-width: 90vw;
   max-height: 85vh;
   overflow-y: auto;
@@ -91,7 +91,7 @@
 }
 
 .closeButton[data-focus-visible] {
-  outline: 2px solid #6ba4ff;
+  outline: 2px solid var(--th-color-accent, #6ba4ff);
   outline-offset: 2px;
 }
 
@@ -127,7 +127,7 @@
 }
 
 .input:focus-visible {
-  outline: 2px solid #6ba4ff;
+  outline: 2px solid var(--th-color-accent, #6ba4ff);
   outline-offset: 1px;
 }
 
@@ -137,10 +137,67 @@
   gap: 0.5rem;
 }
 
+.iconSearchField {
+  display: flex;
+  flex-direction: column;
+}
+
+.iconSearchInput {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  color: var(--th-color-text);
+  background: var(--th-color-background);
+  border: 1px solid var(--th-color-text-secondary);
+  border-radius: 6px;
+}
+
+.iconSearchInput:focus-visible {
+  outline: 2px solid var(--th-color-accent, #6ba4ff);
+  outline-offset: 1px;
+}
+
+.iconSearchEmpty {
+  margin: 0;
+  padding: 0.75rem 0;
+  font-size: 0.85rem;
+  color: var(--th-color-text-secondary);
+  text-align: center;
+}
+
+/* CLAUDE-ADDED: Hundreds of choices now (see SHELF_ICON_CHOICES) instead of a dozen -- bounded to
+   a fixed height and scrollable on its own, rather than growing the whole dialog to fit every row. */
 .iconGrid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 0.5rem;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 0.4rem;
+  margin-right: -0.4rem;
+
+  scrollbar-width: thin;
+  scrollbar-color: var(--th-color-text-secondary) var(--th-color-background);
+}
+
+.iconGrid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.iconGrid::-webkit-scrollbar-track {
+  background: var(--th-color-background);
+}
+
+.iconGrid::-webkit-scrollbar-thumb {
+  background-color: var(--th-color-primary);
+  border-radius: 8px;
+  border: 2px solid var(--th-color-background);
+}
+
+.iconGrid::-webkit-scrollbar-thumb:hover {
+  background-color: var(--th-color-text-secondary);
 }
 
 .iconOption {
@@ -169,12 +226,12 @@
 }
 
 .iconOption[data-selected] {
-  border-color: #6ba4ff;
-  color: #6ba4ff;
+  border-color: var(--th-color-accent, #6ba4ff);
+  color: var(--th-color-accent, #6ba4ff);
 }
 
 .iconOption[data-focus-visible] {
-  outline: 2px solid #6ba4ff;
+  outline: 2px solid var(--th-color-accent, #6ba4ff);
   outline-offset: 2px;
 }
 
@@ -182,8 +239,8 @@
   padding: 0.6rem 1rem;
   font-size: 0.95rem;
   font-weight: 600;
-  color: #fff;
-  background: #6ba4ff;
+  color: var(--th-color-accent-text, #fff);
+  background: var(--th-color-accent, #6ba4ff);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -199,6 +256,6 @@
 }
 
 .createButton[data-focus-visible] {
-  outline: 2px solid #6ba4ff;
+  outline: 2px solid var(--th-color-accent, #6ba4ff);
   outline-offset: 2px;
 }

@@ -526,7 +526,9 @@
   flex-shrink: 0;
 }
 
-.bookFolderRow {
+/* CLAUDE-ADDED: Shared by every plain-text settings field (Book Folder, Readium URL, ...) --
+   was named after Book Folder specifically before Readium URL needed the exact same shape. */
+.textSettingRow {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -534,7 +536,7 @@
   color: var(--th-color-text);
 }
 
-.bookFolderInput {
+.textSettingInput {
   box-sizing: border-box;
   width: 100%;
   padding: 0.4rem 0.55rem;
@@ -546,18 +548,18 @@
   border-radius: 6px;
 }
 
-.bookFolderInput:focus-visible {
+.textSettingInput:focus-visible {
   outline: 2px solid #6ba4ff;
   outline-offset: 1px;
 }
 
-.bookFolderStatus {
+.textSettingStatus {
   margin: 0.35rem 0 0;
   font-size: 0.8rem;
   color: var(--th-color-text-secondary);
 }
 
-.bookFolderStatusError {
+.textSettingStatusError {
   margin: 0.35rem 0 0;
   font-size: 0.8rem;
   color: #d64545;
@@ -572,10 +574,48 @@
   gap: 0.4rem;
 }
 
-.coverSizeOutput {
+/* CLAUDE-ADDED: Replaces ThSlider's own read-only output (hidden via .visuallyHidden on its
+   compounds.output) with a real, editable number input in the same top-right spot, so the cover
+   size can be typed directly instead of only dragged. */
+.coverSizeInputRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.25rem;
+}
+
+.coverSizeInput {
+  box-sizing: border-box;
+  width: 3.5rem;
+  padding: 0.1rem 0.3rem;
   font-size: 0.8rem;
+  font-family: inherit;
+  text-align: right;
   color: var(--th-color-text-secondary);
-  align-self: flex-end;
+  background: none;
+  border: none;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  /* CLAUDE-ADDED: Hides the native up/down spinner buttons -- Firefox via appearance, WebKit/Blink
+     via the pseudo-elements below -- for a plain-text-look field that still accepts typed input. */
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.coverSizeInput::-webkit-inner-spin-button,
+.coverSizeInput::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.coverSizeInput:hover {
+  color: var(--th-color-text);
+  border-bottom-color: var(--th-color-primary);
+}
+
+.coverSizeInput:focus {
+  color: var(--th-color-text);
+  border-bottom-color: var(--th-color-accent, #6ba4ff);
+  outline: none;
 }
 
 .coverSizeTrack {

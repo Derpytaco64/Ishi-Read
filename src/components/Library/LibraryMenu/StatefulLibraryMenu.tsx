@@ -28,13 +28,13 @@ import { ThSlider } from "@/core/Components/Settings/ThSlider";
 import { THEME_STORAGE_KEY } from "@/app/themeStorage";
 import { SHELF_LABELS, ShelfKey, ShelfPrefs } from "@/app/shelfPrefs";
 import { LibraryView } from "@/app/libraryView";
-import { CustomShelf, ShelfIcon } from "@/app/customShelves";
+import { CustomShelf, ShelfModalState } from "@/app/customShelves";
 import { useAccentColor } from "@/app/useAccentColor";
 import { MIN_COVER_SIZE, MAX_COVER_SIZE } from "@/app/coverSizeStorage";
 import { useBookFolder } from "@/app/useBookFolder";
+import { useReadiumUrl } from "@/app/useReadiumUrl";
+import { useUserDataFolder } from "@/app/useUserDataFolder";
 import { fetchLibraryPrefsFromServer, saveLibraryPrefsToServer } from "@/lib/userData/libraryPrefsApi";
-
-import { StatefulShelfFormModal } from "@/components/Library/CustomShelves/StatefulShelfFormModal";
 
 import logo from "@/assets/ishamel.png";
 import floofLogo from "@/assets/foof_ishmael.png";
@@ -54,10 +54,13 @@ export interface StatefulLibraryMenuProps {
   activeView: LibraryView;
   onNavigate: (view: LibraryView) => void;
   shelves: CustomShelf[];
-  onCreateShelf: (name: string, icon: ShelfIcon) => void;
-  onUpdateShelf: (shelfId: string, patch: { name?: string; icon?: ShelfIcon }) => void;
   onDeleteShelf: (shelfId: string) => void;
   onReorderCustomShelves: (shelves: CustomShelf[]) => void;
+  // CLAUDE-ADDED: The create/edit modal itself is owned by page.tsx now (not this component) since
+  // the book context menu's "Create new shelf" needs to trigger the same modal instance -- this
+  // component only ever requests state changes (open to create, open to edit a specific shelf), it
+  // never reads the current state itself.
+  onShelfModalStateChange: (state: ShelfModalState) => void;
   activeShelfId: string | null;
   onSelectShelf: (shelfId: string) => void;
   shelfPrefs: ShelfPrefs;
@@ -66,17 +69,18 @@ export interface StatefulLibraryMenuProps {
   onReorderShelves: (order: ShelfKey[]) => void;
   coverSize: number;
   onChangeCoverSize: (size: number) => void;
-  onBookFolderSaved?: () => void;
+  // CLAUDE-ADDED: Fired after either the book folder or the Readium URL is saved -- both change
+  // where/how books are fetched from, so the caller (page.tsx) re-fetches the library either way.
+  onLibrarySourceChanged?: () => void;
 }
 
 export const StatefulLibraryMenu = ({
   activeView,
   onNavigate,
   shelves,
-  onCreateShelf,
-  onUpdateShelf,
   onDeleteShelf,
   onReorderCustomShelves,
+  onShelfModalStateChange,
   activeShelfId,
   onSelectShelf,
   shelfPrefs,
@@ -85,12 +89,8 @@ export const StatefulLibraryMenu = ({
   onReorderShelves,
   coverSize,
   onChangeCoverSize,
-  onBookFolderSaved
+  onLibrarySourceChanged
 }: StatefulLibraryMenuProps) => {
-  // CLAUDE-ADDED: One modal, two modes -- "create" has no shelfId, "edit" carries which shelf to
-  // prefill (see StatefulShelfFormModal).
-  const [shelfModalState, setShelfModalState] = useState<{ mode: "create" } | { mode: "edit"; shelfId: string } | null>(null);
-
   // CLAUDE-ADDED: Right-click-on-a-shelf-tab context menu (Edit/Delete), positioned at the cursor
   // the same way StatefulBookContextMenu does -- an invisible anchor Button placed at the click
   // coordinates, since react-aria-components has no built-in "open at cursor" trigger.
@@ -157,8 +157,77 @@ export const StatefulLibraryMenu = ({
     const ok = await saveBookFolder(bookFolderDraft);
     if (ok) {
       setBookFolderSaved(true);
-      onBookFolderSaved?.();
+      onLibrarySourceChanged?.();
     }
+  };
+
+  // CLAUDE-ADDED: Same draft/commit-on-blur pattern as Book Folder above.
+  const { readiumUrl, saveReadiumUrl, isSaving: isSavingReadiumUrl, error: readiumUrlError } = useReadiumUrl();
+  const [readiumUrlDraft, setReadiumUrlDraft] = useState(readiumUrl);
+  const [readiumUrlSaved, setReadiumUrlSaved] = useState(false);
+
+  useEffect(() => {
+    setReadiumUrlDraft(readiumUrl);
+  }, [readiumUrl]);
+
+  const commitReadiumUrl = async () => {
+    if (readiumUrlDraft === readiumUrl) return;
+
+    setReadiumUrlSaved(false);
+    const ok = await saveReadiumUrl(readiumUrlDraft);
+    if (ok) {
+      setReadiumUrlSaved(true);
+      onLibrarySourceChanged?.();
+    }
+  };
+
+  // CLAUDE-ADDED: Same draft/commit-on-blur pattern as Book Folder above -- committing here also
+  // migrates any existing data on disk into the new folder (see the API route), which is why
+  // "Saving…" can take noticeably longer than the other text settings.
+  const {
+    userDataFolder,
+    saveUserDataFolder,
+    isSaving: isSavingUserDataFolder,
+    error: userDataFolderError
+  } = useUserDataFolder();
+  const [userDataFolderDraft, setUserDataFolderDraft] = useState(userDataFolder);
+  const [userDataFolderSaved, setUserDataFolderSaved] = useState(false);
+
+  useEffect(() => {
+    setUserDataFolderDraft(userDataFolder);
+  }, [userDataFolder]);
+
+  const commitUserDataFolder = async () => {
+    if (userDataFolderDraft === userDataFolder) return;
+
+    setUserDataFolderSaved(false);
+    const ok = await saveUserDataFolder(userDataFolderDraft);
+    if (ok) {
+      setUserDataFolderSaved(true);
+      onLibrarySourceChanged?.();
+    }
+  };
+
+  // CLAUDE-ADDED: Lets the cover-size number be typed directly instead of only dragged on the
+  // slider -- same draft/commit-on-blur pattern as Book Folder/Readium URL above, so keystrokes
+  // (including a temporarily out-of-range value while typing, e.g. "1" on the way to "160") don't
+  // immediately clamp/commit and fight the user mid-entry.
+  const [coverSizeDraft, setCoverSizeDraft] = useState(String(coverSize));
+
+  useEffect(() => {
+    setCoverSizeDraft(String(coverSize));
+  }, [coverSize]);
+
+  const commitCoverSizeDraft = () => {
+    const parsed = Number(coverSizeDraft);
+    if (Number.isNaN(parsed)) {
+      setCoverSizeDraft(String(coverSize));
+      return;
+    }
+
+    const clamped = Math.min(MAX_COVER_SIZE, Math.max(MIN_COVER_SIZE, Math.round(parsed)));
+    onChangeCoverSize(clamped);
+    setCoverSizeDraft(String(clamped));
   };
 
   const toggleTheme = () => {
@@ -358,7 +427,7 @@ export const StatefulLibraryMenu = ({
               className={ classNames(styles.navButton, styles.nestedNavButton, styles.createShelfButton) }
               onPress={ () => {
                 setIsOpen(false);
-                setShelfModalState({ mode: "create" });
+                onShelfModalStateChange({ mode: "create" });
               } }
             >
               <AddIcon aria-hidden="true" focusable="false" className={ styles.navIcon } />
@@ -454,6 +523,22 @@ export const StatefulLibraryMenu = ({
               </Heading>
 
               <DisclosurePanel className={ styles.disclosurePanel }>
+                <div className={ styles.coverSizeInputRow }>
+                  <input
+                    type="number"
+                    className={ styles.coverSizeInput }
+                    value={ coverSizeDraft }
+                    min={ MIN_COVER_SIZE }
+                    max={ MAX_COVER_SIZE }
+                    onChange={ (e) => setCoverSizeDraft(e.target.value) }
+                    onBlur={ commitCoverSizeDraft }
+                    onKeyDown={ (e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                    } }
+                    aria-label="Cover size in pixels"
+                  />
+                </div>
+
                 <ThSlider
                   aria-label="Cover size"
                   className={ styles.coverSizeSlider }
@@ -461,7 +546,7 @@ export const StatefulLibraryMenu = ({
                   value={ coverSize }
                   onChange={ (value) => onChangeCoverSize(Array.isArray(value) ? value[0] : value) }
                   compounds={{
-                    output: { className: styles.coverSizeOutput },
+                    output: { className: styles.visuallyHidden },
                     track: { className: styles.coverSizeTrack },
                     thumb: { className: styles.coverSizeThumb }
                   }}
@@ -478,11 +563,11 @@ export const StatefulLibraryMenu = ({
               </Heading>
 
               <DisclosurePanel className={ styles.disclosurePanel }>
-                <label className={ styles.bookFolderRow }>
+                <label className={ styles.textSettingRow }>
                   <span>Folder to scan for books</span>
                   <input
                     type="text"
-                    className={ styles.bookFolderInput }
+                    className={ styles.textSettingInput }
                     value={ bookFolderDraft }
                     onChange={ (e) => {
                       setBookFolderDraft(e.target.value);
@@ -496,12 +581,86 @@ export const StatefulLibraryMenu = ({
                     spellCheck={ false }
                   />
                 </label>
-                { isSaving && <p className={ styles.bookFolderStatus }>Saving…</p> }
+                { isSaving && <p className={ styles.textSettingStatus }>Saving…</p> }
                 { !isSaving && bookFolderError && (
-                  <p className={ styles.bookFolderStatusError }>{ bookFolderError }</p>
+                  <p className={ styles.textSettingStatusError }>{ bookFolderError }</p>
                 ) }
                 { !isSaving && !bookFolderError && bookFolderSaved && (
-                  <p className={ styles.bookFolderStatus }>Saved</p>
+                  <p className={ styles.textSettingStatus }>Saved</p>
+                ) }
+              </DisclosurePanel>
+            </Disclosure>
+
+            <Disclosure className={ styles.nestedDisclosure }>
+              <Heading className={ styles.disclosureHeading }>
+                <Button slot="trigger" className={ styles.disclosureTrigger }>
+                  <span className={ styles.disclosureLabel }>Readium URL</span>
+                  <ChevronDown aria-hidden="true" focusable="false" className={ styles.disclosureChevron } />
+                </Button>
+              </Heading>
+
+              <DisclosurePanel className={ styles.disclosurePanel }>
+                <label className={ styles.textSettingRow }>
+                  <span>Readium Web Publication Server URL</span>
+                  <input
+                    type="text"
+                    className={ styles.textSettingInput }
+                    value={ readiumUrlDraft }
+                    onChange={ (e) => {
+                      setReadiumUrlDraft(e.target.value);
+                      setReadiumUrlSaved(false);
+                    } }
+                    onBlur={ commitReadiumUrl }
+                    onKeyDown={ (e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                    } }
+                    aria-label="Readium Web Publication Server URL"
+                    spellCheck={ false }
+                  />
+                </label>
+                { isSavingReadiumUrl && <p className={ styles.textSettingStatus }>Saving…</p> }
+                { !isSavingReadiumUrl && readiumUrlError && (
+                  <p className={ styles.textSettingStatusError }>{ readiumUrlError }</p>
+                ) }
+                { !isSavingReadiumUrl && !readiumUrlError && readiumUrlSaved && (
+                  <p className={ styles.textSettingStatus }>Saved</p>
+                ) }
+              </DisclosurePanel>
+            </Disclosure>
+
+            <Disclosure className={ styles.nestedDisclosure }>
+              <Heading className={ styles.disclosureHeading }>
+                <Button slot="trigger" className={ styles.disclosureTrigger }>
+                  <span className={ styles.disclosureLabel }>User Data Folder</span>
+                  <ChevronDown aria-hidden="true" focusable="false" className={ styles.disclosureChevron } />
+                </Button>
+              </Heading>
+
+              <DisclosurePanel className={ styles.disclosurePanel }>
+                <label className={ styles.textSettingRow }>
+                  <span>Folder for reading progress, annotations, and other saved data</span>
+                  <input
+                    type="text"
+                    className={ styles.textSettingInput }
+                    value={ userDataFolderDraft }
+                    onChange={ (e) => {
+                      setUserDataFolderDraft(e.target.value);
+                      setUserDataFolderSaved(false);
+                    } }
+                    onBlur={ commitUserDataFolder }
+                    onKeyDown={ (e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                    } }
+                    aria-label="User data folder path"
+                    spellCheck={ false }
+                  />
+                </label>
+                { isSavingUserDataFolder && <p className={ styles.textSettingStatus }>Moving existing data…</p> }
+                { !isSavingUserDataFolder && userDataFolderError && (
+                  <p className={ styles.textSettingStatusError }>{ userDataFolderError }</p>
+                ) }
+                { !isSavingUserDataFolder && !userDataFolderError && userDataFolderSaved && (
+                  <p className={ styles.textSettingStatus }>Saved</p>
                 ) }
               </DisclosurePanel>
             </Disclosure>
@@ -543,7 +702,7 @@ export const StatefulLibraryMenu = ({
             <MenuItem
               className={ styles.shelfContextMenuItem }
               onAction={ () => {
-                setShelfModalState({ mode: "edit", shelfId: shelfContextMenu.shelfId });
+                onShelfModalStateChange({ mode: "edit", shelfId: shelfContextMenu.shelfId });
                 setShelfContextMenu(null);
                 setIsOpen(false);
               } }
@@ -563,22 +722,6 @@ export const StatefulLibraryMenu = ({
         </Popover>
       </MenuTrigger>
     ) }
-
-    <StatefulShelfFormModal
-      isOpen={ shelfModalState !== null }
-      shelf={ shelfModalState?.mode === "edit" ? shelves.find((shelf) => shelf.id === shelfModalState.shelfId) : null }
-      onOpenChange={ (open) => {
-        if (!open) setShelfModalState(null);
-      } }
-      onSubmit={ (name, icon) => {
-        if (shelfModalState?.mode === "edit") {
-          onUpdateShelf(shelfModalState.shelfId, { name, icon });
-        } else {
-          onCreateShelf(name, icon);
-        }
-        setShelfModalState(null);
-      } }
-    />
 
     { /* CLAUDE-ADDED: Same confirm-before-delete dialog shape/CSS as StatefulAnnotationsContainer's
          highlight/bookmark/note deletion -- a centered ThModal, not a native window.confirm. */ }

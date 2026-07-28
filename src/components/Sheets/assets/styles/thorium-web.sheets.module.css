@@ -255,3 +255,50 @@
 .body {
   padding: var(--th-layout-spacing);
 }
+
+/* CLAUDE-ADDED: Themed scrollbar for every scrollable sheet variant above (.fullscreen,
+   .modalDialog, .popover, .compactPopover, .docked) -- matches the reader's own currently-applied
+   theme (--th-theme-*) instead of the browser's default scrollbar, which stayed light/dark
+   regardless of e.g. sepia or a dark reading theme. */
+.fullscreen,
+.modalDialog,
+.popover,
+.compactPopover,
+.docked {
+  scrollbar-width: thin;
+  scrollbar-color: var(--th-theme-subdue) var(--th-theme-background);
+}
+
+.fullscreen::-webkit-scrollbar,
+.modalDialog::-webkit-scrollbar,
+.popover::-webkit-scrollbar,
+.compactPopover::-webkit-scrollbar,
+.docked::-webkit-scrollbar {
+  width: 8px;
+}
+
+.fullscreen::-webkit-scrollbar-track,
+.modalDialog::-webkit-scrollbar-track,
+.popover::-webkit-scrollbar-track,
+.compactPopover::-webkit-scrollbar-track,
+.docked::-webkit-scrollbar-track {
+  background: var(--th-theme-background);
+}
+
+.fullscreen::-webkit-scrollbar-thumb,
+.modalDialog::-webkit-scrollbar-thumb,
+.popover::-webkit-scrollbar-thumb,
+.compactPopover::-webkit-scrollbar-thumb,
+.docked::-webkit-scrollbar-thumb {
+  background-color: var(--th-theme-subdue);
+  border-radius: 8px;
+  border: 2px solid var(--th-theme-background);
+}
+
+.fullscreen::-webkit-scrollbar-thumb:hover,
+.modalDialog::-webkit-scrollbar-thumb:hover,
+.popover::-webkit-scrollbar-thumb:hover,
+.compactPopover::-webkit-scrollbar-thumb:hover,
+.docked::-webkit-scrollbar-thumb:hover {
+  background-color: var(--th-theme-text);
+}

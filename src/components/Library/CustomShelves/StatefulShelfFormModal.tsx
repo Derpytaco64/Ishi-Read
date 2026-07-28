@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   Button,
@@ -40,14 +40,26 @@ export const StatefulShelfFormModal = ({
 
   const [name, setName] = useState(shelf?.name ?? "");
   const [icon, setIcon] = useState<ShelfIcon>(shelf?.icon ?? DEFAULT_SHELF_ICON);
+  const [iconSearch, setIconSearch] = useState("");
 
   // CLAUDE-ADDED: Re-seeds the fields whenever the modal opens -- covers switching which shelf is
-  // being edited, and resets any unsaved edits left over from a previous open in either mode.
+  // being edited, and resets any unsaved edits (including a leftover icon search) from a previous
+  // open in either mode.
   useEffect(() => {
     if (!isOpen) return;
     setName(shelf?.name ?? "");
     setIcon(shelf?.icon ?? DEFAULT_SHELF_ICON);
+    setIconSearch("");
   }, [isOpen, shelf]);
+
+  // CLAUDE-ADDED: Plain substring match against each choice's accessible label (e.g. searching
+  // "heart" or "fire") -- there are ~330 choices now (see SHELF_ICON_CHOICES), too many to browse
+  // by scrolling alone.
+  const filteredIconChoices = useMemo(() => {
+    const query = iconSearch.trim().toLowerCase();
+    if (!query) return SHELF_ICON_CHOICES;
+    return SHELF_ICON_CHOICES.filter((choice) => choice.label.toLowerCase().includes(query));
+  }, [iconSearch]);
 
   const submit = () => {
     const trimmed = name.trim();
@@ -101,18 +113,32 @@ export const StatefulShelfFormModal = ({
           onChange={ (value) => setIcon(value as ShelfIcon) }
         >
           <Label className={ styles.label }>Icon</Label>
-          <div className={ styles.iconGrid }>
-            { SHELF_ICON_CHOICES.map((choice) => (
-              <Radio
-                key={ choice.icon }
-                value={ choice.icon }
-                className={ styles.iconOption }
-                aria-label={ choice.label }
-              >
-                <span className={ styles.iconOptionEmoji } aria-hidden="true">{ choice.icon }</span>
-              </Radio>
-            )) }
-          </div>
+
+          <TextField
+            className={ styles.iconSearchField }
+            value={ iconSearch }
+            onChange={ setIconSearch }
+            aria-label="Search icons"
+          >
+            <Input className={ styles.iconSearchInput } placeholder="Search icons…" type="search" />
+          </TextField>
+
+          { filteredIconChoices.length === 0 ? (
+            <p className={ styles.iconSearchEmpty }>No matching icons</p>
+          ) : (
+            <div className={ styles.iconGrid }>
+              { filteredIconChoices.map((choice) => (
+                <Radio
+                  key={ choice.icon }
+                  value={ choice.icon }
+                  className={ styles.iconOption }
+                  aria-label={ choice.label }
+                >
+                  <span className={ styles.iconOptionEmoji } aria-hidden="true">{ choice.icon }</span>
+                </Radio>
+              )) }
+            </div>
+          ) }
         </RadioGroup>
 
         <Button

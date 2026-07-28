@@ -8,6 +8,7 @@ import { StatefulBookSheet } from "@/components/Library/BookSheet/StatefulBookSh
 import { StatefulSeriesView } from "@/components/Library/SeriesView/StatefulSeriesView";
 import { StatefulMyLibraryView } from "@/components/Library/MyLibrary/StatefulMyLibraryView";
 import { StatefulShelfView } from "@/components/Library/CustomShelves/StatefulShelfView";
+import { StatefulShelfFormModal } from "@/components/Library/CustomShelves/StatefulShelfFormModal";
 import { StatefulBookContextMenu, BookContextMenuState } from "@/components/Library/BookContextMenu/StatefulBookContextMenu";
 import Image from "next/image";
 
@@ -17,7 +18,7 @@ import { useCoverSize } from "./useCoverSize";
 import { useCustomShelves } from "./useCustomShelves";
 import { fetchLibraryPrefsFromServer, saveLibraryPrefsToServer } from "@/lib/userData/libraryPrefsApi";
 import { DEFAULT_LIBRARY_VIEW, LIBRARY_VIEW_STORAGE_KEY, LibraryView } from "./libraryView";
-import { ACTIVE_SHELF_ID_STORAGE_KEY } from "./customShelves";
+import { ACTIVE_SHELF_ID_STORAGE_KEY, ShelfModalState } from "./customShelves";
 import {
   DEFAULT_SHELF_ORDER,
   DEFAULT_SHELF_PREFS,
@@ -174,6 +175,11 @@ export default function Home() {
       navigateTo("home");
     }
   };
+
+  // CLAUDE-ADDED: Owned here (not inside StatefulLibraryMenu) since both the menu's own "Create a
+  // new shelf"/"Edit" actions and the book context menu's "Create new shelf" need to open the same
+  // StatefulShelfFormModal instance -- see ShelfModalState's own doc comment in customShelves.ts.
+  const [shelfModalState, setShelfModalState] = useState<ShelfModalState>(null);
 
   // CLAUDE-ADDED: Right-click-on-a-book-cover context menu ("Add to shelf"). Null when closed; set
   // to the clicked book + cursor position by any PublicationGrid's onContextMenu below.
@@ -390,7 +396,7 @@ export default function Home() {
 
   const recentlyAdded = [...myLibraryBooks]
     .sort((a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0))
-    .slice(0, 5);
+    .slice(0, 20);
 
   const alphabetical = [...myLibraryBooks]
     .sort((a, b) => a.title.localeCompare(b.title));
@@ -409,10 +415,9 @@ export default function Home() {
         activeView={ activeView }
         onNavigate={ navigateTo }
         shelves={ shelves }
-        onCreateShelf={ createShelf }
-        onUpdateShelf={ updateShelf }
         onDeleteShelf={ deleteShelfAndNavigateHome }
         onReorderCustomShelves={ reorderCustomShelves }
+        onShelfModalStateChange={ setShelfModalState }
         activeShelfId={ activeShelfId }
         onSelectShelf={ navigateToShelf }
         shelfPrefs={ shelfPrefs }
@@ -421,7 +426,7 @@ export default function Home() {
         onReorderShelves={ reorderShelves }
         coverSize={ coverSize }
         onChangeCoverSize={ setCoverSize }
-        onBookFolderSaved={ fetchMyLibrary }
+        onLibrarySourceChanged={ fetchMyLibrary }
       />
 
       { activeView === "library" && (
@@ -506,6 +511,7 @@ export default function Home() {
                 setIsBookSheetOpen(true);
               } }
               onContextMenu={ openContextMenu }
+              carousel={ key === "lastSeriesRead" || key === "recentlyAdded" }
             />
           </Fragment>
         );
@@ -574,8 +580,31 @@ export default function Home() {
           }
           setContextMenuState(null);
         } }
+        onCreateShelf={ (bookUrl) => {
+          setShelfModalState({ mode: "create", addBookUrl: bookUrl });
+          setContextMenuState(null);
+        } }
         onOpenChange={ (open) => {
           if (!open) setContextMenuState(null);
+        } }
+      />
+
+      <StatefulShelfFormModal
+        isOpen={ shelfModalState !== null }
+        shelf={ shelfModalState?.mode === "edit" ? shelves.find((shelf) => shelf.id === shelfModalState.shelfId) : null }
+        onOpenChange={ (open) => {
+          if (!open) setShelfModalState(null);
+        } }
+        onSubmit={ (name, icon) => {
+          if (shelfModalState?.mode === "edit") {
+            updateShelf(shelfModalState.shelfId, { name, icon });
+          } else {
+            const newShelfId = createShelf(name, icon);
+            if (shelfModalState?.mode === "create" && shelfModalState.addBookUrl) {
+              addBookToShelf(newShelfId, shelfModalState.addBookUrl);
+            }
+          }
+          setShelfModalState(null);
         } }
       />
     </main>

@@ -1,13 +1,9 @@
 import fs from "fs";
 import path from "path";
 
-import { getPublicationsDir } from "./publicationsConfig";
+import { getUserDataDir } from "./publicationsConfig";
 
-// CLAUDE-ADDED: A function, not a constant -- the publications dir can change at runtime via the
-// Settings panel, so this must be re-derived on every call rather than fixed at module load.
-export function getUserDataDir(): string {
-  return path.join(getPublicationsDir(), "UserData");
-}
+export { getUserDataDir };
 
 // CLAUDE-ADDED: No auth system yet -- every request is attributed to this single stand-in user
 // until real sessions land. Isolated here so swapping it for a session lookup later is a small diff.

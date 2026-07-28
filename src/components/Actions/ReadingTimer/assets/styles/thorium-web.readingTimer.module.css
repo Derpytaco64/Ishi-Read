@@ -345,3 +345,28 @@
   border-color: var(--th-theme-text);
   font-weight: bold;
 }
+
+/* CLAUDE-ADDED: Themed scrollbar matching the reader's currently-applied theme (--th-theme-*),
+   same treatment as the shared Sheets module's scroll containers. */
+.confirmDialog {
+  scrollbar-width: thin;
+  scrollbar-color: var(--th-theme-subdue) var(--th-theme-background);
+}
+
+.confirmDialog::-webkit-scrollbar {
+  width: 8px;
+}
+
+.confirmDialog::-webkit-scrollbar-track {
+  background: var(--th-theme-background);
+}
+
+.confirmDialog::-webkit-scrollbar-thumb {
+  background-color: var(--th-theme-subdue);
+  border-radius: 8px;
+  border: 2px solid var(--th-theme-background);
+}
+
+.confirmDialog::-webkit-scrollbar-thumb:hover {
+  background-color: var(--th-theme-text);
+}
