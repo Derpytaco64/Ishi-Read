@@ -183,7 +183,78 @@
 
 .noteOverlayText {
   margin: 0 0 var(--th-layout-spacing);
-  white-space: pre-wrap;
+}
+
+/* CLAUDE-ADDED: note.text is now rendered as markdown (react-markdown), so this styles the block
+   elements it emits (p/ul/ol/h1-6/code/pre/blockquote/a) instead of relying on plain-text
+   white-space: pre-wrap -- real paragraphs/lists carry the line structure now. */
+.noteOverlayText :global(p) {
+  margin: 0 0 0.6em;
+}
+
+.noteOverlayText :global(p:last-child) {
+  margin-bottom: 0;
+}
+
+.noteOverlayText :global(ul),
+.noteOverlayText :global(ol) {
+  margin: 0 0 0.6em;
+  padding-left: 1.25em;
+}
+
+.noteOverlayText :global(li) {
+  margin: 0.15em 0;
+}
+
+.noteOverlayText :global(h1),
+.noteOverlayText :global(h2),
+.noteOverlayText :global(h3),
+.noteOverlayText :global(h4),
+.noteOverlayText :global(h5),
+.noteOverlayText :global(h6) {
+  margin: 0.6em 0 0.3em;
+  line-height: 1.25;
+}
+
+.noteOverlayText :global(h1:first-child),
+.noteOverlayText :global(h2:first-child),
+.noteOverlayText :global(h3:first-child),
+.noteOverlayText :global(h4:first-child),
+.noteOverlayText :global(h5:first-child),
+.noteOverlayText :global(h6:first-child) {
+  margin-top: 0;
+}
+
+.noteOverlayText :global(code) {
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--th-theme-subdue);
+}
+
+.noteOverlayText :global(pre) {
+  margin: 0 0 0.6em;
+  padding: 0.6em;
+  overflow-x: auto;
+  border-radius: var(--th-layout-radius);
+  background: var(--th-theme-subdue);
+}
+
+.noteOverlayText :global(pre code) {
+  padding: 0;
+  background: none;
+}
+
+.noteOverlayText :global(blockquote) {
+  margin: 0 0 0.6em;
+  padding-left: 0.75em;
+  border-left: 3px solid var(--th-theme-subdue);
+}
+
+.noteOverlayText :global(a) {
+  color: inherit;
+  text-decoration: underline;
 }
 
 /* CLAUDE-ADDED: Overrides on top of the shared .noteEditor/.noteTextarea (also used by the small

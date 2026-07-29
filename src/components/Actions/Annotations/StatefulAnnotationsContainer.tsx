@@ -20,6 +20,7 @@ import { setImmersive, setUserNavigated } from "@/lib/readerReducer";
 import { deleteHighlight, deleteBookmark, deleteNote, addOrUpdateNote, addBookmark, setFlashLocator, setReturnLocator } from "@/lib/annotationsReducer";
 
 import { AnnotationsContent, AnnotationListEntry, AnnotationsTab } from "./AnnotationsContent";
+import { resolveChapterTitle } from "@/helpers/resolveChapterTitle";
 
 import panelStyles from "./assets/styles/thorium-web.annotations.module.css";
 
@@ -33,6 +34,11 @@ export const StatefulAnnotationsContainer = ({ triggerRef }: StatefulActionConta
   const highlights = useAppSelector(state => state.annotations.highlights);
   const bookmarks = useAppSelector(state => state.annotations.bookmarks);
   const notes = useAppSelector(state => state.annotations.notes);
+  // CLAUDE-ADDED: Live fallback for the `entries` memo below -- covers annotations created before
+  // chapterTitle existed (which have nothing stored) by resolving against the open book's own TOC,
+  // and is what handleBookmarkPage uses to resolve a *new* bookmark's chapter (bookmarking has no
+  // text selection/StatefulReader involvement to resolve it the way highlights/notes do).
+  const timelineItems = useAppSelector(state => state.publication.unstableTimeline?.items);
 
   const { go, currentLocator } = useNavigator().unified;
 
@@ -61,22 +67,28 @@ export const StatefulAnnotationsContainer = ({ triggerRef }: StatefulActionConta
   }, [dispatch, profile]);
 
   const entries = useMemo<AnnotationListEntry[]>(() => {
+    // CLAUDE-ADDED: item.chapterTitle first (resolved once at creation time -- see
+    // resolveChapterTitle.ts), falling back to a live lookup for annotations that predate that
+    // field entirely.
+    const chapterTitleFor = (item: { chapterTitle?: string }, locator: Locator) =>
+      item.chapterTitle ?? resolveChapterTitle(timelineItems, locator.href);
+
     const highlightEntries: AnnotationListEntry[] = highlights.flatMap(item => {
       const locator = Locator.deserialize(item.locator);
       if (!locator) return [];
-      return [{ id: item.id, kind: "highlight" as const, locator, color: item.color, createdAt: item.createdAt }];
+      return [{ id: item.id, kind: "highlight" as const, locator, color: item.color, createdAt: item.createdAt, chapterTitle: chapterTitleFor(item, locator) }];
     });
 
     const bookmarkEntries: AnnotationListEntry[] = bookmarks.flatMap(item => {
       const locator = Locator.deserialize(item.locator);
       if (!locator) return [];
-      return [{ id: item.id, kind: "bookmark" as const, locator, createdAt: item.createdAt }];
+      return [{ id: item.id, kind: "bookmark" as const, locator, createdAt: item.createdAt, chapterTitle: chapterTitleFor(item, locator) }];
     });
 
     const noteEntries: AnnotationListEntry[] = notes.flatMap(item => {
       const locator = Locator.deserialize(item.locator);
       if (!locator) return [];
-      return [{ id: item.id, kind: "note" as const, locator, noteText: item.text, createdAt: item.createdAt, updatedAt: item.updatedAt }];
+      return [{ id: item.id, kind: "note" as const, locator, noteText: item.text, createdAt: item.createdAt, updatedAt: item.updatedAt, chapterTitle: chapterTitleFor(item, locator) }];
     });
 
     // CLAUDE-ADDED: Book order (start to end) rather than creation order -- position is an index into the
@@ -93,7 +105,7 @@ export const StatefulAnnotationsContainer = ({ triggerRef }: StatefulActionConta
       const [bPos, bProg] = bookOrder(b);
       return (aPos - bPos || aProg - bProg) * direction;
     });
-  }, [highlights, bookmarks, notes, sortDirection]);
+  }, [highlights, bookmarks, notes, sortDirection, timelineItems]);
 
   const closeIfTransient = useCallback(() => {
     if (!(actionState?.isOpen && (sheetType === ThSheetTypes.dockedStart || sheetType === ThSheetTypes.dockedEnd))) {
@@ -147,9 +159,10 @@ export const StatefulAnnotationsContainer = ({ triggerRef }: StatefulActionConta
     dispatch(addBookmark(manifestUrl, {
       id: crypto.randomUUID(),
       locator: locator.serialize(),
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      chapterTitle: resolveChapterTitle(timelineItems, locator.href)
     }));
-  }, [manifestUrl, currentLocator, dispatch]);
+  }, [manifestUrl, currentLocator, dispatch, timelineItems]);
 
   // CLAUDE-ADDED: panelStyles.wrapper forces a fixed ~500px width so the popover/modal/bottom-sheet
   // variants (which otherwise default to a narrower 340px popover) are wide enough for the tabs/list --

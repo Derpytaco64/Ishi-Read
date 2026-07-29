@@ -11,6 +11,7 @@ import { ThSwitch } from "@/core/Components/Settings/ThSwitch";
 import { useCurrentUser } from "@/app/useCurrentUser";
 import { useBookFolder } from "@/app/useBookFolder";
 import { useReadiumUrl } from "@/app/useReadiumUrl";
+import { useReadiumPort } from "@/app/useReadiumPort";
 import { useUserDataFolder } from "@/app/useUserDataFolder";
 import { isLightColor } from "@/preferences/helpers/themeGeneration";
 
@@ -104,6 +105,22 @@ export default function AdminPageClient({ initialLoginAccentColor }: AdminPageCl
     if (readiumUrlDraft === readiumUrl) return;
     setReadiumUrlSaved(false);
     if (await saveReadiumUrl(readiumUrlDraft)) setReadiumUrlSaved(true);
+  };
+
+  // CLAUDE-ADDED: Same draft/commit/blur dance as bookFolder/readiumUrl above -- the value round-trips
+  // as a string (matching the text input) even though it's a number on disk (see useReadiumPort.ts).
+  const { readiumPort, saveReadiumPort, isSaving: isSavingReadiumPort, error: readiumPortError } = useReadiumPort();
+  const [readiumPortDraft, setReadiumPortDraft] = useState(readiumPort);
+  const [readiumPortSaved, setReadiumPortSaved] = useState(false);
+
+  useEffect(() => {
+    setReadiumPortDraft(readiumPort);
+  }, [readiumPort]);
+
+  const commitReadiumPort = async () => {
+    if (readiumPortDraft === readiumPort) return;
+    setReadiumPortSaved(false);
+    if (await saveReadiumPort(readiumPortDraft)) setReadiumPortSaved(true);
   };
 
   // CLAUDE-ADDED: Committing here also migrates any existing data on disk into the new folder (see
@@ -437,6 +454,48 @@ export default function AdminPageClient({ initialLoginAccentColor }: AdminPageCl
               <p className={ styles.textSettingStatusError }>{ readiumUrlError }</p>
             ) }
             { !isSavingReadiumUrl && !readiumUrlError && readiumUrlSaved && (
+              <p className={ styles.textSettingStatus }>Saved</p>
+            ) }
+          </DisclosurePanel>
+        </Disclosure>
+
+        <Disclosure className={ styles.disclosure }>
+          <Heading className={ styles.disclosureHeading }>
+            <Button slot="trigger" className={ styles.disclosureTrigger }>
+              <span className={ styles.disclosureLabel }>Server Port</span>
+              <ChevronDown aria-hidden="true" focusable="false" className={ styles.disclosureChevron } />
+            </Button>
+          </Heading>
+
+          <DisclosurePanel className={ styles.disclosurePanel }>
+            <label className={ styles.textSettingRow }>
+              <span>Readium server listening port</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                className={ styles.textSettingInput }
+                value={ readiumPortDraft }
+                onChange={ (e) => {
+                  setReadiumPortDraft(e.target.value);
+                  setReadiumPortSaved(false);
+                } }
+                onBlur={ commitReadiumPort }
+                onKeyDown={ (e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                } }
+                aria-label="Readium server listening port"
+                spellCheck={ false }
+              />
+            </label>
+            <p className={ styles.textSettingStatus }>
+              Changes which port the Readium server itself listens on (restarts it automatically).
+              Update the Readium URL above to match, unless it already points through a reverse proxy.
+            </p>
+            { isSavingReadiumPort && <p className={ styles.textSettingStatus }>Saving…</p> }
+            { !isSavingReadiumPort && readiumPortError && (
+              <p className={ styles.textSettingStatusError }>{ readiumPortError }</p>
+            ) }
+            { !isSavingReadiumPort && !readiumPortError && readiumPortSaved && (
               <p className={ styles.textSettingStatus }>Saved</p>
             ) }
           </DisclosurePanel>

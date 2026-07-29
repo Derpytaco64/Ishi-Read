@@ -5,7 +5,7 @@
 // src/next-lib/userData/publicationsConfig.ts) -- previously this had to be started by hand
 // (`readium serve --file-directory ...`) in a separate terminal. Plain child_process rather than
 // pulling in `concurrently`: only two processes, and we need custom behavior (restart readium when
-// the book folder changes) a generic process runner doesn't give us for free.
+// the book folder or port changes) a generic process runner doesn't give us for free.
 
 import { spawn } from "child_process";
 import fs from "fs";
@@ -20,10 +20,10 @@ const root = path.join(__dirname, "..");
 // script runs as a plain Node process outside the Next.js/TS build, so it can't import that module
 // directly and has to duplicate the handful of values instead.
 const DEFAULT_PUBLICATIONS_DIR = "/home/deck/Documents/epubs";
+const DEFAULT_READIUM_PORT = 15080;
 const CONFIG_FILE = path.join(os.homedir(), ".config", "ishi-read", "config.json");
 
 const READIUM_BIN = process.env.READIUM_BIN || path.join(root, "readium_linux_x86_64", "readium");
-const READIUM_PORT = 15080;
 const READIUM_ADDRESS = "localhost";
 
 function getConfiguredBookFolder() {
@@ -39,6 +39,21 @@ function getConfiguredBookFolder() {
   return DEFAULT_PUBLICATIONS_DIR;
 }
 
+// CLAUDE-ADDED: Mirrors publicationsConfig.ts's getReadiumServerPort -- same "can't import the TS
+// module, duplicate the read" reasoning as getConfiguredBookFolder above.
+function getConfiguredReadiumPort() {
+  try {
+    const raw = fs.readFileSync(CONFIG_FILE, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.readiumPort === "number" && parsed.readiumPort) {
+      return parsed.readiumPort;
+    }
+  } catch {
+    // Fall through to the default.
+  }
+  return DEFAULT_READIUM_PORT;
+}
+
 let readiumProcess = null;
 
 function startReadium() {
@@ -48,11 +63,12 @@ function startReadium() {
   }
 
   const bookFolder = getConfiguredBookFolder();
-  console.log(`[readium] Starting: serve --file-directory ${ bookFolder } --address ${ READIUM_ADDRESS } --port ${ READIUM_PORT }`);
+  const readiumPort = getConfiguredReadiumPort();
+  console.log(`[readium] Starting: serve --file-directory ${ bookFolder } --address ${ READIUM_ADDRESS } --port ${ readiumPort }`);
 
   const proc = spawn(
     READIUM_BIN,
-    ["serve", "--file-directory", bookFolder, "--address", READIUM_ADDRESS, "--port", String(READIUM_PORT)],
+    ["serve", "--file-directory", bookFolder, "--address", READIUM_ADDRESS, "--port", String(readiumPort)],
     { stdio: ["ignore", "inherit", "inherit"] }
   );
   readiumProcess = proc;
@@ -67,14 +83,15 @@ function startReadium() {
 }
 
 function restartReadium() {
-  console.log("[readium] Book folder changed -- restarting");
+  console.log("[readium] Config changed -- restarting");
   readiumProcess?.kill();
   startReadium();
 }
 
-// CLAUDE-ADDED: --file-directory is a startup flag, not something readium can be told to change
-// live -- so a book-folder change from the Settings panel (which just rewrites this same config
-// file) needs to be picked up by restarting the subprocess, not just re-reading a value.
+// CLAUDE-ADDED: --file-directory and --port are both startup flags, not something readium can be
+// told to change live -- so a book-folder or port change from the Settings panel (which just
+// rewrites this same config file) needs to be picked up by restarting the subprocess, not just
+// re-reading a value.
 let restartTimer = null;
 function watchConfigFile() {
   const dir = path.dirname(CONFIG_FILE);

@@ -10,6 +10,7 @@ import { useAppSelector } from "@/lib/hooks";
 import { getHighlightColorHex } from "./helpers/highlightColors";
 import { getLocationLabel } from "./helpers/locationLabel";
 import { formatTimestamp } from "./helpers/formatTimestamp";
+import { NoteMarkdownExcerpt } from "./helpers/NoteMarkdownExcerpt";
 
 import BookmarkIcon from "./assets/icons/bookmark.svg";
 import DeleteIcon from "./assets/icons/delete.svg";
@@ -30,6 +31,7 @@ export interface AnnotationListEntry {
   noteText?: string;
   createdAt: number;
   updatedAt?: number;
+  chapterTitle?: string;
 }
 
 interface AnnotationsContentProps {
@@ -153,13 +155,19 @@ export const AnnotationsContent = ({ entries, activeTab, onTabChange, onSelect, 
                   <>
                   <span className={ styles.listItemBody }>
                     <span className={ styles.listItemExcerpt }>
-                      { entry.kind === "note" ? entry.noteText : (entry.locator.text?.highlight || entry.locator.title || entry.locator.href) }
+                      { entry.kind === "note" && entry.noteText
+                        ? <NoteMarkdownExcerpt text={ entry.noteText } />
+                        : (entry.locator.text?.highlight || entry.chapterTitle || entry.locator.href) }
                     </span>
                     { entry.kind === "note" && entry.locator.text?.highlight &&
                       <span className={ styles.listItemQuote }>“{ entry.locator.text.highlight }”</span>
                     }
                     <span className={ styles.listItemMeta }>
                       { [
+                        // CLAUDE-ADDED: Omitted here when it's already the excerpt above (a
+                        // text-less bookmark/highlight with no quote falls back to chapterTitle as
+                        // its own excerpt line) so the chapter name isn't shown twice in the same row.
+                        (entry.kind === "note" || entry.locator.text?.highlight) ? entry.chapterTitle : undefined,
                         getLocationLabel(t, entry.locator, isScroll, totalPages, resourcePages),
                         entry.kind === "note"
                           ? t("reader.annotations.lastEdited", { date: formatTimestamp(entry.updatedAt ?? entry.createdAt) })

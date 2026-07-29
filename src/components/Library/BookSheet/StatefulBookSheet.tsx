@@ -32,6 +32,7 @@ import { computeCurrentWpm, estimateSecondsLeft } from "@/components/Actions/Rea
 import { formatFullReadingTime, formatEstimatedTime, ReadingTimeUnitLabels } from "@/components/Actions/ReadingTimer/helpers/formatReadingTime";
 import { formatTimestamp, formatDateOnly } from "@/components/Actions/Annotations/helpers/formatTimestamp";
 import { getHighlightColorHex } from "@/components/Actions/Annotations/helpers/highlightColors";
+import { NoteMarkdownExcerpt } from "@/components/Actions/Annotations/helpers/NoteMarkdownExcerpt";
 
 import PlayIcon from "./assets/icons/play_arrow.svg";
 import ChevronDown from "./assets/icons/chevron_down.svg";
@@ -135,6 +136,11 @@ interface AnnotationDisplayEntry {
   noteText?: string;
   createdAt: number;
   updatedAt?: number;
+  // CLAUDE-ADDED: Resolved once at creation time (see resolveChapterTitle.ts) and just carried
+  // through here -- unlike the reader's own AnnotationsContent, there's no live navigator/TOC for a
+  // book opened from the library to fall back to, so an annotation created before this field existed
+  // simply has none here.
+  chapterTitle?: string;
 }
 
 // CLAUDE-ADDED: Same tab set as the reader's own AnnotationsContent.tsx (its AnnotationsTab type),
@@ -287,19 +293,19 @@ export const StatefulBookSheet = ({
       const highlightEntries: AnnotationDisplayEntry[] = highlights.flatMap(item => {
         const itemLocator = Locator.deserialize(item.locator);
         if (!itemLocator) return [];
-        return [{ key: `highlight-${ item.id }`, id: item.id, kind: "highlight" as const, locator: itemLocator, color: item.color, createdAt: item.createdAt }];
+        return [{ key: `highlight-${ item.id }`, id: item.id, kind: "highlight" as const, locator: itemLocator, color: item.color, createdAt: item.createdAt, chapterTitle: item.chapterTitle }];
       });
 
       const bookmarkEntries: AnnotationDisplayEntry[] = bookmarks.flatMap(item => {
         const itemLocator = Locator.deserialize(item.locator);
         if (!itemLocator) return [];
-        return [{ key: `bookmark-${ item.id }`, id: item.id, kind: "bookmark" as const, locator: itemLocator, createdAt: item.createdAt }];
+        return [{ key: `bookmark-${ item.id }`, id: item.id, kind: "bookmark" as const, locator: itemLocator, createdAt: item.createdAt, chapterTitle: item.chapterTitle }];
       });
 
       const noteEntries: AnnotationDisplayEntry[] = notes.flatMap(item => {
         const itemLocator = Locator.deserialize(item.locator);
         if (!itemLocator) return [];
-        return [{ key: `note-${ item.id }`, id: item.id, kind: "note" as const, locator: itemLocator, noteText: item.text, createdAt: item.createdAt, updatedAt: item.updatedAt }];
+        return [{ key: `note-${ item.id }`, id: item.id, kind: "note" as const, locator: itemLocator, noteText: item.text, createdAt: item.createdAt, updatedAt: item.updatedAt, chapterTitle: item.chapterTitle }];
       });
 
       // CLAUDE-ADDED: Book order (start to end), same as StatefulAnnotationsContainer's default
@@ -787,7 +793,9 @@ export const StatefulBookSheet = ({
                             <>
                             <div className={ styles.annotationBody }>
                               <p className={ styles.annotationExcerpt }>
-                                { entry.kind === "note" ? entry.noteText : (entry.locator.text?.highlight || entry.locator.title || entry.locator.href) }
+                                { entry.kind === "note" && entry.noteText
+                                  ? <NoteMarkdownExcerpt text={ entry.noteText } />
+                                  : (entry.locator.text?.highlight || entry.chapterTitle || entry.locator.href) }
                               </p>
                               { entry.kind === "note" && entry.locator.text?.highlight && (
                                 <p className={ styles.annotationQuote }>“{ entry.locator.text.highlight }”</p>
@@ -796,6 +804,12 @@ export const StatefulBookSheet = ({
                                 <span className={ styles.chip }>
                                   { entry.kind === "highlight" ? "Highlight" : entry.kind === "bookmark" ? "Bookmark" : "Note" }
                                 </span>
+                                { /* CLAUDE-ADDED: Omitted when it's already the excerpt above (a
+                                     text-less bookmark/highlight falls back to chapterTitle as its
+                                     own excerpt line) so the chapter name isn't shown twice. */ }
+                                { (entry.kind === "note" || entry.locator.text?.highlight) && entry.chapterTitle && (
+                                  <span className={ styles.chip }>{ entry.chapterTitle }</span>
+                                ) }
                                 { typeof entry.locator.locations?.totalProgression === "number" && (
                                   <span className={ styles.chip }>{ (entry.locator.locations.totalProgression * 100).toFixed(1) }%</span>
                                 ) }

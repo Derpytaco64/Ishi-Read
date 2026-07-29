@@ -6,6 +6,12 @@ import path from "path";
 // listing and the position/settings storage always agree on where publications live.
 export const DEFAULT_PUBLICATIONS_DIR = "/home/deck/Documents/epubs";
 export const DEFAULT_READIUM_SERVER_URL = "http://localhost:15080";
+// CLAUDE-ADDED: The port the Readium Go binary itself is spawned with (see scripts/run-with-readium.mjs,
+// which duplicates this default since it can't import this module -- keep the two in sync). Distinct
+// from DEFAULT_READIUM_SERVER_URL above: that's the client-facing URL used to build manifest links
+// (see getReadiumServerUrl's own comment), which could point at a reverse proxy on a different port
+// entirely -- this is only ever the literal `--port` flag the subprocess binds to.
+export const DEFAULT_READIUM_SERVER_PORT = 15080;
 // CLAUDE-ADDED: Matches accentColorStorage.ts's DEFAULT_ACCENT_COLOR (the per-user library accent)
 // so a first-ever install's login/admin screens look identical to before this was configurable --
 // this is a deliberately separate, admin-only setting though, not read from that per-user value,
@@ -116,6 +122,39 @@ export function normalizeReadiumUrl(url: string): { url?: string; error?: string
   }
 
   return { url: trimmed };
+}
+
+// CLAUDE-ADDED: The actual `--port` the spawned Readium binary listens on (see
+// scripts/run-with-readium.mjs's own getConfiguredBookFolder-style read of this same config file) --
+// unlike getReadiumServerUrl above, this changes where the subprocess itself binds, not just where
+// the client looks for it. Changing this without also updating the Readium URL setting (below it in
+// the admin panel, unless a reverse proxy already accounts for the change) will break book loading --
+// the two are stored independently on purpose (see getReadiumServerUrl's comment) but are expected to
+// agree in the common single-machine, no-reverse-proxy case.
+export function getReadiumServerPort(): number {
+  const configured = readConfigFile().readiumPort;
+  return typeof configured === "number" ? configured : DEFAULT_READIUM_SERVER_PORT;
+}
+
+export function setReadiumServerPort(port: number): void {
+  writeConfigFile({ readiumPort: port });
+}
+
+// CLAUDE-ADDED: Shared by /api/settings/readium-port so its validation logic has one home, same
+// "route stays a thin wrapper" shape as normalizeReadiumUrl above.
+export function normalizeReadiumPort(value: string): { port?: number; error?: string } {
+  const trimmed = value.trim();
+
+  if (!/^\d+$/.test(trimmed)) {
+    return { error: "That doesn't look like a valid port number" };
+  }
+
+  const port = Number(trimmed);
+  if (port < 1 || port > 65535) {
+    return { error: "Port must be between 1 and 65535" };
+  }
+
+  return { port };
 }
 
 // CLAUDE-ADDED: Drives both /login and /admin's --th-color-accent -- a single shared setting

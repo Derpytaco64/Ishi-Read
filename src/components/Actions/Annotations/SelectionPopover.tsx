@@ -114,7 +114,8 @@ export const SelectionPopover = () => {
       id: existing?.type === "highlight" ? existing.id : crypto.randomUUID(),
       locator: pendingSelection.locator,
       color: colorId,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      chapterTitle: pendingSelection.chapterTitle
     };
     dispatch(addHighlight(manifestUrl, highlight));
     close();
@@ -130,7 +131,8 @@ export const SelectionPopover = () => {
     dispatch(addBookmark(manifestUrl, {
       id: crypto.randomUUID(),
       locator: pendingSelection.locator,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      chapterTitle: pendingSelection.chapterTitle
     }));
     close();
   };
@@ -139,7 +141,7 @@ export const SelectionPopover = () => {
     if (!noteText.trim()) return;
 
     const now = Date.now();
-    const note: StoredNote = { id: crypto.randomUUID(), locator: pendingSelection.locator, text: noteText, createdAt: now, updatedAt: now };
+    const note: StoredNote = { id: crypto.randomUUID(), locator: pendingSelection.locator, text: noteText, createdAt: now, updatedAt: now, chapterTitle: pendingSelection.chapterTitle };
 
     dispatch(addOrUpdateNote(manifestUrl, note));
     close();

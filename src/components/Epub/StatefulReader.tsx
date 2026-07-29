@@ -62,7 +62,8 @@ import { useEpubNavigator } from "@/core/Hooks/Epub/useEpubNavigator";
 import { useFullscreen } from "@/core/Hooks/useFullscreen";
 import { usePrevious } from "@/core/Hooks/usePrevious";
 import { useI18n } from "@/i18n/useI18n";
-import { useTimeline } from "@/core/Hooks/useTimeline";
+import { useTimeline, UnstableTimeline } from "@/core/Hooks/useTimeline";
+import { resolveChapterTitle } from "@/helpers/resolveChapterTitle";
 import { useIsScroll, usePositionStorage } from "@/hooks";
 import { useDocumentTitle } from "@/core/Hooks/useDocumentTitle";
 import { useSpacingPresets } from "../Settings/Spacing/hooks/useSpacingPresets";
@@ -309,6 +310,12 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   const { notifyLocatorChanged: notifyReadingSpeed } = useReadingSpeedSampler();
   notifyReadingSpeedRef.current = notifyReadingSpeed;
 
+  // CLAUDE-ADDED: Same ref-indirection pattern as the two above -- textSelected and the
+  // highlight-tap observer (both inside the `listeners` useMemo below, which deliberately doesn't
+  // depend on `timeline`) need the latest resolved chapter titles without forcing that memo to
+  // recompute on every navigation (timeline's own identity changes on every locator change).
+  const timelineItemsRef = useRef<UnstableTimeline["items"]>(undefined);
+
   const readingTimeIsLoaded = useAppSelector(state => state.readingTime.isLoaded);
   const wordCount = useAppSelector(state => state.readingTime.wordCount);
   const readingManifestUrl = useAppSelector(state => state.readingTime.manifestUrl);
@@ -350,6 +357,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
       dispatch(setTimeline(timeline));
     }
   });
+  timelineItemsRef.current = timeline.items;
 
   const documentTitleFormat = preferences.metadata?.documentTitle?.format;
   
@@ -638,7 +646,8 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
         x: (iframeRect?.left ?? 0) + selection.x,
         y: (iframeRect?.top ?? 0) + selection.y,
         width: selection.width,
-        height: selection.height
+        height: selection.height,
+        chapterTitle: resolveChapterTitle(timelineItemsRef.current, base.href)
       }));
     },
     contentProtection: function (_type: string, _data: SuspiciousActivityEvent): void {},
@@ -836,6 +845,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
           y: (iframeRect?.top ?? 0) + (rect?.top ?? 0) / dpr,
           width: (rect?.width ?? 0) / dpr,
           height: (rect?.height ?? 0) / dpr,
+          chapterTitle: resolveChapterTitle(timelineItemsRef.current, event.decoration.locator.href),
           existing: { type: "highlight", id: event.decoration.id }
         }));
         // CLAUDE-ADDED: Returning true here is documented as "suppresses normal tap/click navigation",

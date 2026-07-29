@@ -1,3 +1,9 @@
+# @readium/shared depends on @edrlab/thorium-locales via its git-repository resolution as a
+# subdependency; pnpm's default supply-chain policy refuses to install any git-resolved
+# subdependency, which blocks every fresh install of this project outright. The top-level
+# thorium-locales dependency is already trusted (declared directly in package.json), so this is
+# safe to relax.
+blockExoticSubdeps: false
 allowBuilds:
   esbuild: true
   sharp: true

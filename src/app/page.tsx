@@ -14,10 +14,12 @@ import { StatefulUserMenu } from "@/components/Library/UserMenu/StatefulUserMenu
 import Image from "next/image";
 
 import { isManifestRouteEnabled } from "./ManifestRouteEnabled";
-import { getBookProgressPercent } from "@/helpers/getBookProgress";
+import { getBookProgressPercent, getManifestUrlFromBookUrl } from "@/helpers/getBookProgress";
+import { buildNotesMarkdown, saveTextFile, notesExportFilename } from "@/helpers/exportNotes";
 import { useCoverSize } from "./useCoverSize";
 import { useCustomShelves } from "./useCustomShelves";
 import { fetchLibraryPrefsFromServer, saveLibraryPrefsToServer } from "@/lib/userData/libraryPrefsApi";
+import { fetchNotesFromServer } from "@/lib/userData/notesApi";
 import { DEFAULT_LIBRARY_VIEW, LIBRARY_VIEW_STORAGE_KEY, LibraryView } from "./libraryView";
 import { ACTIVE_SHELF_ID_STORAGE_KEY, ShelfModalState } from "./customShelves";
 import {
@@ -585,6 +587,19 @@ export default function Home() {
         onCreateShelf={ (bookUrl) => {
           setShelfModalState({ mode: "create", addBookUrl: bookUrl });
           setContextMenuState(null);
+        } }
+        onExportNotes={ (publication) => {
+          setContextMenuState(null);
+
+          const manifestUrl = getManifestUrlFromBookUrl(publication.url);
+          if (!manifestUrl) return;
+
+          fetchNotesFromServer(manifestUrl).then((notes) => {
+            saveTextFile(
+              notesExportFilename(publication.title),
+              buildNotesMarkdown(publication.title, publication.author, notes)
+            );
+          });
         } }
         onOpenChange={ (open) => {
           if (!open) setContextMenuState(null);

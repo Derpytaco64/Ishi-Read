@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
 import { ThModal } from "@/core/Components/Containers/ThModal";
 
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
@@ -127,7 +130,9 @@ export const NoteOverlay = () => {
           </div>
         ) : (
           <>
-          <p className={ styles.noteOverlayText }>{ note.text }</p>
+          <div className={ styles.noteOverlayText }>
+            <ReactMarkdown remarkPlugins={ [remarkGfm] }>{ note.text }</ReactMarkdown>
+          </div>
           <div className={ styles.noteEditorActions }>
             <button type="button" className={ styles.iconButton } aria-label={ t("reader.annotations.actions.editNote.compact") } onClick={ beginEditing }>
               <EditIcon aria-hidden="true" focusable="false" />

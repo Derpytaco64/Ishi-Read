@@ -1,7 +1,11 @@
 .trigger {
   position: absolute;
-  top: 0;
-  left: 0;
+  /* CLAUDE-ADDED: ishamel.png bakes in transparent padding around the glyph (~16px top / ~9px
+     left at this render height), so top:0/left:0 alone leaves it visibly further from the corner
+     than the user avatar (StatefulUserMenu's .trigger), which has no such built-in padding.
+     Pulling the whole hit target up-left by that padding amount lines the two up. */
+  top: -16px;
+  left: -9px;
   z-index: 1;
   display: block;
   padding: 0;

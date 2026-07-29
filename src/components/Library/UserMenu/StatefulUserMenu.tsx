@@ -11,9 +11,14 @@ import { ThContainerHeaderWithClose } from "@/core/Components/Containers/ThConta
 
 import { useCurrentUser } from "@/app/useCurrentUser";
 
+import { fetchStatsFromServer } from "@/lib/userData/statsApi";
+import { UserStats } from "@/lib/userData/statsTypes";
+import { formatFullReadingTime, ReadingTimeUnitLabels } from "@/components/Actions/ReadingTimer/helpers/formatReadingTime";
+
 import styles from "./assets/styles/thorium-web.userMenu.module.css";
 
 const MIN_PASSWORD_LENGTH = 8;
+const READING_TIME_UNITS: ReadingTimeUnitLabels = { seconds: "s", minutes: "m", hours: "h" };
 
 function AvatarCircle({ name, avatarUrl, className }: { name: string; avatarUrl: string | null; className: string }) {
   return avatarUrl ? (
@@ -33,6 +38,11 @@ export const StatefulUserMenu = () => {
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // CLAUDE-ADDED: null while unopened/loading -- rendered as the section's own loading/empty state,
+  // same "null means not there yet" convention as StatefulBookSheet's per-book readingStats.
+  const [isStatsOpen, setIsStatsOpen] = useState(false);
+  const [stats, setStats] = useState<UserStats | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
@@ -178,6 +188,12 @@ export const StatefulUserMenu = () => {
     }
   };
 
+  const openStats = () => {
+    setIsStatsOpen(true);
+    setStats(null);
+    fetchStatsFromServer().then(setStats);
+  };
+
   const logOut = async () => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
@@ -199,6 +215,9 @@ export const StatefulUserMenu = () => {
         <Menu className={ styles.menu }>
           <MenuItem className={ styles.menuItem } onAction={ openEdit }>
             Edit User
+          </MenuItem>
+          <MenuItem className={ styles.menuItem } onAction={ openStats }>
+            Stats
           </MenuItem>
           { user.isAdmin && (
             <MenuItem className={ styles.menuItem } href="/admin">
@@ -227,6 +246,7 @@ export const StatefulUserMenu = () => {
         compounds={{
           heading: {},
           button: {
+            className: styles.closeButton,
             "aria-label": "Close",
             onPress: () => setIsEditOpen(false)
           }
@@ -317,6 +337,102 @@ export const StatefulUserMenu = () => {
             { isSavingPassword ? "Updating…" : "Update Password" }
           </button>
         </form>
+      </ThContainerBody>
+    </ThModal>
+
+    <ThModal
+      isOpen={ isStatsOpen }
+      onOpenChange={ setIsStatsOpen }
+      isDismissable
+      className={ styles.underlay }
+      compounds={{
+        dialog: { className: `${ styles.dialog } ${ styles.statsDialog }` }
+      }}
+    >
+      <ThContainerHeaderWithClose
+        label="Stats"
+        className={ styles.header }
+        compounds={{
+          heading: {},
+          button: {
+            className: styles.closeButton,
+            "aria-label": "Close",
+            onPress: () => setIsStatsOpen(false)
+          }
+        }}
+      />
+
+      <ThContainerBody className={ styles.body }>
+        { !stats ? (
+          <p className={ styles.statsLoading }>Loading…</p>
+        ) : (
+          <>
+            <div className={ styles.statSection }>
+              <h3 className={ styles.statSectionHeading }>Library</h3>
+              <div className={ styles.statGrid }>
+                <div className={ styles.statTile }>
+                  <span className={ styles.statValue }>{ stats.booksInLibrary.toLocaleString() }</span>
+                  <span className={ styles.statLabel }>Books in Library</span>
+                </div>
+                <div className={ styles.statTile }>
+                  <span className={ styles.statValue }>{ stats.booksStarted.toLocaleString() }</span>
+                  <span className={ styles.statLabel }>Books Started</span>
+                </div>
+                <div className={ styles.statTile }>
+                  <span className={ styles.statValue }>{ stats.booksFinished.toLocaleString() }</span>
+                  <span className={ styles.statLabel }>Books Finished</span>
+                </div>
+              </div>
+            </div>
+
+            <div className={ styles.statSection }>
+              <h3 className={ styles.statSectionHeading }>Reading</h3>
+              <div className={ styles.statGrid }>
+                <div className={ styles.statTile }>
+                  <span className={ styles.statValue }>{ formatFullReadingTime(stats.totalReadingSeconds, READING_TIME_UNITS) }</span>
+                  <span className={ styles.statLabel }>Time Reading</span>
+                </div>
+                <div className={ styles.statTile }>
+                  { stats.averageWpm !== null ? (
+                    <span className={ styles.statValue }>
+                      { stats.averageWpm }
+                      <span className={ styles.statValueUnit }>wpm</span>
+                    </span>
+                  ) : (
+                    <span className={ styles.statValue }>—</span>
+                  ) }
+                  <span className={ styles.statLabel }>Average Pace</span>
+                </div>
+                <div className={ styles.statTile }>
+                  <span className={ styles.statValue }>{ stats.totalWordsRead.toLocaleString() }</span>
+                  <span className={ styles.statLabel }>Words Read</span>
+                </div>
+                <div className={ styles.statTile }>
+                  <span className={ styles.statValue }>{ stats.currentStreakDays.toLocaleString() }</span>
+                  <span className={ styles.statLabel }>Day Streak</span>
+                </div>
+              </div>
+            </div>
+
+            <div className={ styles.statSection }>
+              <h3 className={ styles.statSectionHeading }>Annotations</h3>
+              <div className={ styles.statGrid }>
+                <div className={ styles.statTile }>
+                  <span className={ styles.statValue }>{ stats.highlightsCount.toLocaleString() }</span>
+                  <span className={ styles.statLabel }>Highlights</span>
+                </div>
+                <div className={ styles.statTile }>
+                  <span className={ styles.statValue }>{ stats.bookmarksCount.toLocaleString() }</span>
+                  <span className={ styles.statLabel }>Bookmarks</span>
+                </div>
+                <div className={ styles.statTile }>
+                  <span className={ styles.statValue }>{ stats.notesCount.toLocaleString() }</span>
+                  <span className={ styles.statLabel }>Notes</span>
+                </div>
+              </div>
+            </div>
+          </>
+        ) }
       </ThContainerBody>
     </ThModal>
     </>

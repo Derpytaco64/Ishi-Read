@@ -22,8 +22,9 @@
 }
 
 .avatar {
-  width: 48px;
-  height: 48px;
+  /* CLAUDE-ADDED: 1.75x the original 48px, per user request. */
+  width: 84px;
+  height: 84px;
   border-radius: 50%;
   object-fit: cover;
   display: flex;
@@ -31,7 +32,7 @@
   justify-content: center;
   background-color: #e0e0e0;
   color: #333;
-  font-size: 1.1rem;
+  font-size: 1.925rem;
   font-weight: 600;
 }
 
@@ -138,11 +139,54 @@
   --th-color-input-border: #555;
 }
 
+/* CLAUDE-ADDED: position:relative so .closeButton below can pin to this box's own corner instead
+   of just trailing the heading in flex order -- the heading's default browser margin used to add
+   invisible height above/below the row, so the button (last flex item, but still inside that tall
+   row) never actually sat flush in the top-right corner. min-height (not a fixed height) guarantees
+   room for the absolutely-positioned button while still letting padding/line-height drive the
+   actual size instead of a number that could drift out of sync with them. */
 .header {
+  position: relative;
+  min-height: 2.8rem;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  padding: 0.5rem;
+  padding: 0.5rem 2.5rem 0.5rem 1rem;
+}
+
+.header :global([slot="title"]) {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.closeButton {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+}
+
+.closeButton svg {
+  width: 18px;
+  height: 18px;
+}
+
+.closeButton[data-hovered],
+.closeButton[data-focus-visible] {
+  background-color: var(--th-color-primary);
+}
+
+.closeButton[data-focus-visible] {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 1px;
 }
 
 .body {
@@ -257,4 +301,99 @@
 .secondaryButton {
   background-color: var(--th-color-primary);
   color: var(--th-color-text);
+}
+
+/* CLAUDE-ADDED: Stats dialog reuses .dialog's theme tokens/shadow/radius but wants more breathing
+   room than Edit User's 380px for a 3-wide tile row -- applied alongside .dialog, not instead of it. */
+.statsDialog {
+  width: 440px;
+}
+
+.statsLoading {
+  margin: 1.5rem 0;
+  text-align: center;
+  color: var(--th-color-text-secondary);
+}
+
+.statSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.statSection:not(:first-child) {
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--th-color-primary);
+}
+
+.statSectionHeading {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--th-color-text-secondary);
+}
+
+.statSectionHeading::before {
+  content: "";
+  display: block;
+  width: 3px;
+  height: 0.85em;
+  border-radius: 2px;
+  background-color: var(--th-color-accent, #6ba4ff);
+}
+
+/* CLAUDE-ADDED: flex-wrap + centered justify (not a fixed-column grid) so a section whose tile
+   count doesn't divide evenly (3, 4, 3 across the three sections) wraps its last row centered
+   instead of leaving a lone tile stranded in a grid's left column with dead space beside it. */
+.statGrid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.statTile {
+  display: flex;
+  flex: 1 1 108px;
+  max-width: 132px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.85rem 0.5rem;
+  border-radius: 10px;
+  border: 1px solid var(--th-color-primary);
+  /* CLAUDE-ADDED: Plain fallback first for browsers without color-mix() support, same two-declaration
+     pattern as publicationGrid's own accent tinting. */
+  background-color: var(--th-color-primary);
+  background-color: color-mix(in srgb, var(--th-color-primary) 55%, transparent);
+  text-align: center;
+}
+
+.statValue {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.2rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--th-color-accent, #6ba4ff);
+}
+
+.statValueUnit {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--th-color-text-secondary);
+}
+
+.statLabel {
+  font-size: 0.72rem;
+  color: var(--th-color-text-secondary);
 }

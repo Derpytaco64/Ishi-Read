@@ -17,6 +17,10 @@ export interface PendingSelection {
   y: number;
   width: number;
   height: number;
+  // CLAUDE-ADDED: Resolved once by the caller (StatefulReader.tsx, via resolveChapterTitle) and
+  // carried through to whatever SelectionPopover.tsx ends up creating -- see StoredHighlight/
+  // Bookmark/Note's own chapterTitle field for why this isn't just read off locator.title.
+  chapterTitle?: string;
   existing?: {
     type: "highlight";
     id: string;

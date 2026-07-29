@@ -29,6 +29,7 @@ export interface StatefulBookContextMenuProps {
   onRemoveFromShelf: (shelfId: string, bookUrl: string) => void;
   onGoToSeries: (publication: Publication) => void;
   onCreateShelf: (bookUrl: string) => void;
+  onExportNotes: (publication: Publication) => void;
   onOpenChange: (open: boolean) => void;
 }
 
@@ -43,6 +44,7 @@ export const StatefulBookContextMenu = ({
   onRemoveFromShelf,
   onGoToSeries,
   onCreateShelf,
+  onExportNotes,
   onOpenChange
 }: StatefulBookContextMenuProps) => {
   if (!state) return null;
@@ -64,6 +66,13 @@ export const StatefulBookContextMenu = ({
               Go to Series
             </MenuItem>
           ) }
+
+          <MenuItem
+            className={ styles.menuItem }
+            onAction={ () => onExportNotes(state.publication) }
+          >
+            Export Notes
+          </MenuItem>
 
           <SubmenuTrigger>
             <MenuItem className={ styles.menuItem }>+/- Shelf</MenuItem>
