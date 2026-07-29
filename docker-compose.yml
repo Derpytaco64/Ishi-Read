@@ -1,0 +1,11 @@
+services:
+  ishi-read:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      # Same absolute paths as the host, matching ~/.config/ishi-read/config.json's
+      # existing "publicationsDir" -- no settings need to change after moving to Docker.
+      - /home/deck/Documents/epubs:/home/deck/Documents/epubs
+      - /home/deck/.config/ishi-read:/home/deck/.config/ishi-read
+    restart: unless-stopped
