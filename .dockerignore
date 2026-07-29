@@ -6,3 +6,13 @@ dist
 coverage
 .env*.local
 npm-debug.log*
+
+# Not needed to build/run the app -- dev tooling, docs, and local editor/Claude state.
+.claude
+.vscode
+docs
+screenshots
+thorium-web.png
+locale-summary.txt
+*.tsbuildinfo
+wrangler.toml

@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Rollup
 .rollup.cache
+
+# Claude Code local session state (may contain pasted screenshots)
+.claude
