@@ -49,7 +49,7 @@
   },
   "scripts": {
     "dev": "node scripts/run-with-readium.mjs next dev",
-    "build": "pnpm extract-locales && next build",
+    "build": "pnpm extract-locales && NODE_OPTIONS=--max-old-space-size=6144 next build",
     "build:analyze": "npx next experimental-analyze",
     "start": "node scripts/run-with-readium.mjs next start",
     "lint": "eslint .",
