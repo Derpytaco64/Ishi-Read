@@ -14,8 +14,8 @@ export async function GET() {
   return NextResponse.json({ libraryPrefs });
 }
 
-// CLAUDE-ADDED: Shallow top-level merge, not an overwrite -- shelfPrefs, shelfOrder, coverSize,
-// accentColor, and theme each save independently (see the hooks in src/app -- useCoverSize,
+// CLAUDE-ADDED: Shallow top-level merge, not an overwrite -- shelfPrefs, shelfOrder,
+// accentColor, and theme each save independently (see the hooks in src/app --
 // useAccentColor, page.tsx, StatefulLibraryMenu), so a plain overwrite would let whichever saves
 // last wipe out the others' keys.
 //

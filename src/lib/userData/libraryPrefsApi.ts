@@ -2,10 +2,10 @@
 // settingsApi.ts's fetchSettingsFromServer/saveSettingsToServer. Deliberately a separate endpoint
 // and file from the reader's settings.json: that one is fetched wholesale by the Redux store's
 // hydrateFromServer, which merges every top-level key straight into RootState, so shelfPrefs/
-// coverSize/accentColor/theme can't live there without tripping combineReducers' unknown-key
-// warning.
+// accentColor/theme can't live there without tripping combineReducers' unknown-key warning.
+// (coverSize is deliberately NOT synced through here -- see useCoverSize.ts.)
 
-// CLAUDE-ADDED: accentColor, coverSize, theme, and shelfPrefs/shelfOrder are each owned by a
+// CLAUDE-ADDED: accentColor, theme, and shelfPrefs/shelfOrder are each owned by a
 // different hook/component, but they all fetch this same endpoint on mount -- without dedup that's
 // up to four redundant round trips for identical data on every page load. Sharing one in-flight
 // promise collapses concurrent callers onto a single request; it clears once settled so a later
