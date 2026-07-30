@@ -4,8 +4,13 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      # Same absolute paths as the host, matching ~/.config/ishi-read/config.json's
-      # existing "publicationsDir" -- no settings need to change after moving to Docker.
-      - /home/deck/Documents/epubs:/home/deck/Documents/epubs
-      - /home/deck/.config/ishi-read:/home/deck/.config/ishi-read
+      # Left side is yours to point wherever you want on this host -- create the
+      # directories yourself first (e.g. `mkdir -p ./config ./books` next to this
+      # file) so Docker never has to invent a path on its own.
+      #
+      # Right side must stay exactly as-is: it's where the app itself looks
+      # internally -- ./config holds config.json/users.json/settings, ./books is
+      # where the Setup wizard's book folder will point by default.
+      - ./config:/home/deck/.config/ishi-read
+      - ./books:/home/deck/Documents/epubs
     restart: unless-stopped
