@@ -1,3 +1,5 @@
 git pull
 docker build -t dt64/ishi-read:latest .
 docker push dt64/ishi-read:latest
+
+then go n portain and do a recreate pull
