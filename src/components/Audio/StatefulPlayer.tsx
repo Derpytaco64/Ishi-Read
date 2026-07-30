@@ -236,7 +236,25 @@ const StatefulPlayerInner = ({ publication, localDataKey, positionStorage, cover
       handleSleepTimerEndOfFragment(isTransitionToNext);
       handleContinuousPlay(isTransitionToNext);
     },
-    positionChanged: (locator) => {
+    positionChanged: (rawLocator) => {
+      // CLAUDE-ADDED: @readium/navigator's AudioNavigator only ever sets locations.progression
+      // (elapsed/duration of the CURRENT track) on live position updates -- confirmed by reading
+      // its own createLocator()/positionChanged source, it never sets totalProgression for audio.
+      // For single-file .m4b audiobooks (the only audio format this app scans -- see
+      // supportedExtensions in api/books/route.ts) there's exactly one reading-order item, so
+      // "progress through the current track" and "progress through the whole book" are the same
+      // number; backfilling totalProgression from progression here is what makes the library's
+      // progress ring (getBookProgressPercent, which only reads totalProgression) work for
+      // audiobooks at all. Guarded to a single-item readingOrder so a future multi-track format
+      // doesn't silently get a wrong, chapter-relative "book progress". copyWithLocations (not a
+      // direct mutation) because Locator/LocatorLocations fields are readonly.
+      const locator =
+        rawLocator.locations.totalProgression === undefined &&
+        typeof rawLocator.locations.progression === "number" &&
+        publication.readingOrder.items.length === 1
+          ? rawLocator.copyWithLocations({ totalProgression: rawLocator.locations.progression })
+          : rawLocator;
+
       debouncedSavePosition(locator);
 
       if (canGoBackward()) {
