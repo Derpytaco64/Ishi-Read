@@ -1,6 +1,14 @@
 services:
   ishi-read:
     build: .
+    # CLAUDE-ADDED: x-casaos is CasaOS/ZimaOS's own compose extension, read when importing this
+    # file through the App Store's compose-import flow -- only takes effect there, not when running
+    # via a plain `docker run`.
+    x-casaos:
+      icon: https://i.imgur.com/0JRO3A5.gif
+    environment:
+      - PUID=0
+      - PGID=0
     ports:
       - "3000:3000"
     volumes:

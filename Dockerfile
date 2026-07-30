@@ -23,8 +23,5 @@ RUN pnpm build
 
 EXPOSE 3000
 
-# Matches uid/gid 1000 (the "deck" user) so files written into the bind-mounted
-# book/config folders stay owned by deck on the host, not root.
-USER node
-
+# No USER directive -- runs as root (uid/gid 0), matching PUID/PGID=0 in docker-compose.yml.
 CMD ["pnpm", "start"]
