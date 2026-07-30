@@ -132,7 +132,7 @@ export default function Home() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem(LIBRARY_VIEW_STORAGE_KEY);
-      if (stored === "home" || stored === "library" || stored === "series" || stored === "shelf") {
+      if (stored === "home" || stored === "library" || stored === "audiobooks" || stored === "series" || stored === "shelf") {
         setActiveView(stored);
       }
     } catch (error) {
@@ -274,7 +274,7 @@ export default function Home() {
   // over whatever the localStorage-seeded effects above already set, same as Redux's own merge.
   useEffect(() => {
     fetchLibraryPrefsFromServer().then((server) => {
-      if (server?.activeView === "home" || server?.activeView === "library" || server?.activeView === "series" || server?.activeView === "shelf") {
+      if (server?.activeView === "home" || server?.activeView === "library" || server?.activeView === "audiobooks" || server?.activeView === "series" || server?.activeView === "shelf") {
         setActiveView(server.activeView);
         localStorage.setItem(LIBRARY_VIEW_STORAGE_KEY, server.activeView);
       }
@@ -438,6 +438,11 @@ export default function Home() {
     myLibrary: alphabetical
   };
 
+  // CLAUDE-ADDED: Backs the Books/Audiobooks tab split -- same full fetched list, split by the
+  // isAudiobook flag route.ts derives from file extension (only .m4b today).
+  const ebookBooks = myLibraryBooks.filter((book) => !book.isAudiobook);
+  const audiobookBooks = myLibraryBooks.filter((book) => book.isAudiobook);
+
   return (
     <main id="home">
       { /* Logo doubles as the trigger for the left-docked library menu (settings, etc.). */ }
@@ -462,7 +467,7 @@ export default function Home() {
 
       { activeView === "library" && (
         <StatefulMyLibraryView
-          books={ myLibraryBooks }
+          books={ ebookBooks }
           coverSize={ coverSize }
           progressByUrl={ progressByUrl }
           onSelectBook={ (publication) => {
@@ -470,6 +475,23 @@ export default function Home() {
             setIsBookSheetOpen(true);
           } }
           onContextMenu={ openContextMenu }
+          title="Books"
+          emptyMessage="Your library has no books yet."
+        />
+      ) }
+
+      { activeView === "audiobooks" && (
+        <StatefulMyLibraryView
+          books={ audiobookBooks }
+          coverSize={ coverSize }
+          progressByUrl={ progressByUrl }
+          onSelectBook={ (publication) => {
+            setSelectedBook(publication);
+            setIsBookSheetOpen(true);
+          } }
+          onContextMenu={ openContextMenu }
+          title="Audiobooks"
+          emptyMessage="Your library has no audiobooks yet."
         />
       ) }
 

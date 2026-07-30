@@ -255,6 +255,10 @@ export async function GET() {
         const manifestUrl = `${readiumServerUrl}/webpub/${encodedFilename}/manifest.json`;
         const encodedManifestUrl = encodeURIComponent(manifestUrl);
         const fallbackTitle = path.parse(file).name;
+        // CLAUDE-ADDED: Drives the homepage's Books/Audiobooks tab split -- the manifest itself
+        // doesn't carry a stable "is this an audiobook" flag callers can filter on, but the file
+        // extension already does (only .m4b is audio among supportedExtensions).
+        const isAudiobook = path.extname(file).toLowerCase() === ".m4b";
 
         let title = fallbackTitle;
         let author = "";
@@ -344,6 +348,8 @@ export async function GET() {
           author,
           cover,
           url: `/read/manifest/${encodedManifestUrl}`,
+          rendition: isAudiobook ? "Audiobook" : undefined,
+          isAudiobook,
           // CLAUDE-ADDED: birthtime isn't supported on every filesystem (some report 0 or fall back to
           // ctime); mtime is always populated, so it's the safety net for "date added".
           addedAt: stat.birthtimeMs || stat.mtimeMs,
@@ -383,12 +389,15 @@ export async function GET() {
         // Keep the defaults above.
       }
 
+      const isAudiobook = path.extname(file).toLowerCase() === ".m4b";
+
       return {
         title: path.parse(file).name,
         author: "",
         cover: "/images/genericCover.png",
         url: `/read/manifest/${encodeURIComponent(`${readiumServerUrl}/webpub/${base64UrlEncode(file)}/manifest.json`)}`,
-        rendition: "Reflowable EPUB",
+        rendition: isAudiobook ? "Audiobook" : "Reflowable EPUB",
+        isAudiobook,
         addedAt,
         lastReadAt,
         series: null,

@@ -116,6 +116,7 @@ export interface Publication {
   cover: string;
   url: string;
   rendition?: string;
+  isAudiobook?: boolean;
   addedAt?: number;
   lastReadAt?: number | null;
   series?: { name: string; position?: number } | null;

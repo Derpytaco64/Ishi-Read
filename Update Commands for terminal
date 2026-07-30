@@ -6,6 +6,7 @@ then go n portain and do a recreate pull
 
 
 me push update:
+cd /DATA/AppData/Ishi-Reader
 git pull
 docker build -t dt64/ishi-read:latest .
 docker push dt64/ishi-read:latest

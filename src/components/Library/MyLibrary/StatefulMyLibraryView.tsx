@@ -16,6 +16,11 @@ export interface StatefulMyLibraryViewProps {
   progressByUrl: Record<string, number>;
   onSelectBook: (publication: Publication) => void;
   onContextMenu?: (e: React.MouseEvent, publication: Publication) => void;
+  // CLAUDE-ADDED: Reused for both the Books and Audiobooks tabs (page.tsx), which are the same
+  // flat sorted-grid view over two different filtered slices of the library -- only the heading and
+  // empty-state copy differ between them.
+  title?: string;
+  emptyMessage?: string;
 }
 
 const renderBookCover = (publication: Publication) => (
@@ -34,7 +39,9 @@ export const StatefulMyLibraryView = ({
   coverSize,
   progressByUrl,
   onSelectBook,
-  onContextMenu
+  onContextMenu,
+  title = "My Library",
+  emptyMessage = "Your library is empty."
 }: StatefulMyLibraryViewProps) => {
   const [sortMode, setSortMode] = useState<SortMode>(DEFAULT_SORT_MODE);
 
@@ -54,10 +61,10 @@ export const StatefulMyLibraryView = ({
   return (
     <>
       <header className="header">
-        <h1>My Library</h1>
+        <h1>{ title }</h1>
 
         { books.length === 0 && (
-          <p className="subtitle">Your library is empty.</p>
+          <p className="subtitle">{ emptyMessage }</p>
         ) }
       </header>
 
