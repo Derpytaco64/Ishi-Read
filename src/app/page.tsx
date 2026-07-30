@@ -97,6 +97,28 @@ export default function Home() {
   const [myLibraryBooks, setMyLibraryBooks] = useState<DynamicBook[]>([]);
   const [progressByUrl, setProgressByUrl] = useState<Record<string, number>>({});
 
+  // CLAUDE-ADDED: Book-context-menu "Remove from Continue Reading" -- maps a dismissed book's url to
+  // the lastReadAt it had at the moment of dismissal. There's no separate "clear" step anywhere: a
+  // book's lastReadAt is just its position file's mtime (see api/books/route.ts's getLastReadAt), so
+  // reopening it in the reader always bumps lastReadAt past the stored value, which is exactly what
+  // isContinueReadingDismissed below checks. Persisted via the same shallow-merged libraryPrefs
+  // endpoint as shelfPrefs/shelfOrder (hydrated in the fetchLibraryPrefsFromServer effect below).
+  const [continueReadingDismissed, setContinueReadingDismissed] = useState<Record<string, number>>({});
+
+  const isContinueReadingDismissed = (book: DynamicBook) => {
+    const dismissedAt = continueReadingDismissed[book.url];
+    return dismissedAt !== undefined && typeof book.lastReadAt === "number" && dismissedAt >= book.lastReadAt;
+  };
+
+  const removeFromContinueReading = (publication: Publication) => {
+    if (typeof publication.lastReadAt !== "number") return;
+    setContinueReadingDismissed((prev) => {
+      const next = { ...prev, [publication.url]: publication.lastReadAt as number };
+      saveLibraryPrefsToServer({ continueReadingDismissed: next });
+      return next;
+    });
+  };
+
   // CLAUDE-ADDED: Book-detail bottom sheet, opened by clicking a cover in any shelf below.
   const [selectedBook, setSelectedBook] = useState<Publication | null>(null);
   const [isBookSheetOpen, setIsBookSheetOpen] = useState(false);
@@ -281,6 +303,10 @@ export default function Home() {
         }
       }
 
+      if (server?.continueReadingDismissed && typeof server.continueReadingDismissed === "object") {
+        setContinueReadingDismissed(server.continueReadingDismissed as Record<string, number>);
+      }
+
       if (server?.shelfOrder) {
         const next = mergeShelfOrder(server.shelfOrder);
         setShelfOrder(next);
@@ -365,6 +391,7 @@ export default function Home() {
   const recentlyRead = [...myLibraryBooks]
     .filter((book): book is DynamicBook & { lastReadAt: number } => typeof book.lastReadAt === "number")
     .filter((book) => progressByUrl[book.url] !== 100)
+    .filter((book) => !isContinueReadingDismissed(book))
     .sort((a, b) => b.lastReadAt - a.lastReadAt)
     .slice(0, 5);
 
@@ -600,6 +627,16 @@ export default function Home() {
               buildNotesMarkdown(publication.title, publication.author, notes)
             );
           });
+        } }
+        canRemoveFromContinueReading={
+          !!contextMenuState &&
+          typeof contextMenuState.publication.lastReadAt === "number" &&
+          progressByUrl[contextMenuState.publication.url] !== 100 &&
+          !isContinueReadingDismissed(contextMenuState.publication)
+        }
+        onRemoveFromContinueReading={ (publication) => {
+          removeFromContinueReading(publication);
+          setContextMenuState(null);
         } }
         onOpenChange={ (open) => {
           if (!open) setContextMenuState(null);

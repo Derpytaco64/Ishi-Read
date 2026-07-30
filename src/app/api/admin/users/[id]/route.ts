@@ -18,7 +18,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await request.json().catch(() => null);
-  const patch: { username?: string; name?: string; isAdmin?: boolean } = {};
+  const patch: { username?: string; name?: string; isAdmin?: boolean; disabled?: boolean } = {};
 
   if (body?.username !== undefined) {
     if (typeof body.username !== "string" || !USERNAME_PATTERN.test(body.username.trim())) {
@@ -43,6 +43,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "You can't remove your own admin access" }, { status: 400 });
     }
     patch.isAdmin = body.isAdmin;
+  }
+  if (body?.disabled !== undefined) {
+    if (typeof body.disabled !== "boolean") {
+      return NextResponse.json({ error: "disabled must be a boolean" }, { status: 400 });
+    }
+    // CLAUDE-ADDED: Same reasoning as the self-remove-admin guard above -- updateUser's last-admin
+    // guard only stops the count reaching zero, not an admin locking themselves out of the panel
+    // they're currently using while other admins remain.
+    if (id === admin.id && body.disabled) {
+      return NextResponse.json({ error: "You can't disable your own account" }, { status: 400 });
+    }
+    patch.disabled = body.disabled;
   }
 
   try {

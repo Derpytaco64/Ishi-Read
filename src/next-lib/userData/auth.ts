@@ -39,6 +39,7 @@ export interface UserRecord {
   failedAttempts: number;
   lockedUntil: number | null;
   createdAt: number;
+  disabled: boolean;
 }
 
 export type PublicUser = Pick<UserRecord, "id" | "username" | "name" | "isAdmin"> & {
@@ -135,7 +136,8 @@ export function ensureUsersRegistry(): void {
       passwordSalt: null,
       failedAttempts: 0,
       lockedUntil: null,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      disabled: false
     }]);
     return;
   }
@@ -146,7 +148,8 @@ export function ensureUsersRegistry(): void {
       typeof u.username === "string" &&
       typeof u.isAdmin === "boolean" &&
       "avatarExt" in u &&
-      "passwordHash" in u
+      "passwordHash" in u &&
+      "disabled" in u
     ) {
       return u as UserRecord;
     }
@@ -162,7 +165,8 @@ export function ensureUsersRegistry(): void {
       passwordSalt: u.passwordSalt ?? null,
       failedAttempts: u.failedAttempts ?? 0,
       lockedUntil: u.lockedUntil ?? null,
-      createdAt: u.createdAt ?? Date.now()
+      createdAt: u.createdAt ?? Date.now(),
+      disabled: u.disabled ?? false
     };
   });
 
@@ -222,10 +226,6 @@ export function listUsers(): UserRecord[] {
   return readUsers();
 }
 
-export function listPublicUsers(): PublicUser[] {
-  return listUsers().map(toPublicUser);
-}
-
 // CLAUDE-ADDED: Jellyfin-style lockout -- N wrong passwords locks the account for a cooldown,
 // independent of whether the submitted password was "close". A user that doesn't exist runs the
 // same scrypt cost as a real failed attempt (against a fixed dummy salt) so response timing can't
@@ -238,6 +238,14 @@ export function attemptLogin(username: string, password: string): LoginResult {
   if (!user) {
     hashPassword(password, DUMMY_SALT);
     return { ok: false, error: "Invalid username or password" };
+  }
+
+  // CLAUDE-ADDED: Checked before lockout/password verification -- a disabled account can't sign in
+  // at all, regardless of whether the password would've been correct. Sessions are also destroyed
+  // the moment an admin flips this flag (see updateUser), so this mainly guards direct hits to this
+  // route/API rather than a still-logged-in browser tab.
+  if (user.disabled) {
+    return { ok: false, error: "This account has been disabled." };
   }
 
   const now = Date.now();
@@ -363,7 +371,8 @@ export function createUser(input: { username: string; name: string; password?: s
     passwordSalt,
     failedAttempts: 0,
     lockedUntil: null,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    disabled: false
   };
 
   users.push(user);
@@ -371,7 +380,7 @@ export function createUser(input: { username: string; name: string; password?: s
   return user;
 }
 
-export function updateUser(userId: string, patch: { username?: string; name?: string; isAdmin?: boolean }): UserRecord {
+export function updateUser(userId: string, patch: { username?: string; name?: string; isAdmin?: boolean; disabled?: boolean }): UserRecord {
   const users = readUsers();
   const user = users.find((u) => u.id === userId);
   if (!user) throw new Error("User not found");
@@ -382,7 +391,7 @@ export function updateUser(userId: string, patch: { username?: string; name?: st
   }
   if (patch.name !== undefined) user.name = patch.name.trim() || user.username;
   if (patch.isAdmin !== undefined) {
-    if (!patch.isAdmin && user.isAdmin && countAdmins(users) <= 1) {
+    if (!patch.isAdmin && user.isAdmin && countEnabledAdmins(users) <= 1) {
       throw new Error("Can't remove the last remaining admin");
     }
     // CLAUDE-ADDED: Same reasoning as createUser's admin-requires-a-password rule -- a passwordless
@@ -392,6 +401,18 @@ export function updateUser(userId: string, patch: { username?: string; name?: st
     }
     user.isAdmin = patch.isAdmin;
   }
+  if (patch.disabled !== undefined) {
+    // CLAUDE-ADDED: Mirrors the last-admin guard above -- otherwise an admin could disable every
+    // other admin account (or their own, via a non-UI request) and lock the panel forever.
+    if (patch.disabled && user.isAdmin && countEnabledAdmins(users) <= 1) {
+      throw new Error("Can't disable the last remaining admin");
+    }
+    user.disabled = patch.disabled;
+    // CLAUDE-ADDED: Disabling kicks the account out immediately rather than waiting for their
+    // session to expire (up to 30 days) -- same "resistant to breaches" bar as adminResetPassword's
+    // destroyAllSessionsForUser call.
+    if (patch.disabled) destroyAllSessionsForUser(userId);
+  }
 
   writeUsers(users);
   return user;
@@ -399,6 +420,10 @@ export function updateUser(userId: string, patch: { username?: string; name?: st
 
 function countAdmins(users: UserRecord[]): number {
   return users.filter((u) => u.isAdmin).length;
+}
+
+function countEnabledAdmins(users: UserRecord[]): number {
+  return users.filter((u) => u.isAdmin && !u.disabled).length;
 }
 
 export function deleteUser(userId: string): void {

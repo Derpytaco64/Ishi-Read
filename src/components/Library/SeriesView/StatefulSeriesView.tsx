@@ -87,8 +87,8 @@ export const StatefulSeriesView = ({
   const [sortDirection, setSortDirection] = useState<SeriesSortDirection>(DEFAULT_SERIES_SORT_DIRECTION);
 
   // CLAUDE-ADDED: One slot per series, sorted alphabetically by series name. Each slot's "center"
-  // cover is that series' own first book alphabetically by title (not by series.position/volume
-  // order -- position order is used for the drill-down list below instead, once a slot is picked).
+  // cover is that series' own first book by series.position (same ordering as the drill-down list
+  // below), falling back to title when position is missing or tied.
   // Recomputed only when the book list itself changes, so the two random flanking covers don't
   // reshuffle on every unrelated re-render (e.g. reading progress ticking in elsewhere).
   const seriesSlots = useMemo<SeriesSlot[]>(() => {
@@ -105,8 +105,11 @@ export const StatefulSeriesView = ({
 
     return Array.from(groups.entries())
       .map(([name, seriesBooks]) => {
-        const sortedByTitle = [...seriesBooks].sort((a, b) => a.title.localeCompare(b.title));
-        const [center, ...rest] = sortedByTitle;
+        const sortedByPosition = [...seriesBooks].sort((a, b) => {
+          const posDiff = (a.series?.position ?? Number.MAX_SAFE_INTEGER) - (b.series?.position ?? Number.MAX_SAFE_INTEGER);
+          return posDiff !== 0 ? posDiff : a.title.localeCompare(b.title);
+        });
+        const [center, ...rest] = sortedByPosition;
         const [left, right] = pickFlankingCovers(rest);
         return { name, books: seriesBooks, center, left, right };
       })

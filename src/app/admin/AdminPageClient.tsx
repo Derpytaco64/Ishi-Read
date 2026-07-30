@@ -34,6 +34,7 @@ interface AdminUser {
   failedAttempts: number;
   lockedUntil: number | null;
   createdAt: number;
+  disabled: boolean;
 }
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -294,6 +295,26 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isAdmin: !user.isAdmin })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setActionError(data?.error || "Failed to update user");
+        return;
+      }
+      await loadUsers();
+    } catch (err) {
+      console.error("Failed to update user:", err);
+      setActionError("Failed to update user");
+    }
+  };
+
+  const toggleDisabled = async (user: AdminUser) => {
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${ user.id }`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ disabled: !user.disabled })
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
@@ -699,6 +720,7 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
                               { user.name }
                               { user.isAdmin && <span className={ styles.badge }>Admin</span> }
                               { isLocked && <span className={ styles.badgeDanger }>Locked</span> }
+                              { user.disabled && <span className={ styles.badgeDanger }>Disabled</span> }
                             </span>
                             <span className={ styles.userUsername }>@{ user.username }</span>
                           </>
@@ -728,6 +750,14 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
                               Unlock
                             </button>
                           ) }
+                          <button
+                            type="button"
+                            className={ styles.confirmButton }
+                            onClick={ () => toggleDisabled(user) }
+                            disabled={ user.id === currentUser.id && !user.disabled }
+                          >
+                            { user.disabled ? "Enable" : "Disable" }
+                          </button>
                           <button
                             type="button"
                             className={ classNames(styles.confirmButton, styles.confirmButtonDanger) }

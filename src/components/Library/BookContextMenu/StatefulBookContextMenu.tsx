@@ -30,6 +30,12 @@ export interface StatefulBookContextMenuProps {
   onGoToSeries: (publication: Publication) => void;
   onCreateShelf: (bookUrl: string) => void;
   onExportNotes: (publication: Publication) => void;
+  // CLAUDE-ADDED: Whether the right-clicked book is currently showing in the Continue Reading shelf
+  // -- computed in page.tsx (it has progressByUrl and the dismissed-books map, neither of which this
+  // component otherwise receives) rather than re-derived here, so there's exactly one place that
+  // logic lives.
+  canRemoveFromContinueReading: boolean;
+  onRemoveFromContinueReading: (publication: Publication) => void;
   onOpenChange: (open: boolean) => void;
 }
 
@@ -45,6 +51,8 @@ export const StatefulBookContextMenu = ({
   onGoToSeries,
   onCreateShelf,
   onExportNotes,
+  canRemoveFromContinueReading,
+  onRemoveFromContinueReading,
   onOpenChange
 }: StatefulBookContextMenuProps) => {
   if (!state) return null;
@@ -114,6 +122,15 @@ export const StatefulBookContextMenu = ({
               </Menu>
             </Popover>
           </SubmenuTrigger>
+
+          { canRemoveFromContinueReading && (
+            <MenuItem
+              className={ styles.menuItem }
+              onAction={ () => onRemoveFromContinueReading(state.publication) }
+            >
+              Remove from Continue Reading
+            </MenuItem>
+          ) }
         </Menu>
       </Popover>
     </MenuTrigger>
