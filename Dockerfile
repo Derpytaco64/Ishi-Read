@@ -13,6 +13,12 @@ WORKDIR /app
 ENV HOME=/home/deck
 ENV ISHI_CONFIG_DIR=/config
 ENV NODE_ENV=production
+# CLAUDE-ADDED: Must be set here, not just in docker-compose.yml's `environment:` -- next.config.mjs's
+# redirects() (which gates /read/manifest/*, the only URL shape every book on this fork actually
+# links to, see api/books/route.ts) reads this at `next build` time below and bakes the result
+# permanently into the compiled output. docker-compose's `environment:` only injects vars when the
+# container starts, which is already too late; setting it only there silently has no effect at all.
+ENV MANIFEST_ROUTE_FORCE_ENABLE=true
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches ./patches

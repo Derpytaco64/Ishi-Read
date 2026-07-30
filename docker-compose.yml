@@ -17,10 +17,10 @@ services:
       # it binds to loopback-only by default, which only a process inside this same container can
       # reach. See READIUM_ADDRESS in scripts/run-with-readium.mjs.
       - READIUM_ADDRESS=0.0.0.0
-      # Required for books to open at all in a production build. Upstream Thorium Web treats
-      # /read/manifest/* (the URL every book on this fork actually links to, see api/books/route.ts)
-      # as an experimental route and hard-redirects it to "/" in production (next.config.mjs) unless
-      # this is set -- without it, every book click silently bounces back to the library.
+      # Redundant with the Dockerfile's own ENV of the same name (kept here just so it's visible
+      # from this file too) -- the Dockerfile's copy is the one that actually matters, since
+      # next.config.mjs reads this at `next build` time, not per-request, so it has to be set before
+      # the image is built, not just when the container starts. See the Dockerfile's own comment.
       - MANIFEST_ROUTE_FORCE_ENABLE=true
     ports:
       - "3000:3000"
