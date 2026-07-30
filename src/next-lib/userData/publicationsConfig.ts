@@ -189,6 +189,26 @@ export function getLoginAccentTextColor(): string {
   return isLightColor(getLoginAccentColor()) ? "#101010" : "#fff";
 }
 
+export type LoginThemeMode = "light" | "dark";
+
+// CLAUDE-ADDED: Same reasoning as loginAccentColor above -- /login, /admin, and /setup render
+// before/outside any session, so their dark/light mode can't come from a signed-in user's synced
+// preference (StatefulLibraryMenu's theme, which lives in that user's libraryPrefs.json) the way
+// the rest of the app's does. Previously these three pages fell back to whatever the *browser's*
+// localStorage/system preference happened to be (layout.tsx's blocking script, keyed off a
+// different, per-device setting) -- this makes it an explicit admin-wide choice, stored and read
+// the same server-side way as the accent color right above.
+const DEFAULT_LOGIN_THEME_MODE: LoginThemeMode = "light";
+
+export function getLoginThemeMode(): LoginThemeMode {
+  const configured = readConfigFile().loginThemeMode;
+  return configured === "dark" ? "dark" : DEFAULT_LOGIN_THEME_MODE;
+}
+
+export function setLoginThemeMode(mode: LoginThemeMode): void {
+  writeConfigFile({ loginThemeMode: mode });
+}
+
 // CLAUDE-ADDED: Defaults to a "UserData" folder nested inside the publications dir (unchanged
 // behavior from before this was configurable) unless the user has explicitly set an independent
 // location via the Settings panel -- see setUserDataDirOverride, which migrates existing data into

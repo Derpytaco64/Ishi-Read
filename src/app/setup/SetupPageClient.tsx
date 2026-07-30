@@ -11,6 +11,7 @@ import styles from "./setup.module.css";
 interface SetupPageClientProps {
   accentColor: string;
   accentTextColor: string;
+  themeMode: "light" | "dark";
   booksFolderDefault: string;
   readiumUrlDefault: string;
 }
@@ -20,7 +21,7 @@ interface SetupPageClientProps {
 // books live, where per-user data (positions, highlights, accounts...) is stored, and where the
 // Readium server is reachable. Ongoing changes to these same three settings happen from the admin
 // panel afterward -- this page (and /api/setup) only ever does anything once, ever.
-export default function SetupPageClient({ accentColor, accentTextColor, booksFolderDefault, readiumUrlDefault }: SetupPageClientProps) {
+export default function SetupPageClient({ accentColor, accentTextColor, themeMode, booksFolderDefault, readiumUrlDefault }: SetupPageClientProps) {
   const [booksFolder, setBooksFolder] = useState(booksFolderDefault);
   const [userDataFolder, setUserDataFolder] = useState("");
   const [readiumUrl, setReadiumUrl] = useState("");
@@ -68,6 +69,7 @@ export default function SetupPageClient({ accentColor, accentTextColor, booksFol
   return (
     <main
       className={ styles.page }
+      data-theme={ themeMode }
       style={ { "--th-color-accent": accentColor, "--th-color-accent-text": accentTextColor } as CSSProperties }
     >
       <Image src={ logo } alt="" className={ styles.logo } priority />

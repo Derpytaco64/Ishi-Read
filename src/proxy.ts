@@ -27,6 +27,10 @@ function isPublicPath(pathname: string): boolean {
   // CLAUDE-ADDED: /login needs to read this before any session exists -- it's just a color, not
   // sensitive, and the route itself still gates POST to admins (see its own handler).
   if (pathname === "/api/settings/login-accent-color") return true;
+  // CLAUDE-ADDED: Same reasoning as login-accent-color above -- /login's dark/light mode is now
+  // this same admin-wide, server-side setting instead of the browser's local theme, and /login
+  // needs to read it before any session exists too.
+  if (pathname === "/api/settings/login-theme-mode") return true;
   // CLAUDE-ADDED: Needed so these are reachable during the pre-setup window (see the gate at the
   // top of proxy() below) instead of immediately hitting this same "requires a session" check
   // right after -- there's no session to have yet on a fresh install. The route itself still

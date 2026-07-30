@@ -18,6 +18,7 @@ interface PublicUserSummary {
 interface LoginPageClientProps {
   accentColor: string;
   accentTextColor: string;
+  themeMode: "light" | "dark";
 }
 
 type Stage = "pick" | "password" | "setup";
@@ -38,9 +39,10 @@ function AvatarCircle({ user, className }: { user: PublicUserSummary; className:
 // "next" redirect target reads from location.search directly instead of next/navigation's
 // useSearchParams, which would otherwise force this page behind a <Suspense> boundary for no benefit
 // here (nothing above this component needs to render before it's known).
-// accentColor/accentTextColor come from the server-component wrapper (page.tsx), which reads the
-// admin-configured global setting straight off disk -- no client fetch, no flash of the wrong color.
-export default function LoginPageClient({ accentColor, accentTextColor }: LoginPageClientProps) {
+// accentColor/accentTextColor/themeMode come from the server-component wrapper (page.tsx), which
+// reads the admin-configured global settings straight off disk -- no client fetch, no flash of the
+// wrong color or the wrong light/dark mode.
+export default function LoginPageClient({ accentColor, accentTextColor, themeMode }: LoginPageClientProps) {
   const [nextPath, setNextPath] = useState("/");
   const [users, setUsers] = useState<PublicUserSummary[]>([]);
   const [selected, setSelected] = useState<PublicUserSummary | null>(null);
@@ -158,6 +160,7 @@ export default function LoginPageClient({ accentColor, accentTextColor }: LoginP
   return (
     <main
       className={ styles.page }
+      data-theme={ themeMode }
       style={ { "--th-color-accent": accentColor, "--th-color-accent-text": accentTextColor } as CSSProperties }
     >
       <Image src={ logo } alt="" className={ styles.logo } priority />

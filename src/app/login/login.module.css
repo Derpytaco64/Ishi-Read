@@ -28,7 +28,7 @@
   color: var(--th-color-text);
 }
 
-html[data-theme="dark"] .page {
+.page[data-theme="dark"] {
   --th-color-background: #2b2b2b;
   --th-color-text: #e8e8e8;
   --th-color-text-secondary: #b3b3b3;

@@ -22,6 +22,7 @@ import styles from "./admin.module.css";
 
 interface AdminPageClientProps {
   initialLoginAccentColor: string;
+  initialThemeMode: "light" | "dark";
 }
 
 interface AdminUser {
@@ -46,7 +47,7 @@ function avatarUrlFor(user: AdminUser): string | null {
 // The API routes this talks to (/api/admin/users/*) are already the real authorization boundary
 // (403 for non-admins); the isAdmin check/redirect here is just so a non-admin who navigates here
 // directly sees a normal page instead of a broken one full of 403s.
-export default function AdminPageClient({ initialLoginAccentColor }: AdminPageClientProps) {
+export default function AdminPageClient({ initialLoginAccentColor, initialThemeMode }: AdminPageClientProps) {
   const { user: currentUser, isLoading: isLoadingCurrentUser } = useCurrentUser();
 
   // CLAUDE-ADDED: Also drives this very page's own --th-color-accent (see the <main> below) --
@@ -70,6 +71,30 @@ export default function AdminPageClient({ initialLoginAccentColor }: AdminPageCl
     } catch (err) {
       console.error("Failed to save login accent color:", err);
       setAccentColorError("Failed to save color");
+    }
+  };
+
+  // CLAUDE-ADDED: Same live-updates-this-page pattern as loginAccentColor above -- also drives this
+  // page's own data-theme attribute (see the <main> below), so toggling it recolors the admin panel
+  // immediately, the same way the library menu's own dark-mode switch does for the main app.
+  const [themeMode, setThemeModeState] = useState(initialThemeMode);
+  const [themeModeError, setThemeModeError] = useState<string | null>(null);
+
+  const changeThemeMode = async (isDark: boolean) => {
+    const mode = isDark ? "dark" : "light";
+    setThemeModeState(mode);
+    setThemeModeError(null);
+    try {
+      const res = await fetch("/api/settings/login-theme-mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ loginThemeMode: mode })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) setThemeModeError(data?.error || "Failed to save theme");
+    } catch (err) {
+      console.error("Failed to save login theme mode:", err);
+      setThemeModeError("Failed to save theme");
     }
   };
 
@@ -347,15 +372,15 @@ export default function AdminPageClient({ initialLoginAccentColor }: AdminPageCl
   const pageStyle = { "--th-color-accent": loginAccentColor, "--th-color-accent-text": accentTextColor } as CSSProperties;
 
   if (isLoadingCurrentUser || (!currentUser)) {
-    return <main className={ styles.page } style={ pageStyle }><div className={ styles.card }><p className={ styles.textSettingStatus }>Loading…</p></div></main>;
+    return <main className={ styles.page } data-theme={ themeMode } style={ pageStyle }><div className={ styles.card }><p className={ styles.textSettingStatus }>Loading…</p></div></main>;
   }
 
   if (!currentUser.isAdmin) {
-    return <main className={ styles.page } style={ pageStyle }><div className={ styles.card }><p className={ styles.textSettingStatus }>Redirecting…</p></div></main>;
+    return <main className={ styles.page } data-theme={ themeMode } style={ pageStyle }><div className={ styles.card }><p className={ styles.textSettingStatus }>Redirecting…</p></div></main>;
   }
 
   return (
-    <main className={ styles.page } style={ pageStyle }>
+    <main className={ styles.page } data-theme={ themeMode } style={ pageStyle }>
       <div className={ styles.card }>
         <div className={ styles.headerRow }>
           <h1 className={ styles.heading }>User Management</h1>
@@ -382,6 +407,15 @@ export default function AdminPageClient({ initialLoginAccentColor }: AdminPageCl
               />
             </label>
             { accentColorError && <p className={ styles.textSettingStatusError }>{ accentColorError }</p> }
+
+            <ThSwitch
+              isSelected={ themeMode === "dark" }
+              onChange={ changeThemeMode }
+              label={ themeMode === "dark" ? "Dark mode" : "Light mode" }
+              className={ styles.switch }
+              compounds={{ indicator: { className: styles.switchIndicator } }}
+            />
+            { themeModeError && <p className={ styles.textSettingStatusError }>{ themeModeError }</p> }
           </DisclosurePanel>
         </Disclosure>
 

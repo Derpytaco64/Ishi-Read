@@ -5,7 +5,8 @@ import {
   getPublicationsDir,
   getReadiumServerUrl,
   getLoginAccentColor,
-  getLoginAccentTextColor
+  getLoginAccentTextColor,
+  getLoginThemeMode
 } from "@/next-lib/userData/publicationsConfig";
 
 import SetupPageClient from "./SetupPageClient";
@@ -22,6 +23,7 @@ export default function SetupPage() {
     <SetupPageClient
       accentColor={ getLoginAccentColor() }
       accentTextColor={ getLoginAccentTextColor() }
+      themeMode={ getLoginThemeMode() }
       booksFolderDefault={ getPublicationsDir() }
       readiumUrlDefault={ getReadiumServerUrl() }
     />
