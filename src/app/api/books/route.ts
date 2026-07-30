@@ -207,7 +207,10 @@ function formatFileSize(bytes: number): string {
 }
 
 function findCoverHref(manifest: any): string | null {
-  const collections = [manifest.resources, manifest.readingOrder];
+  // CLAUDE-ADDED: Audiobook (M4B) manifests from the Readium server have no `resources` array --
+  // the cover link lives directly on the top-level `links` array instead, so it has to be checked
+  // too or every audiobook falls back to the generic cover.
+  const collections = [manifest.resources, manifest.readingOrder, manifest.links];
 
   for (const collection of collections) {
     if (!Array.isArray(collection)) continue;
@@ -238,7 +241,7 @@ export async function GET() {
     // slashes and all, so nothing downstream (base64UrlEncode, path.join for stat, etc.) needs to
     // change to support subfolders.
     const files = fs.readdirSync(publicationsDir, { recursive: true }) as string[];
-    const supportedExtensions = [".epub", ".pdf", ".cbz"];
+    const supportedExtensions = [".epub", ".pdf", ".cbz", ".m4b"];
 
     const epubFiles = files.filter((file) =>
       supportedExtensions.includes(path.extname(file).toLowerCase()) &&

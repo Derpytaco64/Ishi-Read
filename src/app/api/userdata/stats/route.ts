@@ -11,7 +11,7 @@ import { UserStats } from "@/lib/userData/statsTypes";
 
 export const runtime = "nodejs";
 
-const LIBRARY_EXTENSIONS = [".epub", ".pdf", ".cbz"];
+const LIBRARY_EXTENSIONS = [".epub", ".pdf", ".cbz", ".m4b"];
 // CLAUDE-ADDED: Safety cap on the backward-walk below -- with real data the loop stops at the first
 // gap day, this only guards against ever spinning on a pathological/corrupt dataset.
 const MAX_STREAK_LOOKBACK_DAYS = 3650;
