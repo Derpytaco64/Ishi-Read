@@ -5,6 +5,7 @@ import path from "path";
 import { getUserDataDir } from "./publicationsConfig";
 import { getUserDir } from "./paths";
 import { readJsonFile, writeJsonFileAtomic } from "./jsonStore";
+import { getAvatarPath } from "./avatarStorage";
 
 // CLAUDE-ADDED: Bootstrap admin keeps the same id the app used back when there was only ever one
 // hardcoded user ("DT") -- every existing on-disk positions/highlights/settings file for that user
@@ -190,13 +191,28 @@ export function getUserByUsername(username: string): UserRecord | null {
   return readUsers().find((u) => u.username.toLowerCase() === needle) ?? null;
 }
 
+// CLAUDE-ADDED: The avatar URL's path never changes across re-uploads (same id, same route), so
+// without a cache-busting query param the browser keeps serving the previously-cached image bytes
+// after a user replaces their picture -- looks exactly like the upload silently did nothing. The
+// upload response already appended Date.now() for this reason, but this is the copy actually shown
+// everywhere else (edit dialog, login picker, admin panel) once the page re-fetches /api/auth/me --
+// stamping it with the avatar file's own mtime keeps it correct there too, and for free on any other
+// page load, without persisting a separate "version" field.
+function getAvatarVersion(userId: string, ext: string): number {
+  try {
+    return fs.statSync(getAvatarPath(userId, ext)).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
 export function toPublicUser(user: UserRecord): PublicUser {
   return {
     id: user.id,
     username: user.username,
     name: user.name,
     isAdmin: user.isAdmin,
-    avatarUrl: user.avatarExt ? `/api/users/${ user.id }/avatar` : null,
+    avatarUrl: user.avatarExt ? `/api/users/${ user.id }/avatar?v=${ getAvatarVersion(user.id, user.avatarExt) }` : null,
     needsPasswordSetup: !user.passwordHash
   };
 }

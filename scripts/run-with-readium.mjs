@@ -26,7 +26,12 @@ const CONFIG_DIR = process.env.ISHI_CONFIG_DIR || path.join(os.homedir(), ".conf
 const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 
 const READIUM_BIN = process.env.READIUM_BIN || path.join(root, "readium_linux_x86_64", "readium");
-const READIUM_ADDRESS = "localhost";
+// CLAUDE-ADDED: "localhost" only accepts connections from inside this same container's network
+// namespace -- fine for bare-metal (browser and server are the same machine) but unreachable from a
+// reverse proxy running as its own container, since it arrives via the container's docker-network
+// interface, not its loopback. Override to 0.0.0.0 for any deployment putting something (nginx, etc.)
+// in front of this on a different container/host.
+const READIUM_ADDRESS = process.env.READIUM_ADDRESS || "localhost";
 
 function getConfiguredBookFolder() {
   try {

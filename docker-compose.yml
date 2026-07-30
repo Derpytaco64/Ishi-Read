@@ -13,8 +13,13 @@ services:
       # it exists only because this is reached over plain http://<ip>:3000 with nothing encrypting
       # the connection, and browsers silently discard Secure cookies on non-https origins.
       - ISHI_INSECURE_COOKIES=true
+      # Lets a reverse proxy running in a different container/host reach the Readium server --
+      # it binds to loopback-only by default, which only a process inside this same container can
+      # reach. See READIUM_ADDRESS in scripts/run-with-readium.mjs.
+      - READIUM_ADDRESS=0.0.0.0
     ports:
       - "3000:3000"
+      - "15080:15080"
     volumes:
       # Left side is yours to point wherever you want on this host -- create the
       # directories yourself first (e.g. `mkdir -p ./config ./books` next to this
