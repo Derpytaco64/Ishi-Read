@@ -1,0 +1,3 @@
+git pull
+docker build -t dt64/ishi-read:latest .
+docker push dt64/ishi-read:latest
