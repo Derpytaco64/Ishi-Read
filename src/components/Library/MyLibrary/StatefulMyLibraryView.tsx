@@ -6,7 +6,7 @@ import Image from "next/image";
 import { Publication, PublicationGrid } from "@/components/Misc/PublicationGrid";
 import { ThDropdown } from "@/core/Components/Settings/ThDropdown/ThDropdown";
 
-import { DEFAULT_SORT_MODE, SORT_OPTIONS, SortMode, sortEntries } from "@/components/Library/sortPublications";
+import { SORT_OPTIONS, SortMode, sortEntries } from "@/components/Library/sortPublications";
 
 import styles from "./assets/styles/thorium-web.myLibraryView.module.css";
 
@@ -43,7 +43,10 @@ export const StatefulMyLibraryView = ({
   title = "My Library",
   emptyMessage = "Your library is empty."
 }: StatefulMyLibraryViewProps) => {
-  const [sortMode, setSortMode] = useState<SortMode>(DEFAULT_SORT_MODE);
+  // CLAUDE-ADDED: Books/Audiobooks default to Alphabetical (A-Z), unlike DEFAULT_SORT_MODE
+  // ("Date Added (Newest)") used elsewhere (e.g. custom shelves) -- deliberately not sharing that
+  // constant since changing it would also change every custom shelf's default.
+  const [sortMode, setSortMode] = useState<SortMode>("titleAsc");
 
   // CLAUDE-ADDED: Unlike StatefulShelfView, "added" here is Publication.addedAt itself (added to
   // the library) -- there's no shelf-specific timestamp since this is the whole library, not a
