@@ -18,6 +18,15 @@ const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const SESSION_COOKIE_NAME = "ishi_session";
 
+// CLAUDE-ADDED: Secure-by-default (browsers silently drop a Secure cookie set over plain HTTP, which
+// otherwise looks exactly like "login succeeds but you're immediately bounced back to /login" --
+// the session really was created, the cookie just never got stored). ISHI_INSECURE_COOKIES is an
+// explicit opt-out for LAN-only/plain-HTTP deployments (e.g. a Docker container reached by raw IP
+// with no TLS-terminating reverse proxy in front of it) that still want NODE_ENV=production's other
+// behavior. Leave unset for anything reachable over the open internet.
+export const SESSION_COOKIE_SECURE =
+  process.env.NODE_ENV === "production" && process.env.ISHI_INSECURE_COOKIES !== "true";
+
 export interface UserRecord {
   id: string;
   username: string;

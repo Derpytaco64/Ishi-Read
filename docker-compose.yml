@@ -9,6 +9,10 @@ services:
     environment:
       - PUID=0
       - PGID=0
+      # Remove this if you ever put a TLS-terminating reverse proxy in front of this container --
+      # it exists only because this is reached over plain http://<ip>:3000 with nothing encrypting
+      # the connection, and browsers silently discard Secure cookies on non-https origins.
+      - ISHI_INSECURE_COOKIES=true
     ports:
       - "3000:3000"
     volumes:

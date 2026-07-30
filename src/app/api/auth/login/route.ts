@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { attemptLogin, createSession, SESSION_COOKIE_NAME } from "@/next-lib/userData/auth";
+import { attemptLogin, createSession, SESSION_COOKIE_NAME, SESSION_COOKIE_SECURE } from "@/next-lib/userData/auth";
 
 export const runtime = "nodejs";
 
@@ -29,10 +29,7 @@ export async function POST(request: Request) {
   const response = NextResponse.json({ ok: true });
   response.cookies.set(SESSION_COOKIE_NAME, createSession(result.userId!), {
     httpOnly: true,
-    // CLAUDE-ADDED: Only relaxed for local dev over plain http -- a remotely-reachable deployment
-    // must run with NODE_ENV=production (which `next start` sets) so this cookie is never sent
-    // over an unencrypted connection.
-    secure: process.env.NODE_ENV === "production",
+    secure: SESSION_COOKIE_SECURE,
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS
