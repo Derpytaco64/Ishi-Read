@@ -24,12 +24,23 @@ export interface StatefulSeriesViewProps {
   // series' detail page -- read once as this component's initial state rather than a fully
   // controlled prop, since page.tsx only ever mounts this component fresh when navigating into
   // the Series tab (it's conditionally rendered on activeView), so a plain initial value is enough
-  // to land on the right series without needing an effect to react to later prop changes.
-  initialSelectedSeries?: string | null;
+  // to land on the right series without needing an effect to react to later prop changes. Must be
+  // built with seriesKey() below, not a bare series name -- see that function's comment.
+  initialSelectedSeriesKey?: string | null;
+}
+
+// CLAUDE-ADDED: The same series name can legitimately exist twice -- once as an ebook series, once
+// as an audiobook series (e.g. bought the audiobook of a series you already have in EPUB) -- so
+// grouping/selection is keyed on name+format, not name alone, or the two would merge into one card
+// mixing formats. Exported so page.tsx's "Go to Series" can build the same key from a Publication.
+export function seriesKey(name: string, isAudiobook: boolean): string {
+  return `${ name }::${ isAudiobook ? "audiobook" : "ebook" }`;
 }
 
 interface SeriesSlot {
+  key: string;
   name: string;
+  isAudiobook: boolean;
   books: Publication[];
   center: Publication;
   left: Publication | null;
@@ -81,37 +92,40 @@ export const StatefulSeriesView = ({
   progressByUrl,
   onSelectBook,
   onContextMenu,
-  initialSelectedSeries
+  initialSelectedSeriesKey
 }: StatefulSeriesViewProps) => {
-  const [selectedSeries, setSelectedSeries] = useState<string | null>(initialSelectedSeries ?? null);
+  const [selectedSeries, setSelectedSeries] = useState<string | null>(initialSelectedSeriesKey ?? null);
   const [sortDirection, setSortDirection] = useState<SeriesSortDirection>(DEFAULT_SERIES_SORT_DIRECTION);
 
-  // CLAUDE-ADDED: One slot per series, sorted alphabetically by series name. Each slot's "center"
-  // cover is that series' own first book by series.position (same ordering as the drill-down list
-  // below), falling back to title when position is missing or tied.
+  // CLAUDE-ADDED: One slot per (series name, format) pair, sorted alphabetically by series name --
+  // grouped by seriesKey() rather than name alone so an audiobook series never merges with an
+  // ebook series of the same name. Each slot's "center" cover is that series' own first book by
+  // series.position (same ordering as the drill-down list below), falling back to title when
+  // position is missing or tied.
   // Recomputed only when the book list itself changes, so the two random flanking covers don't
   // reshuffle on every unrelated re-render (e.g. reading progress ticking in elsewhere).
   const seriesSlots = useMemo<SeriesSlot[]>(() => {
     const groups = new Map<string, Publication[]>();
     for (const book of books) {
       if (!book.series?.name) continue;
-      const group = groups.get(book.series.name);
+      const key = seriesKey(book.series.name, !!book.isAudiobook);
+      const group = groups.get(key);
       if (group) {
         group.push(book);
       } else {
-        groups.set(book.series.name, [book]);
+        groups.set(key, [book]);
       }
     }
 
     return Array.from(groups.entries())
-      .map(([name, seriesBooks]) => {
+      .map(([key, seriesBooks]) => {
         const sortedByPosition = [...seriesBooks].sort((a, b) => {
           const posDiff = (a.series?.position ?? Number.MAX_SAFE_INTEGER) - (b.series?.position ?? Number.MAX_SAFE_INTEGER);
           return posDiff !== 0 ? posDiff : a.title.localeCompare(b.title);
         });
         const [center, ...rest] = sortedByPosition;
         const [left, right] = pickFlankingCovers(rest);
-        return { name, books: seriesBooks, center, left, right };
+        return { key, name: center.series!.name, isAudiobook: !!center.isAudiobook, books: seriesBooks, center, left, right };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [books]);
@@ -119,18 +133,22 @@ export const StatefulSeriesView = ({
   // CLAUDE-ADDED: Falls back out of a selection whose series disappeared (e.g. its last book was
   // removed) rather than leaving the drill-down section showing stale/empty content.
   useEffect(() => {
-    if (selectedSeries && !seriesSlots.some((slot) => slot.name === selectedSeries)) {
+    if (selectedSeries && !seriesSlots.some((slot) => slot.key === selectedSeries)) {
       setSelectedSeries(null);
     }
   }, [selectedSeries, seriesSlots]);
 
-  const selectedBooks = useMemo(() => {
-    const slot = seriesSlots.find((s) => s.name === selectedSeries);
-    if (!slot) return [];
+  const selectedSlot = useMemo(
+    () => seriesSlots.find((s) => s.key === selectedSeries) ?? null,
+    [seriesSlots, selectedSeries]
+  );
 
-    const sorted = [...slot.books].sort((a, b) => (a.series?.position ?? 0) - (b.series?.position ?? 0));
+  const selectedBooks = useMemo(() => {
+    if (!selectedSlot) return [];
+
+    const sorted = [...selectedSlot.books].sort((a, b) => (a.series?.position ?? 0) - (b.series?.position ?? 0));
     return sortDirection === "lastToFirst" ? sorted.reverse() : sorted;
-  }, [seriesSlots, selectedSeries, sortDirection]);
+  }, [selectedSlot, sortDirection]);
 
   if (seriesSlots.length === 0) {
     return (
@@ -165,7 +183,7 @@ export const StatefulSeriesView = ({
             <BackIcon aria-hidden="true" focusable="false" className={ styles.backIcon } />
             Back
           </button>
-          <h1>{ selectedSeries }</h1>
+          <h1>{ selectedSlot?.name }{ selectedSlot?.isAudiobook && " (Audiobook)" }</h1>
         </header>
 
         <div className={ styles.sortPicker }>
@@ -215,7 +233,7 @@ export const StatefulSeriesView = ({
           <button
             type="button"
             className={ styles.slot }
-            onClick={ () => setSelectedSeries(slot.name) }
+            onClick={ () => setSelectedSeries(slot.key) }
           >
             <span className={ styles.fan }>
               { slot.left && (
@@ -229,7 +247,7 @@ export const StatefulSeriesView = ({
                    (translateY(100%)) until this cover is hovered/focused, then it slides up over it. */ }
               <span className={ styles.fanCoverCenterWrap }>
                 <img src={ slot.center.cover } alt="" className={ styles.fanCoverCenterImage } />
-                <span className={ styles.fanTitle }>{ slot.name }</span>
+                <span className={ styles.fanTitle }>{ slot.name }{ slot.isAudiobook && " (Audiobook)" }</span>
               </span>
             </span>
           </button>

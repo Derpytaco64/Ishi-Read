@@ -5,7 +5,7 @@ import type { MouseEvent } from "react";
 import { Publication, PublicationGrid } from "@/components/Misc/PublicationGrid";
 import { StatefulLibraryMenu } from "@/components/Library/LibraryMenu/StatefulLibraryMenu";
 import { StatefulBookSheet } from "@/components/Library/BookSheet/StatefulBookSheet";
-import { StatefulSeriesView } from "@/components/Library/SeriesView/StatefulSeriesView";
+import { StatefulSeriesView, seriesKey } from "@/components/Library/SeriesView/StatefulSeriesView";
 import { StatefulMyLibraryView } from "@/components/Library/MyLibrary/StatefulMyLibraryView";
 import { StatefulShelfView } from "@/components/Library/CustomShelves/StatefulShelfView";
 import { StatefulShelfFormModal } from "@/components/Library/CustomShelves/StatefulShelfFormModal";
@@ -171,11 +171,12 @@ export default function Home() {
   // persisted (unlike activeView/activeShelfId) since it's just "land on this series once", not a
   // preference. StatefulSeriesView only reads it as its initial selectedSeries state, which works
   // because it's conditionally rendered on activeView -- switching into "series" always mounts it
-  // fresh, so a plain initial value (no effect needed) is enough to land on the right series.
+  // fresh, so a plain initial value (no effect needed) is enough to land on the right series. Holds
+  // a seriesKey() (name+format), not a bare name -- see StatefulSeriesView's comment on why.
   const [seriesToOpen, setSeriesToOpen] = useState<string | null>(null);
 
-  const navigateToSeries = (seriesName: string) => {
-    setSeriesToOpen(seriesName);
+  const navigateToSeries = (seriesKeyValue: string) => {
+    setSeriesToOpen(seriesKeyValue);
     navigateTo("series");
   };
 
@@ -505,7 +506,7 @@ export default function Home() {
             setIsBookSheetOpen(true);
           } }
           onContextMenu={ openContextMenu }
-          initialSelectedSeries={ seriesToOpen }
+          initialSelectedSeriesKey={ seriesToOpen }
         />
       ) }
 
@@ -629,7 +630,7 @@ export default function Home() {
         } }
         onGoToSeries={ (publication) => {
           if (publication.series?.name) {
-            navigateToSeries(publication.series.name);
+            navigateToSeries(seriesKey(publication.series.name, !!publication.isAudiobook));
           }
           setContextMenuState(null);
         } }

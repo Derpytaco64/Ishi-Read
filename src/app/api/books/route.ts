@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { parseFile } from "music-metadata";
 import { getPublicationsDir, getReadiumServerUrl } from "@/next-lib/userData/publicationsConfig";
 import { resolveBookIdentity } from "@/next-lib/userData/bookIdentity";
 import { getPositionFilePath } from "@/next-lib/userData/paths";
@@ -113,6 +114,33 @@ function extractSeries(belongsTo: any): Series | null {
 
   const position = typeof entry?.position === "number" ? entry.position : undefined;
   return { name, position };
+}
+
+// CLAUDE-ADDED: Readium's manifest for M4B audiobooks never has a belongsTo.series -- confirmed
+// against the bundled Go server (v0.15.1), its M4B parser only surfaces title/author/description/
+// duration/chapters, not the series info audiobook tools embed. That series info does exist in the
+// file itself though, in the MP4 "grouping" (©grp) atom -- Audiobookshelf/Plex/etc. convention is
+// "Series Name #N" or "Series Name, Book N", so this reads the tag directly off disk instead of
+// going through Readium at all. Falls back to the file's own track number for position when the
+// grouping text has no embedded number (still labeled a series, just unordered within it).
+async function extractAudiobookSeries(filePath: string): Promise<Series | null> {
+  try {
+    const { common } = await parseFile(filePath, { duration: false, skipCovers: true });
+    const grouping = common.grouping?.trim();
+    if (!grouping) return null;
+
+    const match = grouping.match(/^(.*?),?\s*(?:#|Book\s+)(\d+(?:\.\d+)?)\s*$/i);
+    if (match) {
+      const name = match[1].trim();
+      if (name) return { name, position: Number(match[2]) };
+    }
+
+    const trackNo = common.track?.no;
+    return { name: grouping, position: typeof trackNo === "number" ? trackNo : undefined };
+  } catch (err) {
+    console.error(`Could not read audiobook tags for ${filePath}:`, err);
+    return null;
+  }
 }
 
 // CLAUDE-ADDED: manifest.metadata.subject is either an array of plain strings or an array of
@@ -316,6 +344,9 @@ export async function GET() {
               }
 
               series = extractSeries(manifest.metadata?.belongsTo);
+              if (isAudiobook) {
+                series = await extractAudiobookSeries(path.join(publicationsDir, file));
+              }
               description = extractDescription(manifest.metadata?.description);
               // publisher is Contributor-shaped per the RWPM spec, same as author -- reuse that
               // extraction rather than assuming it's always a plain string.
