@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { ErrorDisplay, StatefulLoader } from "@/components/Misc";
+import { ThI18nProvider } from "@/i18n/ThI18nProvider";
 import { PUBLICATION_MANIFESTS } from "@/config/publications";
 import { usePublication } from "@/hooks/usePublication";
 import { useServerPosition } from "@/hooks/useServerPosition";
@@ -80,17 +81,21 @@ export default function BookPage({ params }: Props) {
   }, [manifestUrl, dispatch]);
 
   if (domainError) {
+    // CLAUDE-ADDED: See read/manifest/[manifest]/page.tsx's identical comment -- ThI18nProvider
+    // otherwise only mounts inside StatefulReaderWrapper, which never renders on an error path.
     return (
-      <ErrorDisplay
-        error={ domainError }
-      />
+      <ThI18nProvider>
+        <ErrorDisplay error={ domainError } />
+      </ThI18nProvider>
     );
   }
 
   return (
     <>
       { error ? (
-        <ErrorDisplay error={ error } />
+        <ThI18nProvider>
+          <ErrorDisplay error={ error } />
+        </ThI18nProvider>
       ) : publication && !positionLoading ? (
         // CLAUDE-ADDED: positionLoading gates the mount itself, not just the isLoading prop below --
         // StatefulReaderWrapper's internal StatefulLoader always renders its children underneath the

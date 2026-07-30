@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { ErrorDisplay, StatefulLoader } from "@/components/Misc";
+import { ThI18nProvider } from "@/i18n/ThI18nProvider";
 import { usePublication } from "@/hooks/usePublication";
 import { useServerPosition } from "@/hooks/useServerPosition";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
@@ -73,16 +74,24 @@ export default function ManifestPage({ params }: Props) {
 
   if (domainError) {
     return (
-      <ErrorDisplay
-        error={ domainError }
-      />
+      // CLAUDE-ADDED: ThI18nProvider otherwise only mounts inside StatefulReaderWrapper, which never
+      // renders on an error path -- without this, useI18n()'s useTranslation() runs against an
+      // uninitialized global i18next instance and every t() call falls back to returning the raw
+      // key ("reader.app.errors.generic" etc.) instead of real text. Scoped to just the error
+      // branches (not the whole page) so the normal loading/reading path isn't stuck waiting on an
+      // i18n init + locale fetch it never needed before.
+      <ThI18nProvider>
+        <ErrorDisplay error={ domainError } />
+      </ThI18nProvider>
     );
   }
 
   return (
     <>
       { error ? (
-        <ErrorDisplay error={ error } />
+        <ThI18nProvider>
+          <ErrorDisplay error={ error } />
+        </ThI18nProvider>
       ) : publication && !positionLoading ? (
         // CLAUDE-ADDED: positionLoading gates the mount itself -- see read/[identifier]/page.tsx for why.
         <StatefulReaderWrapper
