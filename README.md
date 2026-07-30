@@ -10,6 +10,11 @@ I cloned the thorium repository and have been vibecodin the fuck out of it so th
 ![](./screenshots/Screenshot_20260725_011514.png)
 ![](./screenshots/Screenshot_20260725_011536.png)
 
+# Install
+- For now I think you can just install it from docker hub? dt64/ishi-read/
+- You will need to set up a reverse proxy through something like nginx for readium to be able to provide things like covers, metadata, and and everything else. Theres also a set up wizard that I think is working?
+
+
 # Planned Features
 ## Progress Tracking
 - ~~Base thorium appears to save book position in your browser's local storage instead of alongside the server's files~~
