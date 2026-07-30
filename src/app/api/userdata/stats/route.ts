@@ -51,8 +51,12 @@ export async function GET() {
   // this is library-wide size, not a per-user count of books owned.
   let booksInLibrary = 0;
   try {
-    booksInLibrary = fs.readdirSync(getPublicationsDir())
-      .filter(file => LIBRARY_EXTENSIONS.includes(path.extname(file).toLowerCase()))
+    const publicationsDir = getPublicationsDir();
+    booksInLibrary = (fs.readdirSync(publicationsDir, { recursive: true }) as string[])
+      .filter(file =>
+        LIBRARY_EXTENSIONS.includes(path.extname(file).toLowerCase()) &&
+        fs.statSync(path.join(publicationsDir, file)).isFile()
+      )
       .length;
   } catch {
     booksInLibrary = 0;

@@ -231,11 +231,18 @@ export async function GET() {
   try {
     const publicationsDir = getPublicationsDir();
     const readiumServerUrl = getReadiumServerUrl();
-    const files = fs.readdirSync(publicationsDir);
+    // recursive readdirSync returns paths relative to publicationsDir (e.g.
+    // "Series/Book 1.epub"), directories included -- isFile() below drops the directory entries
+    // themselves. The Readium server already resolves these relative paths fine (confirmed against
+    // the bundled binary): its base64url-encoded manifest URL segment is the whole relative path,
+    // slashes and all, so nothing downstream (base64UrlEncode, path.join for stat, etc.) needs to
+    // change to support subfolders.
+    const files = fs.readdirSync(publicationsDir, { recursive: true }) as string[];
     const supportedExtensions = [".epub", ".pdf", ".cbz"];
 
     const epubFiles = files.filter((file) =>
-      supportedExtensions.includes(path.extname(file).toLowerCase())
+      supportedExtensions.includes(path.extname(file).toLowerCase()) &&
+      fs.statSync(path.join(publicationsDir, file)).isFile()
     );
 
     // CLAUDE-ADDED: Promise.allSettled (rather than Promise.all) so that a book whose per-file processing throws outside the inner try/catch (e.g. a stat() failure) can't take down the whole response — it just falls back below instead of rejecting the entire batch.
