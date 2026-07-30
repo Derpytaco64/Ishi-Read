@@ -8,9 +8,10 @@ RUN npm install -g pnpm
 
 WORKDIR /app
 
-# Matches the real Steam Deck paths so the existing ~/.config/ishi-read/config.json
-# (book folder, readium port, users, etc.) keeps working unmodified when bind-mounted in.
+# HOME still drives the book-folder default (see DEFAULT_PUBLICATIONS_DIR) -- ISHI_CONFIG_DIR
+# moves config.json/users.json to a clean, dedicated mount point instead of ~/.config/ishi-read.
 ENV HOME=/home/deck
+ENV ISHI_CONFIG_DIR=/config
 ENV NODE_ENV=production
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./

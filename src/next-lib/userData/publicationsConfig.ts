@@ -22,7 +22,9 @@ export const DEFAULT_LOGIN_ACCENT_COLOR = "#2f6fed";
 // admin-configurable, so none of them can be plain exported constants -- all persist here, in a
 // file outside PUBLICATIONS_DIR itself (changing the folder must never strand the file that
 // remembers what the folder is).
-const CONFIG_DIR = path.join(os.homedir(), ".config", "ishi-read");
+// ISHI_CONFIG_DIR lets a container deployment mount this at a clean, dedicated path (e.g. /config)
+// instead of the bare-metal default of ~/.config/ishi-read -- unset, behavior is unchanged.
+const CONFIG_DIR = process.env.ISHI_CONFIG_DIR || path.join(os.homedir(), ".config", "ishi-read");
 const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 
 function readConfigFileUncached(): Record<string, unknown> {

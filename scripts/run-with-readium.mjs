@@ -21,7 +21,9 @@ const root = path.join(__dirname, "..");
 // directly and has to duplicate the handful of values instead.
 const DEFAULT_PUBLICATIONS_DIR = "/home/deck/Documents/epubs";
 const DEFAULT_READIUM_PORT = 15080;
-const CONFIG_FILE = path.join(os.homedir(), ".config", "ishi-read", "config.json");
+// CLAUDE-ADDED: Mirrors publicationsConfig.ts's own ISHI_CONFIG_DIR override -- keep in sync.
+const CONFIG_DIR = process.env.ISHI_CONFIG_DIR || path.join(os.homedir(), ".config", "ishi-read");
+const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 
 const READIUM_BIN = process.env.READIUM_BIN || path.join(root, "readium_linux_x86_64", "readium");
 const READIUM_ADDRESS = "localhost";
