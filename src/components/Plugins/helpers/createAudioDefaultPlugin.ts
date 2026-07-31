@@ -22,6 +22,8 @@ import { StatefulAudioTocTrigger } from "../../Audio/actions/Toc/StatefulAudioTo
 import { StatefulAudioTocContainer } from "../../Audio/actions/Toc/StatefulAudioTocContainer";
 import { StatefulAudioSleepTimerTrigger } from "../../Audio/actions/SleepTimer/StatefulAudioSleepTimerTrigger";
 import { StatefulAudioSleepTimerContainer } from "../../Audio/actions/SleepTimer/StatefulAudioSleepTimerContainer";
+import { StatefulAudioListeningTimerTrigger } from "../../Audio/actions/ListeningTimer/StatefulAudioListeningTimerTrigger";
+import { StatefulAudioListeningTimerContainer } from "../../Audio/actions/ListeningTimer/StatefulAudioListeningTimerContainer";
 import { StatefulAudioRemotePlaybackTrigger } from "../../Audio/actions/RemotePlayback/StatefulAudioRemotePlaybackTrigger";
 
 export const createAudioDefaultPlugin = (): ThPlugin => {
@@ -52,6 +54,7 @@ export const createAudioDefaultPlugin = (): ThPlugin => {
         [ThAudioActionKeys.playbackRate]: { Trigger: StatefulAudioPlaybackRateTrigger, Target: StatefulAudioPlaybackRateContainer },
         [ThAudioActionKeys.toc]:          { Trigger: StatefulAudioTocTrigger,          Target: StatefulAudioTocContainer },
         [ThAudioActionKeys.sleepTimer]:   { Trigger: StatefulAudioSleepTimerTrigger,   Target: StatefulAudioSleepTimerContainer },
+        [ThAudioActionKeys.listeningTimer]: { Trigger: StatefulAudioListeningTimerTrigger, Target: StatefulAudioListeningTimerContainer },
       },
       settings: {
         [ThAudioKeys.theme]: {

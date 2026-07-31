@@ -9,6 +9,7 @@ import actionsReducer, { ActionsReducerState, ActionStateObject } from "@/lib/ac
 import publicationReducer, { PublicationReducerState } from "./publicationReducer";
 import annotationsReducer, { AnnotationsReducerState } from "./annotationsReducer";
 import readingTimeReducer, { ReadingTimeReducerState } from "./readingTimeReducer";
+import listeningTimeReducer, { ListeningTimeReducerState } from "./listeningTimeReducer";
 import preferencesReducer, { PreferencesReducerState } from "./preferencesReducer";
 import globalPreferencesReducer, { GlobalPreferencesReducerState } from "./globalPreferencesReducer";
 import webPubSettingsReducer, { WebPubSettingsReducerState } from "./webPubSettingsReducer";
@@ -38,6 +39,7 @@ export type RootState = {
   publication: PublicationReducerState;
   annotations: AnnotationsReducerState;
   readingTime: ReadingTimeReducerState;
+  listeningTime: ListeningTimeReducerState;
   preferences: PreferencesReducerState;
   globalPreferences: GlobalPreferencesReducerState;
   webPubSettings: WebPubSettingsReducerState;
@@ -291,6 +293,7 @@ export const makeStore = (storageKey?: string, externalReducers: Record<string, 
     publication: publicationReducer,
     annotations: annotationsReducer,
     readingTime: readingTimeReducer,
+    listeningTime: listeningTimeReducer,
     preferences: preferencesReducer,
     globalPreferences: globalPreferencesReducer,
     webPubSettings: webPubSettingsReducer,

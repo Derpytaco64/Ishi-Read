@@ -415,6 +415,28 @@ export const StatefulUserMenu = () => {
             </div>
 
             <div className={ styles.statSection }>
+              <h3 className={ styles.statSectionHeading }>Audiobooks</h3>
+              <div className={ styles.statGrid }>
+                <div className={ styles.statTile }>
+                  <span className={ styles.statValue }>{ stats.audiobooksInLibrary.toLocaleString() }</span>
+                  <span className={ styles.statLabel }>Audiobooks in Library</span>
+                </div>
+                <div className={ styles.statTile }>
+                  <span className={ styles.statValue }>{ stats.audiobooksStarted.toLocaleString() }</span>
+                  <span className={ styles.statLabel }>Audiobooks Started</span>
+                </div>
+                <div className={ styles.statTile }>
+                  <span className={ styles.statValue }>{ stats.audiobooksFinished.toLocaleString() }</span>
+                  <span className={ styles.statLabel }>Audiobooks Finished</span>
+                </div>
+                <div className={ styles.statTile }>
+                  <span className={ styles.statValue }>{ formatFullReadingTime(stats.totalListeningSeconds, READING_TIME_UNITS) }</span>
+                  <span className={ styles.statLabel }>Time Listened</span>
+                </div>
+              </div>
+            </div>
+
+            <div className={ styles.statSection }>
               <h3 className={ styles.statSectionHeading }>Annotations</h3>
               <div className={ styles.statGrid }>
                 <div className={ styles.statTile }>

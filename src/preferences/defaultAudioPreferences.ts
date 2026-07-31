@@ -20,6 +20,7 @@ import {
   defaultAudioPlaybackRateAction,
   defaultAudioTocAction,
   defaultAudioSleepTimerAction,
+  defaultAudioListeningTimerAction,
   defaultAudioRemotePlaybackAction,
   defaultAudioContentProtectionConfig,
   defaultAudioVolume,
@@ -116,13 +117,15 @@ export const defaultAudioPreferences: ThAudioPreferences<AudioDefaultKeys> =
           ThAudioActionKeys.volume,
           ThAudioActionKeys.playbackRate,
           ThAudioActionKeys.toc,
-          ThAudioActionKeys.sleepTimer
+          ThAudioActionKeys.sleepTimer,
+          ThAudioActionKeys.listeningTimer
         ],
         keys: {
           [ThAudioActionKeys.volume]: defaultAudioVolumeAction,
           [ThAudioActionKeys.playbackRate]: defaultAudioPlaybackRateAction,
           [ThAudioActionKeys.toc]: defaultAudioTocAction,
           [ThAudioActionKeys.sleepTimer]: defaultAudioSleepTimerAction,
+          [ThAudioActionKeys.listeningTimer]: defaultAudioListeningTimerAction,
         }
       },
       secondary: {

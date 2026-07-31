@@ -8,6 +8,7 @@ export enum ThAudioActionKeys {
   volume = "audio.volume",
   playbackRate = "audio.playbackRate",
   sleepTimer = "audio.sleepTimer",
+  listeningTimer = "audio.listeningTimer",
   remotePlayback = "audio.remotePlayback",
 }
 
@@ -127,6 +128,28 @@ export const defaultAudioSleepTimerAction: ThAudioActionsTokens = {
   sheet: {
     defaultSheet: ThSheetTypes.modal,
     breakpoints: { 
+      [ThBreakpoints.compact]: ThSheetTypes.bottomSheet,
+      [ThBreakpoints.medium]: ThSheetTypes.bottomSheet
+    }
+  },
+  snapped: {
+    minHeight: "content-height"
+  },
+  docked: { dockable: ThDockingTypes.none }
+};
+
+// CLAUDE-ADDED: Same shape as defaultAudioSleepTimerAction -- ThAudioActionsTokens' sheet type
+// excludes plain "popover" (only compactPopover/modal/fullscreen/bottomSheet), so this uses "modal"
+// on desktop and drops to a bottomSheet on compact/medium, same as SleepTimer's own panel.
+export const defaultAudioListeningTimerAction: ThAudioActionsTokens = {
+  visibility: ThCollapsibilityVisibility.partially,
+  shortcut: {
+    label: "L",
+    keyCombos: [{ keyCode: 76, shift: true, alt: true, suppressOnInteractiveElement: TEXT_INPUT_SELECTORS }]
+  },
+  sheet: {
+    defaultSheet: ThSheetTypes.modal,
+    breakpoints: {
       [ThBreakpoints.compact]: ThSheetTypes.bottomSheet,
       [ThBreakpoints.medium]: ThSheetTypes.bottomSheet
     }

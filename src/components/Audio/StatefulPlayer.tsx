@@ -35,6 +35,7 @@ import { usePositionStorage } from "@/hooks/usePositionStorage";
 import { useDocumentTitle } from "@/core/Hooks/useDocumentTitle";
 import { useAudioPlayerInit } from "./Hooks/useAudioPlayerInit";
 import { useAudioKeyboardPeripherals } from "./Hooks/useAudioKeyboardPeripherals";
+import { useListeningTimer } from "./Hooks/useListeningTimer";
 import { useFocusedDockableKey } from "../Docking/hooks/useFocusedDockableKey";
 
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
@@ -49,6 +50,7 @@ import {
   setTocEntry,
   setAdjacentTimelineItems,
 } from "@/lib/publicationReducer";
+import { ensureListenStarted, completeListen } from "@/lib/listeningTimeReducer";
 import { findTocItemByHref, TocItem } from "@/helpers/buildTocTree";
 import { isWebKit } from "@/helpers/browser";
 import { TimelineItem } from "@readium/shared";
@@ -148,6 +150,18 @@ const StatefulPlayerInner = ({ publication, localDataKey, positionStorage, cover
 
   const dispatch = useAppDispatch();
   const getFocusedDockableKey = useFocusedDockableKey();
+
+  // CLAUDE-ADDED: Runs the audiobook "minutes listened" ticker for as long as this player is mounted
+  // (see useListeningTimer.ts) -- the reducer's own manifestUrl is set by loadListeningTime, dispatched
+  // from the reader shell page, not derived here. Mirrored into a ref (not read directly in the
+  // listeners below) since AudioNavigatorListeners is a useMemo'd object and refs don't need to be
+  // dependencies.
+  useListeningTimer();
+  const listeningManifestUrl = useAppSelector(state => state.listeningTime.manifestUrl);
+  const listeningManifestUrlRef = useRef(listeningManifestUrl);
+  useEffect(() => {
+    listeningManifestUrlRef.current = listeningManifestUrl;
+  }, [listeningManifestUrl]);
 
   const audioNavigator = useAudioNavigator();
   const { canGoBackward, canGoForward, submitPreferences, pause, isPlaying } = audioNavigator;
@@ -282,12 +296,25 @@ const StatefulPlayerInner = ({ publication, localDataKey, positionStorage, cover
         submitPreferences({ autoPlay: false });
         dispatch(setSleepTimerOnFragmentEnd(false));
       }
+      // CLAUDE-ADDED: Auto-completes the Listening Timer's Completed Listens the moment the
+      // audiobook reaches its end -- guarded to single-item readingOrder (the only shape this app's
+      // .m4b scanning ever produces, see the same guard on the totalProgression backfill above) so a
+      // future multi-track format's per-chapter trackEnded doesn't get mistaken for the whole book
+      // finishing.
+      if (publication.readingOrder.items.length === 1 && listeningManifestUrlRef.current) {
+        dispatch(completeListen(listeningManifestUrlRef.current));
+      }
     },
     metadataLoaded: () => {},
     play: () => {
       if (cache.current.sleepTimerOnTrackEnd) {
         submitPreferences({ autoPlay: cache.current.settings.autoPlay });
         dispatch(setSleepTimerOnTrackEnd(false));
+      }
+      // CLAUDE-ADDED: First play after a load/reset marks the Listening Timer's start date --
+      // ensureListenStarted is a no-op once already set, so this is safe to call on every play.
+      if (listeningManifestUrlRef.current) {
+        dispatch(ensureListenStarted(listeningManifestUrlRef.current));
       }
       dispatch(setStatus("playing"));
     },

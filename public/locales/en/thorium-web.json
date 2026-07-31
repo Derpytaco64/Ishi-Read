@@ -195,6 +195,31 @@
         "instruction": "Playback will pause after the set duration.",
         "remaining": "Pausing in {{ remaining }}"
       }
+    },
+    "listeningTimer": {
+      "tooltip": "Listening time: {{ time }}",
+      "title": "Listening Timer",
+      "totalListened": "Total time listened",
+      "startedOn": "Started listening {{ date }}",
+      "markFinished": "Mark as Finished",
+      "clearStart": "Clear start date",
+      "finishConfirmTitle": "Mark this audiobook as finished?",
+      "finishConfirmText": "This'll save a Completed Listen with today as the finish date.",
+      "delete": "Delete",
+      "deleteConfirmTitle": "Delete this Completed Listen?",
+      "deleteConfirmText": "This can't be undone.",
+      "completedEmptyState": "No completed listens yet.",
+      "started": "Started",
+      "finished": "Finished",
+      "tabs": {
+        "timer": "Timer",
+        "completed": "Completed Listens"
+      },
+      "units": {
+        "seconds": "s",
+        "minutes": "m",
+        "hours": "h"
+      }
     }
   }
 }

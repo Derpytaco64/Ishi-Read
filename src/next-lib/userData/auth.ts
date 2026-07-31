@@ -457,7 +457,25 @@ interface SessionRecord {
   userId: string;
   createdAt: number;
   expiresAt: number;
+  // CLAUDE-ADDED: Last time this session was actually used (see resolveSession's throttled update
+  // below), not just when it was created -- createdAt alone would make a user who logged in three
+  // weeks ago and hasn't touched the app since look identical to one active right now, since
+  // sessions live for SESSION_DURATION_MS (30 days) either way. Optional because sessions created
+  // before this field existed have none until their next request.
+  lastActivityAt?: number;
 }
+
+// CLAUDE-ADDED: How recently a session must have been used to count as "currently active" for the
+// admin panel's status dot (see getActiveUserIds below) -- generous enough to stay lit through
+// normal reading/listening pauses between requests, short enough that closing the tab actually goes
+// stale within a few minutes rather than looking "active" for the full 30-day session lifetime.
+const ACTIVE_WINDOW_MS = 5 * 60 * 1000;
+
+// CLAUDE-ADDED: Only rewrite sessions.json this often per session, even though resolveSession runs
+// on essentially every request (proxy.ts + each route handler) -- without a throttle, active use
+// would mean a disk write on every single page/API request. A minute of staleness on the "active"
+// window is invisible at ACTIVE_WINDOW_MS's 5-minute granularity.
+const ACTIVITY_UPDATE_THROTTLE_MS = 60 * 1000;
 
 type SessionsMap = Record<string, SessionRecord>;
 
@@ -544,11 +562,36 @@ export function resolveSession(token: string | undefined | null): string | null 
   const session = sessions[token];
   if (!session) return null;
 
-  if (session.expiresAt < Date.now()) {
+  const now = Date.now();
+
+  if (session.expiresAt < now) {
     delete sessions[token];
     writeSessions(sessions);
     return null;
   }
 
+  if (!session.lastActivityAt || now - session.lastActivityAt > ACTIVITY_UPDATE_THROTTLE_MS) {
+    session.lastActivityAt = now;
+    writeSessions(sessions);
+  }
+
   return session.userId;
+}
+
+// CLAUDE-ADDED: Powers the admin panel's per-user status dot -- a user counts as "currently active"
+// if any of their (still-valid) sessions was used within ACTIVE_WINDOW_MS, across however many
+// devices/tabs they're signed in on.
+export function getActiveUserIds(): Set<string> {
+  const sessions = readSessions();
+  const now = Date.now();
+  const active = new Set<string>();
+
+  for (const session of Object.values(sessions)) {
+    if (session.expiresAt < now) continue;
+    if (session.lastActivityAt && now - session.lastActivityAt <= ACTIVE_WINDOW_MS) {
+      active.add(session.userId);
+    }
+  }
+
+  return active;
 }

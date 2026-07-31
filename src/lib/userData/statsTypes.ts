@@ -13,4 +13,12 @@ export interface UserStats {
   highlightsCount: number;
   bookmarksCount: number;
   notesCount: number;
+  // CLAUDE-ADDED: Audiobook counterparts to the ebook fields above -- deliberately kept separate
+  // (not folded into booksInLibrary/booksStarted/etc.) so the stats page can show them as their own
+  // section instead of mixing formats. See listeningTimeTypes.ts for why there's no averageWpm/
+  // totalWordsRead/currentStreakDays equivalent here.
+  audiobooksInLibrary: number;
+  audiobooksStarted: number;
+  audiobooksFinished: number;
+  totalListeningSeconds: number;
 }

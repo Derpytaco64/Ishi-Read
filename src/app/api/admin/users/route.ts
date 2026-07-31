@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { createUser, listUsers } from "@/next-lib/userData/auth";
+import { createUser, listUsers, getActiveUserIds } from "@/next-lib/userData/auth";
 import { getCurrentUser } from "@/next-lib/userData/session";
 
 export const runtime = "nodejs";
@@ -20,7 +20,10 @@ export async function GET() {
   const admin = await getCurrentUser();
   if (!admin?.isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  return NextResponse.json({ users: listUsers().map(stripSecrets) });
+  const activeUserIds = getActiveUserIds();
+  const users = listUsers().map((user) => ({ ...stripSecrets(user), isActive: activeUserIds.has(user.id) }));
+
+  return NextResponse.json({ users });
 }
 
 export async function POST(request: Request) {

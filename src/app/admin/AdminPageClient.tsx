@@ -35,6 +35,9 @@ interface AdminUser {
   lockedUntil: number | null;
   createdAt: number;
   disabled: boolean;
+  // CLAUDE-ADDED: Whether any of this user's sessions was used in the last few minutes -- see
+  // getActiveUserIds in next-lib/userData/auth.ts. Drives the status dot on their avatar below.
+  isActive: boolean;
 }
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -189,8 +192,10 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
   const [resetPasswordId, setResetPasswordId] = useState<string | null>(null);
   const [resetPasswordValue, setResetPasswordValue] = useState("");
 
-  const loadUsers = async () => {
-    setIsLoadingUsers(true);
+  // CLAUDE-ADDED: silent skips the isLoadingUsers toggle -- used by the periodic status-dot refresh
+  // below so it swaps the list's data in place instead of flashing "Loading…" over it every 30s.
+  const loadUsers = async (silent = false) => {
+    if (!silent) setIsLoadingUsers(true);
     setListError(null);
     try {
       const res = await fetch("/api/admin/users");
@@ -204,12 +209,21 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
       console.error("Failed to load users:", err);
       setListError("Failed to load users");
     } finally {
-      setIsLoadingUsers(false);
+      if (!silent) setIsLoadingUsers(false);
     }
   };
 
   useEffect(() => {
-    if (currentUser?.isAdmin) loadUsers();
+    if (!currentUser?.isAdmin) return;
+
+    loadUsers();
+
+    // CLAUDE-ADDED: The status dot reflects a moving "active in the last few minutes" window (see
+    // getActiveUserIds), so it needs to keep refreshing on its own rather than only updating after
+    // this admin's own actions -- otherwise a dot would only ever go stale, never flip back to red
+    // once someone's session actually goes quiet.
+    const intervalId = window.setInterval(() => loadUsers(true), 30_000);
+    return () => window.clearInterval(intervalId);
   }, [currentUser]);
 
   useEffect(() => {
@@ -678,12 +692,20 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
                   return (
                     <li key={ user.id } className={ styles.userRow }>
                       <span className={ styles.avatar }>
-                        { avatarUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={ avatarUrl } alt="" className={ styles.avatarImg } />
-                        ) : (
-                          <span aria-hidden="true">{ user.name.charAt(0).toUpperCase() }</span>
-                        ) }
+                        <span className={ styles.avatarInner }>
+                          { avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={ avatarUrl } alt="" className={ styles.avatarImg } />
+                          ) : (
+                            <span aria-hidden="true">{ user.name.charAt(0).toUpperCase() }</span>
+                          ) }
+                        </span>
+                        <span
+                          className={ classNames(styles.statusDot, user.isActive ? styles.statusDotActive : styles.statusDotInactive) }
+                          role="img"
+                          aria-label={ user.isActive ? "Active now" : "Not connected" }
+                          title={ user.isActive ? "Active now" : "Not connected" }
+                        />
                       </span>
 
                       <div className={ styles.userInfo }>

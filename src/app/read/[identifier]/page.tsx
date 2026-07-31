@@ -9,6 +9,7 @@ import { useServerPosition } from "@/hooks/useServerPosition";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import { loadAnnotations } from "@/lib/annotationsReducer";
 import { loadReadingTime } from "@/lib/readingTimeReducer";
+import { loadListeningTime } from "@/lib/listeningTimeReducer";
 import { verifyManifestUrl } from "@/app/api/verify-manifest/verifyDomain";
 import { StatefulReaderWrapper } from "@/components/Reader/StatefulReaderWrapper";
 import { ErrorHandler, ProcessedError } from "@/helpers/errorHandler";
@@ -77,6 +78,14 @@ export default function BookPage({ params }: Props) {
   useEffect(() => {
     if (manifestUrl) {
       dispatch(loadReadingTime(manifestUrl));
+    }
+  }, [manifestUrl, dispatch]);
+
+  // CLAUDE-ADDED: Audiobook counterpart to loadReadingTime above, dispatched the same
+  // format-agnostic way -- only StatefulPlayer ever acts on this data (see listeningTimeReducer.ts).
+  useEffect(() => {
+    if (manifestUrl) {
+      dispatch(loadListeningTime(manifestUrl));
     }
   }, [manifestUrl, dispatch]);
 

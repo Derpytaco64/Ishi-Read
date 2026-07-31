@@ -8,6 +8,7 @@ import { useServerPosition } from "@/hooks/useServerPosition";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import { loadAnnotations } from "@/lib/annotationsReducer";
 import { loadReadingTime } from "@/lib/readingTimeReducer";
+import { loadListeningTime } from "@/lib/listeningTimeReducer";
 import { verifyManifestUrl } from "@/app/api/verify-manifest/verifyDomain";
 import { StatefulReaderWrapper } from "@/components/Reader/StatefulReaderWrapper";
 import { ErrorHandler, ProcessedError } from "@/helpers/errorHandler";
@@ -69,6 +70,14 @@ export default function ManifestPage({ params }: Props) {
   useEffect(() => {
     if (manifestUrl) {
       dispatch(loadReadingTime(manifestUrl));
+    }
+  }, [manifestUrl, dispatch]);
+
+  // CLAUDE-ADDED: Audiobook counterpart to loadReadingTime above -- see its sibling in
+  // read/[identifier]/page.tsx for why this is dispatched unconditionally regardless of format.
+  useEffect(() => {
+    if (manifestUrl) {
+      dispatch(loadListeningTime(manifestUrl));
     }
   }, [manifestUrl, dispatch]);
 
