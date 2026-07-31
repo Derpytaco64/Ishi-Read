@@ -187,14 +187,14 @@ export const defaultLineHeights = {
 }
 
 export const defaultZoom: ThSettingsRangePrefRequired = {
-  variant: ThSettingsRangeVariant.numberField,
+  variant: ThSettingsRangeVariant.slider,
   placeholder: ThSettingsRangePlaceholder.range,
   range: [0.7, 4],
   step: 0.01
 }
 
 export const defaultMarginHorizontal: ThSettingsRangePrefRequired = {
-  variant: ThSettingsRangeVariant.numberField,
+  variant: ThSettingsRangeVariant.slider,
   placeholder: ThSettingsRangePlaceholder.range,
   range: [0, 100],
   step: 5

@@ -129,6 +129,26 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   outline: none;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--th-color-text-secondary) var(--th-color-background);
+}
+
+.dialog::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dialog::-webkit-scrollbar-track {
+  background: var(--th-color-background);
+}
+
+.dialog::-webkit-scrollbar-thumb {
+  background-color: var(--th-color-text-secondary);
+  border-radius: 8px;
+  border: 2px solid var(--th-color-background);
+}
+
+.dialog::-webkit-scrollbar-thumb:hover {
+  background-color: var(--th-color-text);
 }
 
 :global(html[data-theme="dark"]) .dialog {

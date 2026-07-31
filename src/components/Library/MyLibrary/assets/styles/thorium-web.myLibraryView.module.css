@@ -45,6 +45,26 @@
   overflow-y: auto;
   max-height: 300px;
   z-index: 1000000;
+  scrollbar-width: thin;
+  scrollbar-color: var(--th-color-text-secondary) var(--th-color-background);
+}
+
+.sortPickerPopover::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sortPickerPopover::-webkit-scrollbar-track {
+  background: var(--th-color-background);
+}
+
+.sortPickerPopover::-webkit-scrollbar-thumb {
+  background-color: var(--th-color-text-secondary);
+  border-radius: 8px;
+  border: 2px solid var(--th-color-background);
+}
+
+.sortPickerPopover::-webkit-scrollbar-thumb:hover {
+  background-color: var(--th-color-text);
 }
 
 :global(html[data-theme="dark"]) .sortPickerPopover {

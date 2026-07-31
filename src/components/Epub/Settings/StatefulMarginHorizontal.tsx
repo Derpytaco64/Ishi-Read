@@ -5,10 +5,11 @@ import { useCallback } from "react";
 import settingsStyles from "../../Settings/assets/styles/thorium-web.reader.settings.module.css";
 import readerSharedUI from "../../assets/styles/thorium-web.button.module.css";
 
-import { ThSettingsKeys } from "@/preferences/models";
+import { ThSettingsKeys, ThSettingsRangeVariant } from "@/preferences/models";
 import { ThSettingsResetButton } from "@/core/Components/Settings/ThSettingsResetButton";
 
 import { StatefulNumberField } from "../../Settings/StatefulNumberField";
+import { StatefulSlider } from "../../Settings/StatefulSlider";
 
 import { usePreferences } from "@/preferences/hooks/usePreferences";
 import { useI18n } from "@/i18n/useI18n";
@@ -70,22 +71,35 @@ export const StatefulMarginHorizontal = () => {
           />
         }
       </div>
-      <StatefulNumberField
-        standalone={ false }
-        defaultValue={ defaultMarginHorizontal }
-        value={ marginHorizontal }
-        onChange={ async (value) => await updatePreference(value) }
-        label={ t("reader.preferences.margin.horizontal") }
-        placeholder={ placeholderText }
-        range={ config.range }
-        step={ config.step }
-        steppers={{
-          decrementLabel: t("common.actions.decrease"),
-          incrementLabel: t("common.actions.increase")
-        }}
-        isWheelDisabled={ true }
-        isVirtualKeyboardDisabled={ true }
-      />
+      { config.variant === ThSettingsRangeVariant.numberField
+        ? <StatefulNumberField
+          standalone={ false }
+          defaultValue={ defaultMarginHorizontal }
+          value={ marginHorizontal }
+          onChange={ async (value) => await updatePreference(value) }
+          label={ t("reader.preferences.margin.horizontal") }
+          placeholder={ placeholderText }
+          range={ config.range }
+          step={ config.step }
+          steppers={{
+            decrementLabel: t("common.actions.decrease"),
+            incrementLabel: t("common.actions.increase")
+          }}
+          isWheelDisabled={ true }
+          isVirtualKeyboardDisabled={ true }
+        />
+        : <StatefulSlider
+          standalone={ false }
+          displayTicks={ config.variant === ThSettingsRangeVariant.incrementedSlider }
+          defaultValue={ defaultMarginHorizontal }
+          value={ marginHorizontal }
+          onChange={ async (value) => await updatePreference(value as number) }
+          label={ t("reader.preferences.margin.horizontal") }
+          placeholder={ placeholderText }
+          range={ config.range }
+          step={ config.step }
+        />
+      }
     </div>
   );
 };
