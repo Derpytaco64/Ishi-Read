@@ -607,7 +607,7 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
           </DisclosurePanel>
         </Disclosure>
 
-        <Disclosure className={ styles.disclosure } defaultExpanded>
+        <Disclosure className={ styles.disclosure }>
           <Heading className={ styles.disclosureHeading }>
             <Button slot="trigger" className={ styles.disclosureTrigger }>
               <AddIcon aria-hidden="true" focusable="false" className={ styles.disclosureIcon } />

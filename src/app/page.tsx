@@ -396,32 +396,36 @@ export default function Home() {
     .sort((a, b) => b.lastReadAt - a.lastReadAt)
     .slice(0, 5);
 
-  // CLAUDE-ADDED: Groups books by series name, then picks whichever series has the most recent
-  // lastReadAt among its own books (not just the single most-recently-read book overall) -- so
-  // reading a standalone book after volume 1 of a series doesn't bump the series shelf away in
-  // favor of nothing. Shows every book in that series, in series order, whether started or not.
+  // CLAUDE-ADDED: Groups books by series name AND format (seriesKey -- same composite key the
+  // Series page itself groups by, see StatefulSeriesView's own comment on why) so an audiobook
+  // series never gets merged with an identically-named ebook series here either, then picks
+  // whichever group has the most recent lastReadAt among its own books (not just the single
+  // most-recently-read book overall) -- so reading a standalone book after volume 1 of a series
+  // doesn't bump the series shelf away in favor of nothing. Shows every book in that group, in
+  // series order, whether started or not.
   const seriesGroups = new Map<string, DynamicBook[]>();
   for (const book of myLibraryBooks) {
     if (!book.series?.name) continue;
-    const group = seriesGroups.get(book.series.name);
+    const key = seriesKey(book.series.name, !!book.isAudiobook);
+    const group = seriesGroups.get(key);
     if (group) {
       group.push(book);
     } else {
-      seriesGroups.set(book.series.name, [book]);
+      seriesGroups.set(key, [book]);
     }
   }
 
-  let lastSeriesName: string | null = null;
+  let lastSeriesGroupKey: string | null = null;
   let lastSeriesReadAt = -Infinity;
-  for (const [name, books] of seriesGroups) {
+  for (const [key, books] of seriesGroups) {
     const mostRecent = Math.max(...books.map((book) => book.lastReadAt ?? -Infinity));
     if (mostRecent > lastSeriesReadAt) {
       lastSeriesReadAt = mostRecent;
-      lastSeriesName = name;
+      lastSeriesGroupKey = key;
     }
   }
 
-  const lastSeriesRead = (lastSeriesName ? seriesGroups.get(lastSeriesName) ?? [] : [])
+  const lastSeriesRead = (lastSeriesGroupKey ? seriesGroups.get(lastSeriesGroupKey) ?? [] : [])
     .slice()
     .sort((a, b) => (a.series?.position ?? 0) - (b.series?.position ?? 0));
 
