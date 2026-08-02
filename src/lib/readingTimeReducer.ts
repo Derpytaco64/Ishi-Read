@@ -7,7 +7,7 @@ import {
   deleteCompletedReadTimeFromServer
 } from "@/lib/userData/completedReadTimesApi";
 import { fetchWordCountFromServer, saveWordCountToServer } from "@/lib/userData/wordCountApi";
-import { fetchReadingSpeedSamplesFromServer, saveReadingSpeedSamplesToServer } from "@/lib/userData/readingSpeedApi";
+import { fetchGlobalReadingSpeedSamplesFromServer } from "@/lib/userData/readingSpeedApi";
 import { fetchDailyReadingHistoryFromServer, saveDailyReadingHistoryToServer } from "@/lib/userData/dailyReadingHistoryApi";
 import { StoredCompletedReadTime, ReadingSpeedSample, DailyReadingBucket } from "@/lib/userData/readingTimeTypes";
 import type { AppDispatch, RootState } from "@/lib/store";
@@ -25,7 +25,14 @@ export interface ReadingTimeReducerState {
   // CLAUDE-ADDED: null means "not computed/loaded yet" -- distinct from 0, which useBookWordCount
   // could legitimately report for a pathological empty resource set.
   wordCount: number | null;
+  // CLAUDE-ADDED: Global (cross-book) rolling WPM sample buffer -- deliberately *not* reset by
+  // setManifestUrl/resetReadingTimer/completeReadingTimer below, unlike every other field in this
+  // slice. Switching books or resetting/completing a session used to wipe this and force the live pace
+  // estimate back to "not enough data" until 5 fresh samples came in; keeping it global means the
+  // estimate stays populated across both. speedSamplesLoaded guards the one-time fetch in
+  // loadReadingTime so repeated book opens in the same session don't refetch it.
   speedSamples: ReadingSpeedSample[];
+  speedSamplesLoaded: boolean;
   // CLAUDE-ADDED: Latest totalProgression seen, updated on every locator change (not just accepted
   // speed samples) -- the only thing the "time left in book" estimate needs beyond wordCount/wpm.
   currentProgression: number | null;
@@ -41,6 +48,7 @@ const initialState: ReadingTimeReducerState = {
   completedReadTimes: [],
   wordCount: null,
   speedSamples: [],
+  speedSamplesLoaded: false,
   currentProgression: null,
   dailyReadingHistory: []
 };
@@ -56,7 +64,6 @@ export const readingTimeSlice = createSlice({
       state.isLoaded = false;
       state.completedReadTimes = [];
       state.wordCount = null;
-      state.speedSamples = [];
       state.currentProgression = null;
       state.dailyReadingHistory = [];
     },
@@ -64,13 +71,11 @@ export const readingTimeSlice = createSlice({
       seconds: number;
       completedReadTimes: StoredCompletedReadTime[];
       wordCount: number | null;
-      speedSamples: ReadingSpeedSample[];
       dailyReadingHistory: DailyReadingBucket[];
     }>) => {
       state.accumulatedSeconds = action.payload.seconds;
       state.completedReadTimes = action.payload.completedReadTimes;
       state.wordCount = action.payload.wordCount;
-      state.speedSamples = action.payload.speedSamples;
       state.dailyReadingHistory = action.payload.dailyReadingHistory;
       state.isLoaded = true;
     },
@@ -92,8 +97,9 @@ export const readingTimeSlice = createSlice({
     addSpeedSample: (state, action: PayloadAction<ReadingSpeedSample>) => {
       state.speedSamples = [...state.speedSamples, action.payload].slice(-MAX_SPEED_SAMPLES);
     },
-    resetSpeedSamples: (state) => {
-      state.speedSamples = [];
+    setSpeedSamples: (state, action: PayloadAction<ReadingSpeedSample[]>) => {
+      state.speedSamples = action.payload;
+      state.speedSamplesLoaded = true;
     },
     setCurrentProgression: (state, action: PayloadAction<number>) => {
       state.currentProgression = action.payload;
@@ -113,7 +119,7 @@ export const {
   removeCompletedReadTimeState,
   setWordCount,
   addSpeedSample,
-  resetSpeedSamples,
+  setSpeedSamples,
   setCurrentProgression,
   setDailyReadingHistory
 } = readingTimeSlice.actions;
@@ -122,19 +128,25 @@ export const {
 // loadAnnotations -- keeps state.readingTime.manifestUrl in the same clean form so it's directly usable
 // as the fetch/save key everywhere else. Fetches the live accumulated total and the Completed Read Times
 // history in parallel, same shape as loadAnnotations fetching highlights/bookmarks/notes together.
-export const loadReadingTime = (rawManifestUrl: string) => async (dispatch: AppDispatch) => {
+export const loadReadingTime = (rawManifestUrl: string) => async (dispatch: AppDispatch, getState: () => RootState) => {
   const manifestUrl = decodeURIComponent(rawManifestUrl);
   dispatch(setManifestUrl(manifestUrl));
 
-  const [seconds, completedReadTimes, wordCount, speedSamples, dailyReadingHistory] = await Promise.all([
+  const [seconds, completedReadTimes, wordCount, dailyReadingHistory] = await Promise.all([
     fetchReadingTimeFromServer(manifestUrl),
     fetchCompletedReadTimesFromServer(manifestUrl),
     fetchWordCountFromServer(manifestUrl),
-    fetchReadingSpeedSamplesFromServer(manifestUrl),
     fetchDailyReadingHistoryFromServer(manifestUrl)
   ]);
 
-  dispatch(setReadingTimeLoaded({ seconds: seconds ?? 0, completedReadTimes, wordCount, speedSamples, dailyReadingHistory }));
+  dispatch(setReadingTimeLoaded({ seconds: seconds ?? 0, completedReadTimes, wordCount, dailyReadingHistory }));
+
+  // CLAUDE-ADDED: Global buffer, fetched once per session (guarded by speedSamplesLoaded) rather than
+  // on every book open -- see the state field's own comment above.
+  if (!getState().readingTime.speedSamplesLoaded) {
+    const speedSamples = await fetchGlobalReadingSpeedSamplesFromServer();
+    dispatch(setSpeedSamples(speedSamples));
+  }
 };
 
 // CLAUDE-ADDED: Called once by useBookWordCount after it finishes the (one-time-ever) text-extraction
@@ -146,23 +158,20 @@ export const persistWordCount = (manifestUrl: string, wordCount: number) => (dis
 
 // CLAUDE-ADDED: Discards the current session without archiving it -- the "No" path out of the reset
 // confirmation dialog. The open period's daily buckets are discarded right along with the seconds
-// they came from, same as the seconds themselves. Also resets the rolling speed-sample buffer, so
-// "current pace" doesn't carry an old session's rate into whatever comes next -- both reset paths end
-// the same open period, so both start pace fresh alongside the daily buckets and elapsed seconds.
+// they came from, same as the seconds themselves. Unlike the daily buckets, the rolling speed-sample
+// buffer is *not* touched here -- it's global now (see the state field's own comment), so a reset on
+// one book's session no longer blanks the live pace estimate.
 export const resetReadingTimer = (manifestUrl: string) => (dispatch: AppDispatch) => {
   dispatch(resetAccumulatedSeconds());
   dispatch(setDailyReadingHistory([]));
-  dispatch(resetSpeedSamples());
   saveReadingTimeToServer(manifestUrl, 0);
   saveDailyReadingHistoryToServer(manifestUrl, []);
-  saveReadingSpeedSamplesToServer(manifestUrl, []);
 };
 
 // CLAUDE-ADDED: The "Yes" path -- archives the current session as a Completed Read Time (with today's
 // date), bundling in whatever daily buckets accumulated since the last reset (see DailyReadingBucket)
 // so the Completed Reads tab can show them as this entry's own nested breakdown, then clears the live
-// buckets (and the rolling speed-sample buffer -- see resetReadingTimer) so the next open period
-// starts with a clean pace estimate instead of carrying the just-archived session's rate forward.
+// buckets. The rolling speed-sample buffer is left alone -- see resetReadingTimer's own comment.
 export const completeReadingTimer = (manifestUrl: string, seconds: number) => (dispatch: AppDispatch, getState: () => RootState) => {
   const dailyHistory = getState().readingTime.dailyReadingHistory;
 
@@ -178,10 +187,8 @@ export const completeReadingTimer = (manifestUrl: string, seconds: number) => (d
 
   dispatch(resetAccumulatedSeconds());
   dispatch(setDailyReadingHistory([]));
-  dispatch(resetSpeedSamples());
   saveReadingTimeToServer(manifestUrl, 0);
   saveDailyReadingHistoryToServer(manifestUrl, []);
-  saveReadingSpeedSamplesToServer(manifestUrl, []);
 };
 
 // CLAUDE-ADDED: Removes a single archived session -- the confirmed path out of the per-item delete

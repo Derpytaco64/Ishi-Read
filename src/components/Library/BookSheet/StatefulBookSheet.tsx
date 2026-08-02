@@ -21,7 +21,7 @@ import { fetchPositionFromServer } from "@/lib/userData/positionApi";
 import { fetchReadingTimeFromServer } from "@/lib/userData/readingTimeApi";
 import { fetchWordCountFromServer } from "@/lib/userData/wordCountApi";
 import { fetchPageCountFromServer } from "@/lib/userData/pageCountApi";
-import { fetchReadingSpeedSamplesFromServer } from "@/lib/userData/readingSpeedApi";
+import { fetchGlobalReadingSpeedSamplesFromServer } from "@/lib/userData/readingSpeedApi";
 import { fetchCompletedReadTimesFromServer } from "@/lib/userData/completedReadTimesApi";
 import { fetchHighlightsFromServer, deleteHighlightFromServer } from "@/lib/userData/highlightsApi";
 import { fetchBookmarksFromServer, deleteBookmarkFromServer } from "@/lib/userData/bookmarksApi";
@@ -211,10 +211,11 @@ export const StatefulBookSheet = ({
 
   // CLAUDE-ADDED: Powers both the read-progress dial and the "Reading Timer" section -- fetched
   // together (not via PublicationGrid's own progressByUrl prop, which only carries the percent) since
-  // wpm/secondsLeft need wordCount + speedSamples + the same position locator's totalProgression the
-  // dial uses, and every one of these is keyed by manifestUrl, not by the page's own book list. Reset
-  // to null on every book change so a slow fetch never shows the *previous* book's stats under the
-  // new one's title -- an empty section while loading reads better than a wrong one.
+  // wpm/secondsLeft need wordCount + the same position locator's totalProgression the dial uses, both
+  // keyed by manifestUrl (speedSamples itself is the one exception -- a global, cross-book buffer, see
+  // readingTimeReducer.ts). Reset to null on every book change so a slow fetch never shows the
+  // *previous* book's stats under the new one's title -- an empty section while loading reads better
+  // than a wrong one.
   const [readingStats, setReadingStats] = useState<ReadingStats | null>(null);
 
   // CLAUDE-ADDED: The "Annotations" section, between Reading Timer and Completed Read -- a read-only
@@ -261,7 +262,7 @@ export const StatefulBookSheet = ({
       fetchPositionFromServer(manifestUrl),
       fetchReadingTimeFromServer(manifestUrl),
       fetchWordCountFromServer(manifestUrl),
-      fetchReadingSpeedSamplesFromServer(manifestUrl),
+      fetchGlobalReadingSpeedSamplesFromServer(),
       fetchCompletedReadTimesFromServer(manifestUrl),
       fetchHighlightsFromServer(manifestUrl),
       fetchBookmarksFromServer(manifestUrl),

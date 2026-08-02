@@ -134,10 +134,6 @@ export async function GET() {
 
   const totalReadingSeconds = inProgressSeconds + completedSeconds;
 
-  // CLAUDE-ADDED: deltaWords is progression * wordCount (a float), so the raw sum needs rounding
-  // for display -- this is a "words read" count, not a rate, so it still counts every bucket.
-  const totalWordsRead = Math.round(dailyBuckets.reduce((sum, bucket) => sum + bucket.words, 0));
-
   // CLAUDE-ADDED: Same sample-weighted rate as computeCurrentWpm's weightedRate (Σwords/Σseconds,
   // not an average of per-bucket rates), just over every day ever tracked instead of a rolling
   // per-book buffer. Unlike the live estimate, there are no individual samples left to run
@@ -146,8 +142,9 @@ export async function GET() {
   // landing in a very short accumulated-seconds window, see JUMP_DISCARD_THRESHOLD in
   // useReadingSpeedSampler) can blow out that whole day's rate to thousands of wpm. The coarsest
   // safeguard available at this granularity is dropping any day whose own rate exceeds plausible
-  // human reading speed from the pace average -- its words still count toward Words Read above,
-  // just not toward the pace. null means no eligible day exists yet, not a rate of zero.
+  // human reading speed -- both from the pace average AND from Words Read below, since a day that
+  // wasn't really read at that rate wasn't really read that many words either. null averageWpm means
+  // no eligible day exists yet, not a rate of zero.
   const PLAUSIBLE_WPM_CEILING = 1000;
   const paceEligibleBuckets = dailyBuckets.filter(bucket =>
     bucket.seconds > 0 && (bucket.words / (bucket.seconds / 60)) <= PLAUSIBLE_WPM_CEILING
@@ -155,6 +152,11 @@ export async function GET() {
   const paceWords = paceEligibleBuckets.reduce((sum, bucket) => sum + bucket.words, 0);
   const paceSeconds = paceEligibleBuckets.reduce((sum, bucket) => sum + bucket.seconds, 0);
   const averageWpm = paceSeconds > 0 ? Math.round(paceWords / (paceSeconds / 60)) : null;
+
+  // CLAUDE-ADDED: deltaWords is progression * wordCount (a float), so the raw sum needs rounding for
+  // display. Summed over paceEligibleBuckets (not every dailyBucket) so the same implausible-rate days
+  // excluded from averageWpm above don't inflate this count either.
+  const totalWordsRead = Math.round(paceWords);
 
   // CLAUDE-ADDED: Current streak -- consecutive local calendar days, ending today, with any tracked
   // reading time on any book, merged by date across the whole library.

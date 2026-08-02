@@ -53,8 +53,11 @@ export function getPageCountFilePath(userId: string, bookHash: string): string {
   return path.join(getUserDir(userId), "pageCount", `${ bookHash }.json`);
 }
 
-export function getReadingSpeedSamplesFilePath(userId: string, bookHash: string): string {
-  return path.join(getUserDir(userId), "readingSpeedSamples", `${ bookHash }.json`);
+// CLAUDE-ADDED: Unlike the other per-book files above, this is a single file per user, not one per
+// bookHash -- the rolling WPM sample buffer is a cross-book pace estimate (see readingTimeReducer.ts),
+// not tied to any one book's progress.
+export function getGlobalReadingSpeedSamplesFilePath(userId: string): string {
+  return path.join(getUserDir(userId), "globalReadingSpeedSamples.json");
 }
 
 export function getDailyReadingHistoryFilePath(userId: string, bookHash: string): string {

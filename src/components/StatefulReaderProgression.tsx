@@ -123,9 +123,13 @@ export const StatefulReaderProgression = ({
     const effectivePositions = exactPageCount?.currentPageRange ?? (exactPageCountApplies ? [] : currentPositions);
     const effectiveTotal = exactPageCount?.totalPages ?? (exactPageCountApplies ? undefined : totalPositions);
     // CLAUDE-ADDED: One decimal place (not a rounded whole percent) for the overall book progress.
-    const effectivePercentage = (exactPageCount?.totalPages && exactPageCount.currentPageRange)
-      ? (((exactPageCount.currentPageRange[exactPageCount.currentPageRange.length - 1] ?? 0) / exactPageCount.totalPages) * 100).toFixed(1)
-      : ((totalProgression || 0) * 100).toFixed(1);
+    // Deliberately always derived from totalProgression, never from the exact-page-count ratio --
+    // exactPageCount measures pages against the *current* font/column/margin settings, which is a
+    // different unit than the content-based positionsList totalProgression that's persisted to the
+    // server and used everywhere else (library grid, book details). Using exactPageCount here made the
+    // in-reader percentage disagree with those by a point or more even at the same reading position;
+    // totalProgression is the one canonical, cross-surface progress metric.
+    const effectivePercentage = ((totalProgression || 0) * 100).toFixed(1);
 
     let text = "";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import {
   Link,
@@ -22,6 +22,16 @@ import {
   getScriptMode,
   ScriptMode
 } from "@readium/navigator";
+
+import { useAppSelector } from "@/lib/hooks";
+
+// CLAUDE-ADDED: Two rAFs (not a fixed setTimeout) to wait out a browser reflow -- same idiom
+// useExactPageCount.ts's own nextFrame uses for the same reason: a ResizeObserver callback runs
+// "after layout, before paint" of some upcoming frame, not synchronously with the DOM change that
+// triggered it, so a single rAF isn't reliably guaranteed to land after it fires.
+const nextFrame = (): Promise<void> => {
+  return new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve())));
+};
 
 type cbb = (ok: boolean) => void;
 
@@ -46,8 +56,66 @@ export const useEpubNavigator = () => {
   const containerParent = useRef<HTMLElement | null>(null);
   const publication = useRef<Publication | null>(null);
 
+  // CLAUDE-ADDED: positionsList's own copy of the current position, kept fresh via ref (submitPreferences
+  // below is a stable useCallback, so it needs a ref rather than closing over the selector value
+  // directly) -- see submitPreferences' own comment for why this is needed.
+  const positionsList = useAppSelector(state => state.publication.positionsList);
+  const positionsListRef = useRef(positionsList);
+  useEffect(() => {
+    positionsListRef.current = positionsList;
+  }, [positionsList]);
+
+  // CLAUDE-ADDED: The reflow-drift correction below only applies to reflowable content -- FXL resources
+  // don't reflow at all (a preference change there goes through handleFXLPrefs, not updateCSS/CSS
+  // column reflow), so their position never drifts in the first place, and re-navigating anyway would
+  // just add an unnecessary full resource reload (see go()'s own this.apply() call) on every zoom click.
+  const isFXL = useAppSelector(state => state.publication.isFXL);
+  const isFXLRef = useRef(isFXL);
+  useEffect(() => {
+    isFXLRef.current = isFXL;
+  }, [isFXL]);
+
+  // CLAUDE-ADDED: Guards the correction below against overlapping calls -- zoom's +/- buttons in
+  // particular get rapid-clicked, and each click's own capture-change-wait-correct cycle now takes a
+  // few frames, wide enough for a second click to land before the first's correction fires. Without
+  // this, an in-flight correction from an *earlier* click could re-navigate to that click's now-stale
+  // captured position, stepping on whatever the latest click already settled -- visible flicker. Only
+  // the most recent call's correction is allowed to actually run; the preference value itself is
+  // unaffected (that's applied synchronously inside navigatorInstance.submitPreferences above, every
+  // call's own).
+  const submitGenerationRef = useRef(0);
+
   const submitPreferences = useCallback(async (preferences: IEpubPreferences) => {
+    // CLAUDE-ADDED: EpubNavigator's own post-reflow position recovery (see submitPreferences/
+    // syncLocation in @readium/navigator) approximates "where you were" by clamping the previous
+    // *pixel* scroll offset into the resource's newly reflowed scroll width, then re-deriving
+    // locations.position from that clamped fraction. That's fine for a small nudge, but a large
+    // font-size (or other layout-affecting) change can shrink/grow a resource's total width so much
+    // that the clamped pixel position lands nowhere near the paragraph actually being read --
+    // jumping from position 50 of 800 to 200 of 800 on one big decrease, for example. Capturing
+    // locations.position *before* the change and explicitly re-navigating to that same positions-list
+    // entry afterward -- the identical lookup StatefulJumpToPositionContainer already uses for manual
+    // position jumps -- corrects the drift regardless of how the internal auto-snap landed, since the
+    // positions list itself is a fixed, content-based index that never depends on layout.
+    const positionBefore = isFXLRef.current ? undefined : navigatorInstance?.currentLocator?.locations?.position;
+    const generation = ++submitGenerationRef.current;
+
     await navigatorInstance?.submitPreferences(new EpubPreferences(preferences));
+
+    if (positionBefore === undefined) return;
+
+    // CLAUDE-ADDED: The navigator's own ResizeObserver-driven auto-snap runs off a browser reflow, not
+    // off this submitPreferences promise -- it can still be pending when the above await resolves. Wait
+    // it out first so our corrective go() below is the last word, not something the auto-snap clobbers
+    // a frame later.
+    await nextFrame();
+
+    if (submitGenerationRef.current !== generation) return;
+
+    const target = positionsListRef.current.find(item => item.locations.position === positionBefore);
+    if (!target) return;
+
+    await new Promise<void>((resolve) => navigatorInstance?.go(target, false, () => resolve()));
   }, []);
 
   const getSetting = useCallback(<K extends keyof EpubSettings>(settingKey: K) => {

@@ -260,14 +260,29 @@ const buildPersistedState = (state: any, externalReducers: Record<string, Extern
   return stateToPersist;
 };
 
+// CLAUDE-ADDED: Only theme and font family are meant to roam across devices -- everything else in
+// settings/webPubSettings (font size, spacing, columns, alignment, hyphens, ligatures, etc.) is a
+// device-local display preference now (a phone and a desktop want different values, same rationale
+// as useCoverSize.ts), so it stays in buildPersistedState's localStorage blob but is deliberately
+// excluded from what gets sent to the server.
+const buildServerSyncedState = (state: any) => {
+  const stateToSync: any = {};
+
+  if (state.theming) stateToSync.theming = { theme: state.theming.theme };
+  if (state.settings?.fontFamily !== undefined) stateToSync.settings = { fontFamily: state.settings.fontFamily };
+  if (state.webPubSettings?.fontFamily !== undefined) stateToSync.webPubSettings = { fontFamily: state.webPubSettings.fontFamily };
+
+  return stateToSync;
+};
+
 const persistState = (stateToPersist: any, storageKey?: string) => {
   try {
     const resolvedKey = storageKey || DEFAULT_STORAGE_KEY;
 
+    // CLAUDE-ADDED: localStorage remains the instant synchronous boot path (see makeStore) and now
+    // also the sole store for device-local settings -- server sync happens separately, and only for
+    // the theme/fontFamily subset (see buildServerSyncedState + saveStateDebounced).
     localStorage.setItem(resolvedKey, JSON.stringify(stateToPersist));
-    // CLAUDE-ADDED: localStorage remains the instant synchronous boot path (see makeStore); the
-    // server copy becomes authoritative across devices/reinstalls once hydrateFromServer picks it up.
-    saveSettingsToServer(stateToPersist);
   } catch (err) {
     console.error(err);
   }
@@ -349,7 +364,13 @@ export const makeStore = (storageKey?: string, externalReducers: Record<string, 
         // never the live-detected fields (colorScheme, monochrome, breakpoint, ...) that useTheming
         // may have already set by the time this hydrate lands. A wholesale spread would blow those
         // back to undefined instead of leaving them alone.
-        ...(payload.theming ? { theming: { ...state.theming, theme: payload.theming.theme } } : {})
+        ...(payload.theming ? { theming: { ...state.theming, theme: payload.theming.theme } } : {}),
+        // CLAUDE-ADDED: Same narrow-merge reasoning as theming above -- the server payload's settings/
+        // webPubSettings now only ever carry fontFamily (see buildServerSyncedState), never the rest of
+        // the slice, so a wholesale spread would blow every other, now device-local field back to
+        // undefined instead of leaving the localStorage-loaded values alone.
+        ...(payload.settings?.fontFamily !== undefined ? { settings: { ...state.settings, fontFamily: payload.settings.fontFamily } } : {}),
+        ...(payload.webPubSettings?.fontFamily !== undefined ? { webPubSettings: { ...state.webPubSettings, fontFamily: payload.webPubSettings.fontFamily } } : {})
       };
     }
     return appReducer(state, action);
@@ -365,14 +386,28 @@ export const makeStore = (storageKey?: string, externalReducers: Record<string, 
   // when the persisted subset hasn't actually changed, instead of re-saving identical data to
   // localStorage and re-uploading it to the server on every unrelated action.
   let lastPersistedSnapshot: string | null = null;
+  // CLAUDE-ADDED: Separate dedupe snapshot for the server-synced subset -- without it, any change to a
+  // device-local-only setting (font size, spacing, ...) would still change buildPersistedState's full
+  // blob and trip the localStorage snapshot check, but that's unrelated to whether theme/fontFamily
+  // actually changed, so a shared snapshot would trigger a pointless server POST on every such change.
+  let lastServerSyncedSnapshot: string | null = null;
 
   const saveStateDebounced = debounce(() => {
-    const stateToPersist = buildPersistedState(store.getState(), externalReducers);
-    const serialized = JSON.stringify(stateToPersist);
-    if (serialized === lastPersistedSnapshot) return;
+    const state = store.getState();
 
-    lastPersistedSnapshot = serialized;
-    persistState(stateToPersist, storageKey);
+    const stateToPersist = buildPersistedState(state, externalReducers);
+    const serialized = JSON.stringify(stateToPersist);
+    if (serialized !== lastPersistedSnapshot) {
+      lastPersistedSnapshot = serialized;
+      persistState(stateToPersist, storageKey);
+    }
+
+    const stateToSync = buildServerSyncedState(state);
+    const serializedSync = JSON.stringify(stateToSync);
+    if (serializedSync !== lastServerSyncedSnapshot) {
+      lastServerSyncedSnapshot = serializedSync;
+      saveSettingsToServer(stateToSync);
+    }
   }, 250);
 
   store.subscribe(saveStateDebounced);

@@ -1,26 +1,21 @@
 import { NextResponse } from "next/server";
 
-import { resolveBookIdentity } from "@/next-lib/userData/bookIdentity";
-import { getReadingSpeedSamplesFilePath } from "@/next-lib/userData/paths";
+import { getGlobalReadingSpeedSamplesFilePath } from "@/next-lib/userData/paths";
 import { readJsonFile, writeJsonFileAtomic } from "@/next-lib/userData/jsonStore";
 import { ReadingSpeedSample } from "@/lib/userData/readingTimeTypes";
 import { getCurrentUserId } from "@/next-lib/userData/session";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+// CLAUDE-ADDED: A single global rolling buffer per user (not one per book -- see
+// getGlobalReadingSpeedSamplesFilePath), so the live WPM estimate carries over across book switches
+// and session resets instead of resetting to "not enough data" every time.
+
+export async function GET() {
   const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { searchParams } = new URL(request.url);
-  const manifestUrl = searchParams.get("manifestUrl");
-
-  if (!manifestUrl) {
-    return NextResponse.json({ error: "manifestUrl parameter is required" }, { status: 400 });
-  }
-
-  const hash = resolveBookIdentity(manifestUrl);
-  const samples = readJsonFile<ReadingSpeedSample[]>(getReadingSpeedSamplesFilePath(userId, hash));
+  const samples = readJsonFile<ReadingSpeedSample[]>(getGlobalReadingSpeedSamplesFilePath(userId));
 
   return NextResponse.json({ samples: samples ?? [] });
 }
@@ -30,15 +25,13 @@ export async function POST(request: Request) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json().catch(() => null);
-  const manifestUrl = body?.manifestUrl;
   const samples = body?.samples;
 
-  if (typeof manifestUrl !== "string" || !manifestUrl || !Array.isArray(samples)) {
-    return NextResponse.json({ error: "manifestUrl and samples are required" }, { status: 400 });
+  if (!Array.isArray(samples)) {
+    return NextResponse.json({ error: "samples is required" }, { status: 400 });
   }
 
-  const hash = resolveBookIdentity(manifestUrl);
-  writeJsonFileAtomic(getReadingSpeedSamplesFilePath(userId, hash), samples);
+  writeJsonFileAtomic(getGlobalReadingSpeedSamplesFilePath(userId), samples);
 
   return NextResponse.json({ ok: true });
 }

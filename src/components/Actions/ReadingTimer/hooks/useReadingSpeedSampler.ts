@@ -12,8 +12,9 @@
 // accumulatedSeconds -- so a backgrounded tab never inflates a sample's elapsed time). Samples that
 // aren't organic forward reading are hard-discarded before they ever reach the rolling buffer:
 // backward navigation (deltaProgression <= 0), a jump bigger than JUMP_DISCARD_THRESHOLD of the whole
-// book in one step (TOC click, search result, "go to position" -- not a page turn), or zero elapsed
-// active time. What's left is genuinely noisy page-turn-to-page-turn data, which is exactly what
+// book in one step (TOC click, search result, "go to position" -- not a page turn), zero elapsed
+// active time, or a rate above RAPID_TURN_WPM_CEILING (mashing next-page/flipping through rather than
+// reading). What's left is genuinely noisy page-turn-to-page-turn data, which is exactly what
 // computeCurrentWpm's median/MAD trimming is for.
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Locator } from "@readium/shared";
@@ -21,12 +22,22 @@ import debounce from "debounce";
 
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { addSpeedSample, setCurrentProgression, setDailyReadingHistory } from "@/lib/readingTimeReducer";
-import { saveReadingSpeedSamplesToServer } from "@/lib/userData/readingSpeedApi";
+import { saveGlobalReadingSpeedSamplesToServer } from "@/lib/userData/readingSpeedApi";
 import { saveDailyReadingHistoryToServer } from "@/lib/userData/dailyReadingHistoryApi";
 import { ReadingSpeedSample, DailyReadingBucket } from "@/lib/userData/readingTimeTypes";
 
 const JUMP_DISCARD_THRESHOLD = 0.05;
 const PERSIST_DEBOUNCE_MS = 2000;
+
+// CLAUDE-ADDED: No human being reads this fast -- a sample above this rate is a rapid page-turn
+// (mashing next-page, flipping through to find a spot) rather than a genuine read, and gets
+// hard-discarded the same way a too-big jump or backward navigation does. Deliberately well above
+// even a fast reader's real pace (unlike the stats route's own PLAUSIBLE_WPM_CEILING of 1000, which
+// filters already-smoothed *daily* aggregates) -- this runs per individual page-turn sample, where a
+// short/sparse page can honestly spike a genuine reader's instantaneous rate well past 1000 for one
+// sample. It only needs to be low enough to catch the multiple-thousands-of-wpm rate flipping
+// several pages in a couple of seconds actually produces.
+const RAPID_TURN_WPM_CEILING = 2500;
 
 // CLAUDE-ADDED: Local (not UTC) calendar day, so "today" lines up with the day the user actually
 // experiences reading in, not whatever day UTC midnight happens to fall on for their timezone.
@@ -75,19 +86,23 @@ export const useReadingSpeedSampler = () => {
   // CLAUDE-ADDED: One shared debounce for both -- they're always updated together (see the accepted-
   // sample branch below), so persisting them in the same debounced call halves the network chatter
   // rapid page turns would otherwise cause. Deliberately reads samplesRef/dailyHistoryRef/manifestUrlRef
-  // at *fire* time instead of closing over the arrays computed when the save was scheduled: a
-  // save-and-reset (or discard-reset) can land inside this debounce's window, synchronously clearing
-  // dailyReadingHistory and writing the empty array to the server right away (see completeReadingTimer/
-  // resetReadingTimer) -- if this callback still saved the pre-reset array it scheduled with, it would
-  // fire after that clear and silently resurrect the just-archived day's bucket into the new "current"
-  // period. Reading the refs at fire time means this always persists whatever is true *now*, so it's
-  // either a no-op (state hasn't changed since scheduling) or correctly re-saves the post-reset state.
+  // at *fire* time instead of closing over the arrays computed when the save was scheduled: for
+  // dailyHistory specifically, a save-and-reset (or discard-reset) can land inside this debounce's
+  // window, synchronously clearing dailyReadingHistory and writing the empty array to the server right
+  // away (see completeReadingTimer/resetReadingTimer) -- if this callback still saved the pre-reset
+  // array it scheduled with, it would fire after that clear and silently resurrect the just-archived
+  // day's bucket into the new "current" period. Reading the refs at fire time means this always persists
+  // whatever is true *now*, so it's either a no-op (state hasn't changed since scheduling) or correctly
+  // re-saves the post-reset state. speedSamples has no such reset path (it's global, see
+  // readingTimeReducer.ts) but reads its ref at fire time too, for consistency.
   const debouncedSave = useMemo(
     () => debounce(() => {
+      // CLAUDE-ADDED: The speed-sample buffer is global (not per-book, see readingTimeReducer.ts), so
+      // it saves regardless of manifestUrl -- only the daily-history save still needs one.
+      saveGlobalReadingSpeedSamplesToServer(samplesRef.current);
+
       const url = manifestUrlRef.current;
-      if (!url) return;
-      saveReadingSpeedSamplesToServer(url, samplesRef.current);
-      saveDailyReadingHistoryToServer(url, dailyHistoryRef.current);
+      if (url) saveDailyReadingHistoryToServer(url, dailyHistoryRef.current);
     }, PERSIST_DEBOUNCE_MS),
     []
   );
@@ -136,6 +151,14 @@ export const useReadingSpeedSampler = () => {
     if (deltaSeconds <= 0) return;
 
     const deltaWords = deltaProgression * wordCount;
+
+    // CLAUDE-ADDED: Rapid-page-turn discard -- see RAPID_TURN_WPM_CEILING above. Anchors were already
+    // re-seeded above, so a burst of fast turns just collapses into however much real time and
+    // progression separates the *next* accepted sample from here, instead of poisoning the buffer
+    // with one wildly-fast reading.
+    const impliedWpm = deltaWords / (deltaSeconds / 60);
+    if (impliedWpm > RAPID_TURN_WPM_CEILING) return;
+
     const sample: ReadingSpeedSample = { deltaWords, deltaSeconds, timestamp: Date.now() };
 
     dispatch(addSpeedSample(sample));
