@@ -34,17 +34,24 @@
 /* CLAUDE-ADDED: On narrow viewports the header title (home.css's .header, centered and nearly
    full-width there) runs underneath this and the user avatar (StatefulUserMenu's .trigger) at
    their full desktop size -- shrinking both here and there, plus giving the header extra
-   top clearance in home.css, keeps the title clear of both corners. Offset scaled down by the
-   same ratio as the height (56/96) to keep the transparent-png-padding correction from the
-   .trigger comment above proportionally correct at the smaller size. */
+   top clearance in home.css, keeps the title clear of both corners.
+
+   Height picked (64px, up from the avatar's own 48px here -- see StatefulUserMenu's .avatar) to
+   compensate for ishamel.png's baked-in transparent margin around the glyph, measured directly off
+   the source PNG's alpha channel: the glyph only occupies ~74.7% of the image's own height (vs. the
+   avatar photo, which fills its circle edge-to-edge), so matching *bounding-box* height would still
+   read as visibly smaller than the avatar. 64px here renders a glyph ~47.8px tall, matching the
+   avatar's 48px circle. Offset scaled to the same ratio measured off that alpha channel (17.17% top
+   / 9.64% left of rendered height) rather than the old 96px-derived 56px ratio, so the hit target
+   still lines up with the visible glyph at this new size. */
 @media (max-width: 600px) {
   .trigger {
-    top: -9px;
-    left: -5px;
+    top: -11px;
+    left: -6px;
   }
 
   .logo {
-    height: 56px;
+    height: 64px;
   }
 }
 

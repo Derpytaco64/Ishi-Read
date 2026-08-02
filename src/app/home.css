@@ -37,13 +37,29 @@ html[data-theme="dark"] body {
    width and needs to clear both icons vertically instead, so it's pushed below their (now shrunk)
    footprint rather than trying to coexist beside them. */
 @media (max-width: 600px) {
+  /* CLAUDE-ADDED: #home's own margin (20px on every side, see .root above) was the actual source of
+     the gap sitting above the corner icons -- they're pulled up out of it via their own negative
+     top offsets (see StatefulLibraryMenu's/StatefulUserMenu's .trigger), but 20px of it still showed
+     above even the taller (logo) one. Trimmed to 1rem for narrow viewports only -- left/right/bottom
+     stay at 20px (unset here, so the base rule's shorthand still supplies them). */
+  #home {
+    margin-top: 1rem;
+  }
+
   .header {
-    margin-top: 4.5rem;
+    /* CLAUDE-ADDED: Just enough to clear the corner icons' own (now-matched, see their own mobile
+       media queries) footprint, not the old fixed 4.5rem that left the title sitting well below
+       them with room to spare. */
+    margin-top: 3.75rem;
     padding: 0 0.5rem;
   }
 
   h1 {
-    font-size: 1.5rem;
+    font-size: 1.3rem;
+  }
+
+  .subtitle {
+    font-size: 1rem;
   }
 }
 

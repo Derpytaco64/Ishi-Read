@@ -39,12 +39,16 @@
 /* CLAUDE-ADDED: Matches the library logo's own mobile shrink (see StatefulLibraryMenu's .logo) --
    at desktop size this and the logo sit far enough apart that the centered header title between
    them never collides, but on a narrow viewport the title runs nearly full-width and needs both
-   corner icons smaller (plus extra clearance in home.css) to stay clear of it. */
+   corner icons smaller (plus extra clearance in home.css) to stay clear of it.
+
+   48px, not the logo's own 64px -- this is a plain filled circle with no transparent padding of its
+   own, so it needs a *smaller* box than the logo to render as the same visible size (see the .logo
+   comment for the alpha-channel measurements behind that number). */
 @media (max-width: 600px) {
   .avatar {
-    width: 56px;
-    height: 56px;
-    font-size: 1.3rem;
+    width: 48px;
+    height: 48px;
+    font-size: 1.1rem;
   }
 }
 

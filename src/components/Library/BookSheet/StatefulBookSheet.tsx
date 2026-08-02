@@ -365,6 +365,15 @@ export const StatefulBookSheet = ({
   const sheetRef = useRef<SheetRef | null>(null);
   const wheelCleanupRef = useRef<(() => void) | null>(null);
 
+  // CLAUDE-ADDED: Mirrors react-modal-sheet's own internal currentSnap (see Sheet.Header/Sheet.Content's
+  // sheetContext.currentSnap) out to this component so compounds.header's disableDrag below can be
+  // gated the same way compounds.content's already is. react-modal-sheet's own Sheet.Header doesn't
+  // support a *function* disableDrag the way Sheet.Content does (it only ever checks its prop for
+  // truthiness, so passing a function there would just permanently disable it) -- onSnap is the one
+  // hook the library exposes for reading currentSnap reactively from outside, so it's tracked here and
+  // turned into a plain boolean instead.
+  const [currentSnap, setCurrentSnap] = useState<number>(PEEK_SNAP);
+
   // CLAUDE-ADDED: react-modal-sheet unmounts the sheet's entire content subtree (including this
   // body, and the content-scroller div wrapping it) whenever the sheet is fully closed -- see
   // react-modal-sheet/dist/index.js's `state !== "closed" ? children : null`. A plain useRef +
@@ -515,10 +524,18 @@ export const StatefulBookSheet = ({
       detent="default"
       snapPoints={ [0, 0.5, 1] }
       initialSnap={ PEEK_SNAP }
+      onSnap={ setCurrentSnap }
       className={ styles.root }
       compounds={{
         container: { className: styles.container },
-        header: { className: styles.header },
+        // CLAUDE-ADDED: Gated the same as compounds.content below (currentSnap === FULL_SNAP) --
+        // without this, dragging the cover/play-button area (rendered inside Sheet.Header, see
+        // ThContainerHeader below) always moved the whole sheet, even once fully open, while dragging
+        // the details area right next to it had already handed off to native content scroll at that
+        // point (see compounds.content's own comment). Same physical gesture doing two different
+        // things depending on exactly where it started read as the cover/play button being
+        // "disconnected" from the rest of the card instead of moving with it.
+        header: { className: styles.header, disableDrag: currentSnap === FULL_SNAP },
         dragIndicator: { className: styles.dragIndicator },
         // CLAUDE-ADDED: ThBottomSheet sets `contain: content` + `overscroll-behavior: contain` on
         // this element via a direct style mutation whenever the sheet is draggable (snapPoints.length
