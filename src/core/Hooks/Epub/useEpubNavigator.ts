@@ -134,7 +134,47 @@ export const useEpubNavigator = () => {
     if (isFXLRef.current) { await action(); return; }
 
     const positionBefore = navigatorInstance?.currentLocator?.locations?.position;
+    // CLAUDE-ADDED: positionTarget (not anchorBefore) is the required anchor for everything below --
+    // it's always a real positions-list entry, so its own locations.position is guaranteed valid. Bail
+    // out before ever calling requestFirstVisibleLocator if we don't have one (positions list not ready
+    // yet, or currentLocator itself has no position), rather than risk the repair below writing back a
+    // locator with no position at all -- see its own comment for why that specifically crashes.
+    const positionTarget = positionBefore !== undefined
+      ? positionsListRef.current.find(item => item.locations.position === positionBefore)
+      : undefined;
+    if (!positionTarget) { await action(); return; }
+
     const anchorBefore = await requestFirstVisibleLocator();
+
+    const target = anchorBefore?.text?.highlight
+      ? new Locator({
+          href: positionTarget.href,
+          type: positionTarget.type,
+          text: anchorBefore.text,
+          locations: new LocatorLocations({
+            ...positionTarget.locations,
+            otherLocations: anchorBefore.locations?.otherLocations,
+          }),
+        })
+      : positionTarget;
+
+    // CLAUDE-ADDED: requestFirstVisibleLocator's own round trip above is Readium's "first_visible_locator"
+    // event handling (EpubNavigator.ts's eventListener), which unconditionally replaces
+    // navigatorInstance's own currentLocation.locations wholesale with whatever the frame reports -- a
+    // cssSelector only, no position/progression (see helpers/dom.ts's findFirstVisibleLocator, which
+    // never sets either). Harmless for our own read of it above (anchorBefore is a local copy), but left
+    // uncorrected it leaves the navigator's *shared* currentLocation without a valid locations.position --
+    // which crashes FramePoolManager.update's `this.positions.findIndex(l => l.locations.position ===
+    // locator.locations.position)` (throws "Locator not found in position list") the instant action()
+    // itself triggers a layout switch (scroll <-> paginated, e.g. StatefulLayout's radio group), since
+    // setLayout reads navigatorInstance.currentLocator directly rather than anything of ours. There's no
+    // public setter for currentLocation (private field, TS-only enforced), so this repairs it directly --
+    // with the exact same well-formed, guaranteed-to-have-a-position locator we're about to navigate back
+    // to anyway once action() finishes, i.e. the same kind of direct currentLocation assignment
+    // EpubNavigator's own internal code already does in several places (e.g. that same
+    // first_visible_locator handler).
+    if (navigatorInstance) (navigatorInstance as unknown as { currentLocation: Locator }).currentLocation = target;
+
     const generation = ++submitGenerationRef.current;
 
     await action();
@@ -146,21 +186,6 @@ export const useEpubNavigator = () => {
     await nextFrame();
 
     if (submitGenerationRef.current !== generation) return;
-
-    const positionTarget = positionsListRef.current.find(item => item.locations.position === positionBefore);
-    if (!positionTarget && !anchorBefore?.text?.highlight) return;
-
-    const target = anchorBefore?.text?.highlight
-      ? new Locator({
-          href: positionTarget?.href ?? anchorBefore.href,
-          type: positionTarget?.type ?? anchorBefore.type,
-          text: anchorBefore.text,
-          locations: new LocatorLocations({
-            ...positionTarget?.locations,
-            otherLocations: anchorBefore.locations?.otherLocations,
-          }),
-        })
-      : positionTarget!;
 
     await new Promise<void>((resolve) => navigatorInstance?.go(target, false, () => resolve()));
   }, [requestFirstVisibleLocator]);
