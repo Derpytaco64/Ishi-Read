@@ -535,7 +535,30 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
     [setLocalData, updatePublicationNavigationState]
   );
 
-  useEffect(() => () => debouncedSavePosition.clear(), [debouncedSavePosition]);
+  // CLAUDE-ADDED: flush(), not clear() -- clear() would silently discard whatever position change was
+  // still pending inside the 250ms debounce window at the moment this unmounts (e.g. exiting the reader
+  // via in-app navigation rather than a full page reload), leaving the server's saved position up to one
+  // debounce interval stale. flush() runs the pending save immediately instead of dropping it.
+  //
+  // That React-unmount cleanup alone isn't enough, though: exitReader below navigates away via a hard
+  // `window.location.href` assignment, not client-side routing, and on mobile in particular the page can
+  // be torn down (backgrounded/killed) before a pending React effect cleanup gets a chance to run at all
+  // -- the exact same problem useReadingTimer.ts already solved for the reading-time counter. pagehide
+  // fires reliably in both cases (hard nav and mobile backgrounding); visibilitychange's "hidden" state
+  // covers app-switch-without-navigating, which pagehide alone would miss.
+  useEffect(() => {
+    const flush = () => debouncedSavePosition.flush();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", flush);
+      flush();
+    };
+  }, [debouncedSavePosition]);
 
   const listeners: EpubNavigatorListeners = useMemo(() => ({
     // CLAUDE-ADDED: Applies the current horizontal margin to every freshly-loaded frame -- see useMarginSync.ts (keeps already-loaded frames in sync when the setting changes).
