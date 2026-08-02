@@ -23,7 +23,8 @@ import { StatefulActionContainerProps } from "../models/actions";
 import { StatefulSettingsWrapper } from "./StatefulSettingsWrapper";
 import { StatefulSpacingGroupContainer } from "../../Settings/Spacing/StatefulSpacingGroup";
 import { StatefulTextGroupContainer } from "../../Settings/Text/StatefulTextGroup";
-import { StatefulKeepChromeVisible } from "../../Settings/StatefulKeepChromeVisible";
+import { StatefulUIVisibilityGroup } from "../../Settings/UIVisibility/StatefulUIVisibilityGroup";
+import { StatefulUIVisibilityToggles } from "../../Settings/UIVisibility/StatefulUIVisibilityToggles";
 
 import { usePreferences } from "@/preferences/hooks/usePreferences";
 import { usePlugins } from "@/components/Plugins/PluginProvider";
@@ -118,6 +119,9 @@ export const StatefulVisualSettingsContainer = ({
       case ThSettingsContainerKeys.spacing:
         return <StatefulSpacingGroupContainer />;
 
+      case ThSettingsContainerKeys.uiVisibility:
+        return <StatefulUIVisibilityToggles />;
+
       case ThSettingsContainerKeys.initial:
       default:
         return (
@@ -145,7 +149,7 @@ export const StatefulVisualSettingsContainer = ({
                 })
               : <></>
             }
-            <StatefulKeepChromeVisible />
+            <StatefulUIVisibilityGroup />
           </>
         );
     }
@@ -158,6 +162,9 @@ export const StatefulVisualSettingsContainer = ({
 
       case ThSettingsContainerKeys.spacing:
         return t("reader.preferences.spacing.title");
+
+      case ThSettingsContainerKeys.uiVisibility:
+        return t("reader.preferences.uiVisibility.title");
 
       case ThSettingsContainerKeys.initial:
       default:
@@ -172,6 +179,12 @@ export const StatefulVisualSettingsContainer = ({
 
       case ThSettingsContainerKeys.spacing:
         return preferences.settings.spacing?.header || ThSheetHeaderVariant.close;
+
+      case ThSettingsContainerKeys.uiVisibility:
+        // CLAUDE-ADDED: Not a Readium preference, so there's no preferences.settings.uiVisibility?.header
+        // to read like text/spacing above -- hardcoded to the same "previous" variant defaultPreferences.ts
+        // already sets for those, since this is a subpanel (needs a back arrow, not a close X) same as them.
+        return ThSheetHeaderVariant.previous;
 
       case ThSettingsContainerKeys.initial:
       default:

@@ -41,8 +41,11 @@ export const StatefulReaderHeader = ({
 
   const { preferences } = usePreferences();
 
-  // CLAUDE-ADDED: See StatefulKeepChromeVisible.tsx / StatefulReaderFooter.tsx's equivalent comment.
+  // CLAUDE-ADDED: See StatefulUIVisibilityToggles.tsx / StatefulReaderFooter.tsx's equivalent comment.
   const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
+  // CLAUDE-ADDED: See UIElementVisibility's own comment in globalPreferencesReducer.ts -- `!== false`
+  // (not `=== true`) so every flag here defaults to visible/on.
+  const uiElementVisibility = useAppSelector(state => state.globalPreferences.uiElementVisibility);
 
   return (
     <>
@@ -61,9 +64,13 @@ export const StatefulReaderHeader = ({
         onMouseLeave={ removeHover }
         { ...focusWithinProps }
       >
-        { preferences.theming.header?.backLink && <StatefulBackLink className={ readerHeaderStyles.backlinkWrapper } /> }
+        { preferences.theming.header?.backLink && uiElementVisibility?.backLink !== false &&
+          <StatefulBackLink className={ readerHeaderStyles.backlinkWrapper } />
+        }
 
-        <StatefulReaderRunningHead formatPref={ runningHeadFormatPref } />
+        { uiElementVisibility?.runningHead !== false &&
+          <StatefulReaderRunningHead formatPref={ runningHeadFormatPref } />
+        }
 
         <StatefulCollapsibleActionsBar
           id="reader-header-overflowMenu"
@@ -72,9 +79,10 @@ export const StatefulReaderHeader = ({
           className={ readerHeaderStyles.actionsWrapper }
           aria-label={ t("reader.app.header.actions") }
           overflowMenuClassName={
-            (!isScroll || preferences.affordances.scroll.hintInImmersive)
-              ? overflowMenuStyles.hint
-              : undefined
+            classNames(
+              (!isScroll || preferences.affordances.scroll.hintInImmersive) && overflowMenuStyles.hint,
+              uiElementVisibility?.overflowMenu === false && overflowMenuStyles.hidden
+            )
           }
         />
       </ThHeader>

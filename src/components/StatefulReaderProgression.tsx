@@ -49,7 +49,7 @@ export const StatefulReaderProgression = ({
   const isImmersive = useAppSelector(state => state.reader.isImmersive);
   const isFullscreen = useAppSelector(state => state.reader.isFullscreen);
   const isHoveringRaw = useAppSelector(state => state.reader.isHovering);
-  // CLAUDE-ADDED: "Keep progress indicator visible while reading" -- see StatefulKeepChromeVisible.tsx.
+  // CLAUDE-ADDED: "Keep progress indicator visible while reading" -- see StatefulUIVisibilityToggles.tsx.
   // Combined into isHovering below (used in both immersive/fullscreen blanking checks further down) --
   // the compact/mobile breakpoint's displayInImmersive:false is what actually blanks this text; the CSS
   // bar-slide handled in StatefulReader.tsx's getReaderClassNames is a separate, redundant layer this
@@ -207,14 +207,14 @@ export const StatefulReaderProgression = ({
         
       case ThProgressionFormat.resourceProgression:
         if (relativeProgression !== undefined) {
-          const percentage = Math.round(relativeProgression * 100);
+          const percentage = (relativeProgression * 100).toFixed(1);
           text = `${ percentage }%`;
         }
         break;
-        
+
       case ThProgressionFormat.progressionOfResource:
         if (relativeProgression !== undefined) {
-          const percentage = Math.round(relativeProgression * 100);
+          const percentage = (relativeProgression * 100).toFixed(1);
           text = t("reader.progression.xOfY.compact", {
             x: `${ percentage }%`,
             y: currentChapter || t("reader.app.progression.referenceFallback")

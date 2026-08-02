@@ -22,7 +22,7 @@ export const StatefulReaderRunningHead = ({
   const unstableTimeline = useAppSelector(state => state.publication.unstableTimeline);
   const isImmersive = useAppSelector(state => state.reader.isImmersive);
   const isHoveringRaw = useAppSelector(state => state.reader.isHovering);
-  // CLAUDE-ADDED: See StatefulReaderProgression.tsx's equivalent comment / StatefulKeepChromeVisible.tsx.
+  // CLAUDE-ADDED: See StatefulReaderProgression.tsx's equivalent comment / StatefulUIVisibilityToggles.tsx.
   const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
   const isHovering = isHoveringRaw || keepChromeVisible;
   const isFullscreen = useAppSelector(state => state.reader.isFullscreen);

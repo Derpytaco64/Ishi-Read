@@ -213,7 +213,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   const isImmersive = useAppSelector(state => state.reader.isImmersive);
   const isHovering = useAppSelector(state => state.reader.isHovering);
   // CLAUDE-ADDED: "Keep progress indicator visible while reading" setting -- see
-  // StatefulKeepChromeVisible.tsx. Combined only at the getReaderClassNames call below (the CSS class
+  // StatefulUIVisibilityToggles.tsx. Combined only at the getReaderClassNames call below (the CSS class
   // that slides the whole header/footer bar out of view in immersive mode), not into the base
   // isHovering used above for useEpubStatelessCache's layout signature, which tracks the real hover
   // state independent of this display preference.
@@ -547,6 +547,19 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
       wnd.postMessage({ type: NOTE_HOVER_MESSAGE_TYPE, notes: noteHoverEntriesRef.current }, "*");
     },
     positionChanged: async function (locator: Locator): Promise<void> {
+      // CLAUDE-ADDED: correctPositionAround's requestFirstVisibleLocator (useEpubNavigator.ts) triggers
+      // EpubNavigator's own "first_visible_locator" round trip as a side effect, which fires this same
+      // positionChanged listener with a priming locator that has no locations.position/progression at
+      // all (see findFirstVisibleLocator in @readium/navigator-html-injectables -- href is hardcoded to
+      // "#", locations only ever carries a cssSelector). Every real, settled position update in this
+      // library -- syncLocation's scroll/paginate reporting, changeResource's page turns -- always comes
+      // from a positions-list entry and therefore always has .position set, so this is a safe filter
+      // that only drops that one synthetic priming event. Without it, whichever of these four listeners
+      // last received an event before correctPositionAround's own corrective go() lands (up to a few
+      // frames later, sometimes longer on slow devices) could act on/persist this position-less locator
+      // -- debouncedSavePosition in particular could flush it to the server as the resume position.
+      if (locator.locations?.position === undefined) return;
+
       debouncedSavePosition(locator);
 
       // CLAUDE-ADDED: Not debounced, unlike the above -- the pairing/auto-advance logic in useShortImageSpread needs to react to every single position change in sequence to correctly detect "user paged past an already-shown pair".

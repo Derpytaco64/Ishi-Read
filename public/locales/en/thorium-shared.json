@@ -217,6 +217,9 @@
                 "small": "Tight",
                 "title": "Line height"
             },
+            "margin": {
+                "horizontal": "Horizontal margin"
+            },
             "noRuby": {
                 "label": "Hide ruby annotations",
                 "title": "Ruby annotations"
@@ -292,6 +295,15 @@
                 "title": "Themes"
             },
             "title": "Display Settings",
+            "uiVisibility": {
+                "backLink": "Return to library button",
+                "overflowMenu": "More actions menu",
+                "pagination": "Page turn buttons",
+                "progression": "Page number",
+                "readingTimer": "Reading timer",
+                "runningHead": "Chapter name",
+                "title": "UI Element Visibility"
+            },
             "wordSpacing": "Word spacing",
             "zoom": "Zoom"
         },

@@ -42,10 +42,13 @@ export const StatefulReaderFooter = ({
   const footerRef = useRef<HTMLDivElement>(null);
   const isImmersive = useAppSelector(state => state.reader.isImmersive);
   const isHovering = useAppSelector(state => state.reader.isHovering);
-  // CLAUDE-ADDED: See StatefulKeepChromeVisible.tsx -- ORed into the overlay's isActive below so the
+  // CLAUDE-ADDED: See StatefulUIVisibilityToggles.tsx -- ORed into the overlay's isActive below so the
   // invisible full-bar tap-catcher doesn't sit on top of the footer once this setting keeps it visible
   // (ThInteractiveOverlay renders pointerEvents:"auto" at a very high z-index when active).
   const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
+  // CLAUDE-ADDED: See UIElementVisibility's own comment in globalPreferencesReducer.ts -- gates the
+  // page-turn buttons (pagination, via updateLinks below) and the page-number indicator (progression).
+  const uiElementVisibility = useAppSelector(state => state.globalPreferences.uiElementVisibility);
   const hasScrollAffordance = useAppSelector(state => state.reader.hasScrollAffordance);
   const isRTL = useAppSelector(state => state.publication.isRTL);
   const isFXL = useAppSelector(state => state.publication.isFXL);
@@ -111,6 +114,8 @@ export const StatefulReaderFooter = ({
   }, [t, breakpoint]);
 
   const updateLinks = useCallback(() => {
+    if (uiElementVisibility?.pagination === false) return {};
+
     const previous = previousLocator();
     const next = nextLocator();
 
@@ -137,7 +142,7 @@ export const StatefulReaderFooter = ({
     return isRTL
       ? { left: nextLink, right: previousLink }
       : { left: previousLink, right: nextLink };
-  }, [go, previousLocator, nextLocator, buildNode, timeline, reducedMotion, isFXL, isRTL]);
+  }, [go, previousLocator, nextLocator, buildNode, timeline, reducedMotion, isFXL, isRTL, uiElementVisibility]);
 
   useEffect(() => {
     updateLinks();
@@ -190,11 +195,13 @@ export const StatefulReaderFooter = ({
             } }
           >
             <span className={ readerStyles.progressionWithReturn }>
-              <StatefulReaderProgression
-                className={ readerPaginationStyles.progression }
-                formatPref={ progressionFormatPref }
-                fallbackVariant={ progressionFormatFallback }
-              />
+              { uiElementVisibility?.progression !== false &&
+                <StatefulReaderProgression
+                  className={ readerPaginationStyles.progression }
+                  formatPref={ progressionFormatPref }
+                  fallbackVariant={ progressionFormatFallback }
+                />
+              }
               { !!returnLocator &&
                 <button
                   type="button"
@@ -208,10 +215,12 @@ export const StatefulReaderFooter = ({
             </span>
           </StatefulReaderPagination>
         : <span className={ readerStyles.progressionWithReturn }>
-            <StatefulReaderProgression
-              formatPref={ progressionFormatPref }
-              fallbackVariant={ progressionFormatFallback }
-            />
+            { uiElementVisibility?.progression !== false &&
+              <StatefulReaderProgression
+                formatPref={ progressionFormatPref }
+                fallbackVariant={ progressionFormatFallback }
+              />
+            }
             { !!returnLocator &&
               <button
                 type="button"

@@ -10,6 +10,10 @@
   background-color: var(--th-theme-background);
 }
 
+.hidden {
+  display: none;
+}
+
 .popover {
   background-color: var(--th-theme-background);
   color: var(--th-theme-text);
