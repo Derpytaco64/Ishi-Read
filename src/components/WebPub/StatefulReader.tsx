@@ -55,6 +55,7 @@ import { useZoomCallbacks } from "@/components/Settings/hooks/useZoomCallbacks";
 import { useFocusedDockableKey } from "../Docking/hooks/useFocusedDockableKey";
 
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
+import { anyUIElementPinned } from "@/lib/globalPreferencesReducer";
 import { 
   setLoading,
   setHovering, 
@@ -140,9 +141,12 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   const hasDisplayTransformability = useAppSelector(state => state.publication.hasDisplayTransformability);
   const isImmersive = useAppSelector(state => state.reader.isImmersive);
   const isHovering = useAppSelector(state => state.reader.isHovering);
-  // CLAUDE-ADDED: "Keep progress indicator visible while reading" setting -- see
-  // StatefulUIVisibilityToggles.tsx. Same combination as Epub/StatefulReader.tsx's equivalent.
+  // CLAUDE-ADDED: "Keep progress indicator visible while reading" setting, plus any individual "UI
+  // Element Visibility" toggle pinned on -- see StatefulUIVisibilityToggles.tsx / anyUIElementPinned's
+  // own comment in globalPreferencesReducer.ts. Same combination as Epub/StatefulReader.tsx's equivalent.
   const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
+  const uiElementVisibility = useAppSelector(state => state.globalPreferences.uiElementVisibility);
+  const chromeAlwaysVisible = keepChromeVisible || anyUIElementPinned(uiElementVisibility);
   const breakpoint = useAppSelector(state => state.theming.breakpoint);
   const containerBreakpoint = useAppSelector(state => state.theming.containerBreakpoint);
 
@@ -392,7 +396,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
                 getReaderClassNames({
                   isScroll: true,
                   isImmersive,
-                  isHovering: isHovering || keepChromeVisible,
+                  isHovering: isHovering || chromeAlwaysVisible,
                   layoutUI,
                   breakpoint,
                   containerBreakpoint

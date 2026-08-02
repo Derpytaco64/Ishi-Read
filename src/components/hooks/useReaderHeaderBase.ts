@@ -35,11 +35,6 @@ export const useReaderHeaderBase = (actionKeys: string[]) => {
   const actions = useActions(mergedActionsMap);
   const dispatch = useAppDispatch();
 
-  // CLAUDE-ADDED: See UIElementVisibility's own comment in globalPreferencesReducer.ts -- drives the
-  // readingTimer exclusion in listActionItems' own filter below, same "UI Element Visibility" settings
-  // menu as StatefulReaderHeader.tsx's backLink/runningHead/overflowMenu gating.
-  const uiElementVisibility = useAppSelector(state => state.globalPreferences.uiElementVisibility);
-
   const { focusWithinProps } = useFocusWithin({
     onFocusWithin() {
       dispatch(setHovering(true));
@@ -87,12 +82,9 @@ export const useReaderHeaderBase = (actionKeys: string[]) => {
       if (item.key === ThActionsKeys.fullscreen) {
         return document.fullscreenEnabled && !isIOSish();
       }
-      if (item.key === ThActionsKeys.readingTimer) {
-        return uiElementVisibility?.readingTimer !== false;
-      }
       return true;
     });
-  }, [actionKeys, actionsComponentsMap, positionsList, uiElementVisibility]);
+  }, [actionKeys, actionsComponentsMap, positionsList]);
 
   useEffect(() => {
     if (isImmersive) {

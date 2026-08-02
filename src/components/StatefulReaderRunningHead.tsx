@@ -24,7 +24,8 @@ export const StatefulReaderRunningHead = ({
   const isHoveringRaw = useAppSelector(state => state.reader.isHovering);
   // CLAUDE-ADDED: See StatefulReaderProgression.tsx's equivalent comment / StatefulUIVisibilityToggles.tsx.
   const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
-  const isHovering = isHoveringRaw || keepChromeVisible;
+  const uiElementVisibility = useAppSelector(state => state.globalPreferences.uiElementVisibility);
+  const isHovering = isHoveringRaw || keepChromeVisible || !!uiElementVisibility?.runningHead;
   const isFullscreen = useAppSelector(state => state.reader.isFullscreen);
   const breakpoint = useAppSelector(state => state.theming.containerBreakpoint);
 

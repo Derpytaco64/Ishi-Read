@@ -20,6 +20,7 @@ import { useReaderHeaderBase } from "./hooks/useReaderHeaderBase";
 import { usePreferences } from "@/preferences/hooks";
 
 import { useAppSelector } from "@/lib/hooks";
+import { anyUIElementPinned } from "@/lib/globalPreferencesReducer";
 
 import classNames from "classnames";
 
@@ -43,15 +44,17 @@ export const StatefulReaderHeader = ({
 
   // CLAUDE-ADDED: See StatefulUIVisibilityToggles.tsx / StatefulReaderFooter.tsx's equivalent comment.
   const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
-  // CLAUDE-ADDED: See UIElementVisibility's own comment in globalPreferencesReducer.ts -- `!== false`
-  // (not `=== true`) so every flag here defaults to visible/on.
+  // CLAUDE-ADDED: See anyUIElementPinned's own comment in globalPreferencesReducer.ts -- pinning any one
+  // of backLink/runningHead/overflowMenu/readingTimer keeps the whole header bar from fading, same as
+  // keepChromeVisible alone already does (they share one CSS slide transform, not independent ones).
   const uiElementVisibility = useAppSelector(state => state.globalPreferences.uiElementVisibility);
+  const headerAlwaysVisible = keepChromeVisible || anyUIElementPinned(uiElementVisibility);
 
   return (
     <>
       <ThInteractiveOverlay
         className={ classNames(readerStyles.barOverlay, readerStyles.headerOverlay) }
-        isActive={ layout === ThLayoutUI.layered && isImmersive && !isHovering && !keepChromeVisible }
+        isActive={ layout === ThLayoutUI.layered && isImmersive && !isHovering && !headerAlwaysVisible }
         onMouseEnter={ setHover }
         onMouseLeave={ removeHover }
       />
@@ -64,13 +67,11 @@ export const StatefulReaderHeader = ({
         onMouseLeave={ removeHover }
         { ...focusWithinProps }
       >
-        { preferences.theming.header?.backLink && uiElementVisibility?.backLink !== false &&
+        { preferences.theming.header?.backLink &&
           <StatefulBackLink className={ readerHeaderStyles.backlinkWrapper } />
         }
 
-        { uiElementVisibility?.runningHead !== false &&
-          <StatefulReaderRunningHead formatPref={ runningHeadFormatPref } />
-        }
+        <StatefulReaderRunningHead formatPref={ runningHeadFormatPref } />
 
         <StatefulCollapsibleActionsBar
           id="reader-header-overflowMenu"
@@ -80,8 +81,7 @@ export const StatefulReaderHeader = ({
           aria-label={ t("reader.app.header.actions") }
           overflowMenuClassName={
             classNames(
-              (!isScroll || preferences.affordances.scroll.hintInImmersive) && overflowMenuStyles.hint,
-              uiElementVisibility?.overflowMenu === false && overflowMenuStyles.hidden
+              (!isScroll || preferences.affordances.scroll.hintInImmersive) && overflowMenuStyles.hint
             )
           }
         />

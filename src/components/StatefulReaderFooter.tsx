@@ -25,6 +25,7 @@ import { setReturnLocator } from "@/lib/annotationsReducer";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { useIsScroll } from "@/hooks";
 import { focusReadingContainer } from "@/core/Helpers/focusUtilities";
+import { anyUIElementPinned } from "@/lib/globalPreferencesReducer";
 
 import classNames from "classnames";
 
@@ -46,9 +47,12 @@ export const StatefulReaderFooter = ({
   // invisible full-bar tap-catcher doesn't sit on top of the footer once this setting keeps it visible
   // (ThInteractiveOverlay renders pointerEvents:"auto" at a very high z-index when active).
   const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
-  // CLAUDE-ADDED: See UIElementVisibility's own comment in globalPreferencesReducer.ts -- gates the
-  // page-turn buttons (pagination, via updateLinks below) and the page-number indicator (progression).
+  // CLAUDE-ADDED: See anyUIElementPinned's own comment in globalPreferencesReducer.ts -- pinning either
+  // progression or pagination keeps the whole footer bar from fading, same as keepChromeVisible alone
+  // already does. progression's own content additionally stays pinned independently of the bar via its
+  // own isHovering merge -- see StatefulReaderProgression.tsx.
   const uiElementVisibility = useAppSelector(state => state.globalPreferences.uiElementVisibility);
+  const footerAlwaysVisible = keepChromeVisible || anyUIElementPinned(uiElementVisibility);
   const hasScrollAffordance = useAppSelector(state => state.reader.hasScrollAffordance);
   const isRTL = useAppSelector(state => state.publication.isRTL);
   const isFXL = useAppSelector(state => state.publication.isFXL);
@@ -114,8 +118,6 @@ export const StatefulReaderFooter = ({
   }, [t, breakpoint]);
 
   const updateLinks = useCallback(() => {
-    if (uiElementVisibility?.pagination === false) return {};
-
     const previous = previousLocator();
     const next = nextLocator();
 
@@ -142,7 +144,7 @@ export const StatefulReaderFooter = ({
     return isRTL
       ? { left: nextLink, right: previousLink }
       : { left: previousLink, right: nextLink };
-  }, [go, previousLocator, nextLocator, buildNode, timeline, reducedMotion, isFXL, isRTL, uiElementVisibility]);
+  }, [go, previousLocator, nextLocator, buildNode, timeline, reducedMotion, isFXL, isRTL]);
 
   useEffect(() => {
     updateLinks();
@@ -162,7 +164,7 @@ export const StatefulReaderFooter = ({
     <>
     <ThInteractiveOverlay
       className={ classNames(readerStyles.barOverlay, readerStyles.footerOverlay) }
-      isActive={ layout === ThLayoutUI.layered && isImmersive && !isHovering && !keepChromeVisible }
+      isActive={ layout === ThLayoutUI.layered && isImmersive && !isHovering && !footerAlwaysVisible }
       onMouseEnter={ setHover }
       onMouseLeave={ removeHover }
     />
@@ -195,13 +197,11 @@ export const StatefulReaderFooter = ({
             } }
           >
             <span className={ readerStyles.progressionWithReturn }>
-              { uiElementVisibility?.progression !== false &&
-                <StatefulReaderProgression
-                  className={ readerPaginationStyles.progression }
-                  formatPref={ progressionFormatPref }
-                  fallbackVariant={ progressionFormatFallback }
-                />
-              }
+              <StatefulReaderProgression
+                className={ readerPaginationStyles.progression }
+                formatPref={ progressionFormatPref }
+                fallbackVariant={ progressionFormatFallback }
+              />
               { !!returnLocator &&
                 <button
                   type="button"
@@ -215,12 +215,10 @@ export const StatefulReaderFooter = ({
             </span>
           </StatefulReaderPagination>
         : <span className={ readerStyles.progressionWithReturn }>
-            { uiElementVisibility?.progression !== false &&
-              <StatefulReaderProgression
-                formatPref={ progressionFormatPref }
-                fallbackVariant={ progressionFormatFallback }
-              />
-            }
+            <StatefulReaderProgression
+              formatPref={ progressionFormatPref }
+              fallbackVariant={ progressionFormatFallback }
+            />
             { !!returnLocator &&
               <button
                 type="button"

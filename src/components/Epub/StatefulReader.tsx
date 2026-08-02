@@ -57,6 +57,7 @@ import { useReadingTimer } from "@/components/Actions/ReadingTimer/hooks/useRead
 import { useReadingSpeedSampler } from "@/components/Actions/ReadingTimer/hooks/useReadingSpeedSampler";
 import { useBookWordCount } from "./Hooks/useBookWordCount";
 import { persistWordCount } from "@/lib/readingTimeReducer";
+import { anyUIElementPinned } from "@/lib/globalPreferencesReducer";
 import { PairedSpreadOverlay } from "./PairedSpreadOverlay";
 import { useEpubNavigator } from "@/core/Hooks/Epub/useEpubNavigator";
 import { useFullscreen } from "@/core/Hooks/useFullscreen";
@@ -212,12 +213,15 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   
   const isImmersive = useAppSelector(state => state.reader.isImmersive);
   const isHovering = useAppSelector(state => state.reader.isHovering);
-  // CLAUDE-ADDED: "Keep progress indicator visible while reading" setting -- see
-  // StatefulUIVisibilityToggles.tsx. Combined only at the getReaderClassNames call below (the CSS class
-  // that slides the whole header/footer bar out of view in immersive mode), not into the base
+  // CLAUDE-ADDED: "Keep progress indicator visible while reading" setting, plus any individual "UI
+  // Element Visibility" toggle pinned on -- see StatefulUIVisibilityToggles.tsx / anyUIElementPinned's
+  // own comment in globalPreferencesReducer.ts. Combined only at the getReaderClassNames call below (the
+  // CSS class that slides the whole header/footer bar out of view in immersive mode), not into the base
   // isHovering used above for useEpubStatelessCache's layout signature, which tracks the real hover
   // state independent of this display preference.
   const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
+  const uiElementVisibility = useAppSelector(state => state.globalPreferences.uiElementVisibility);
+  const chromeAlwaysVisible = keepChromeVisible || anyUIElementPinned(uiElementVisibility);
 
   const layoutUI = isFXL 
     ? preferences.theming.layout.ui?.fxl || ThLayoutUI.layered 
@@ -1038,7 +1042,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
               getReaderClassNames({
                 isScroll,
                 isImmersive,
-                isHovering: isHovering || keepChromeVisible,
+                isHovering: isHovering || chromeAlwaysVisible,
                 isFXL,
                 layoutUI,
                 breakpoint,
