@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef } from "react";
 import {
   Link,
   Locator,
+  LocatorLocations,
   Publication
 } from "@readium/shared";
 import {
@@ -85,6 +86,29 @@ export const useEpubNavigator = () => {
   // call's own).
   const submitGenerationRef = useRef(0);
 
+  // CLAUDE-ADDED: EpubNavigator/the injectable content script already ship a full "find the first
+  // visible element, turn it into a Locator" pipeline (ColumnSnapper.ts's "first_visible_locator"
+  // comms handler -> helpers/dom.ts's findFirstVisibleLocator, which walks the DOM for the smallest
+  // fully-visible element and builds a Locator with a cssSelector *and* text.highlight set to that
+  // element's own text) -- it's just never triggered from anywhere in the compiled bundle. _cframes is
+  // the same internal escape hatch getCframes() already exposes to the rest of the app (see its own
+  // "will become private" warning); .msg is EpubNavigator's own internal comms channel, the same one
+  // go()/submitPreferences use themselves. Sending the command directly and awaiting
+  // navigatorInstance.currentLocator afterward -- rather than reading it in the ack callback -- relies
+  // on the frame posting its "first_visible_locator" event (which is what actually updates
+  // currentLocator, inside EpubNavigator's own eventListener) before it acks our command; both are sent
+  // from the same synchronous handler in the frame, so postMessage ordering guarantees the event lands
+  // first.
+  const requestFirstVisibleLocator = useCallback((): Promise<Locator | undefined> => {
+    return new Promise((resolve) => {
+      const frame = navigatorInstance?._cframes?.[0];
+      if (!frame?.msg) { resolve(undefined); return; }
+      frame.msg.send("first_visible_locator", undefined, () => {
+        resolve(navigatorInstance?.currentLocator);
+      });
+    });
+  }, []);
+
   // CLAUDE-ADDED: Shared by submitPreferences (font size/spacing/etc. changes) and the fullscreen
   // toggle correction below -- both trigger the same underlying problem: EpubNavigator's post-reflow
   // position recovery (see submitPreferences/syncLocation in @readium/navigator) approximates "where
@@ -92,23 +116,28 @@ export const useEpubNavigator = () => {
   // scroll width, then re-deriving locations.position from that clamped fraction. That's fine for a
   // small nudge, but a large layout change -- a big font-size jump, or a fullscreen toggle changing
   // the viewport's available height/width -- can shrink/grow a resource's total width so much that
-  // the clamped pixel position lands nowhere near the paragraph actually being read (jumping from
-  // position 50 of 800 to 200 of 800 on one big font-size decrease, for example, or silently
-  // reverting forward navigation made while fullscreen once exiting resizes the viewport back).
-  // Capturing locations.position *before* the change and explicitly re-navigating to that same
-  // positions-list entry afterward -- the identical lookup StatefulJumpToPositionContainer already
-  // uses for manual position jumps -- corrects the drift regardless of how the internal auto-snap
-  // landed, since the positions list itself is a fixed, content-based index that never depends on
-  // layout. `action` is expected to be whatever synchronously (or via its own returned promise)
-  // triggers the layout change; capturing happens before it runs, which is why this takes a callback
-  // rather than just wrapping a promise passed in already-started.
+  // the clamped pixel position lands nowhere near the paragraph actually being read.
+  //
+  // The primary fix is content-anchored, not index-anchored: capture the actual text of whatever
+  // element is first visible *before* the change (requestFirstVisibleLocator above), then after the
+  // change ask the frame to re-find that same text via rangeFromLocator's TextQuoteAnchor search (see
+  // EpubNavigator.ts's loadLocator -- passing a Locator with text.highlight set makes go() try this
+  // automatically) and scroll it into view. That's anchored to the content itself, so it's correct
+  // regardless of how the internal auto-snap's pixel-clamping landed, and regardless of device/viewport.
+  // locations.position (the positions-list index lookup this used to rely on exclusively) is kept as a
+  // merged-in fallback on the same target Locator -- loadLocator falls through to it automatically if
+  // the text search comes up empty (e.g. a quote that's no longer unique). `action` is expected to be
+  // whatever synchronously (or via its own returned promise) triggers the layout change; capturing
+  // happens before it runs, which is why this takes a callback rather than just wrapping an
+  // already-started promise.
   const correctPositionAround = useCallback(async (action: () => void | Promise<void>) => {
-    const positionBefore = isFXLRef.current ? undefined : navigatorInstance?.currentLocator?.locations?.position;
+    if (isFXLRef.current) { await action(); return; }
+
+    const positionBefore = navigatorInstance?.currentLocator?.locations?.position;
+    const anchorBefore = await requestFirstVisibleLocator();
     const generation = ++submitGenerationRef.current;
 
     await action();
-
-    if (positionBefore === undefined) return;
 
     // CLAUDE-ADDED: The navigator's own ResizeObserver-driven auto-snap runs off a browser reflow, not
     // off action()'s own promise -- it can still be pending when the above await resolves. Wait it out
@@ -118,11 +147,23 @@ export const useEpubNavigator = () => {
 
     if (submitGenerationRef.current !== generation) return;
 
-    const target = positionsListRef.current.find(item => item.locations.position === positionBefore);
-    if (!target) return;
+    const positionTarget = positionsListRef.current.find(item => item.locations.position === positionBefore);
+    if (!positionTarget && !anchorBefore?.text?.highlight) return;
+
+    const target = anchorBefore?.text?.highlight
+      ? new Locator({
+          href: positionTarget?.href ?? anchorBefore.href,
+          type: positionTarget?.type ?? anchorBefore.type,
+          text: anchorBefore.text,
+          locations: new LocatorLocations({
+            ...positionTarget?.locations,
+            otherLocations: anchorBefore.locations?.otherLocations,
+          }),
+        })
+      : positionTarget!;
 
     await new Promise<void>((resolve) => navigatorInstance?.go(target, false, () => resolve()));
-  }, []);
+  }, [requestFirstVisibleLocator]);
 
   const submitPreferences = useCallback(async (preferences: IEpubPreferences) => {
     await correctPositionAround(() => navigatorInstance?.submitPreferences(new EpubPreferences(preferences)));
