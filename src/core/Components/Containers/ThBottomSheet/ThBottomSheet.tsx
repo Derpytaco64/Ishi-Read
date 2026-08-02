@@ -181,10 +181,15 @@ const ThBottomSheetContainer = ({
         }
         { Header }
       </Sheet.Header>
-      <Sheet.Content 
+      <Sheet.Content
         scrollRef={ scrollerRef }
         { ...compounds?.content }
-        { ...(isDraggable && compounds?.content?.disableDrag ? { style: { ...compounds?.content?.style, paddingBottom: autoPadding } as { [key: string]: any }} : {})}
+        // CLAUDE-ADDED: Strict === true (not a truthiness check) so a *function* disableDrag (see
+        // StatefulBookSheet.tsx -- only wants dragging disabled once fully open, not always) doesn't
+        // also trip this padding compensation. It exists for content that never moves with the sheet's
+        // own drag transform at all (StatefulBottomSheet.tsx's always-true case); a partially-draggable
+        // sheet's content still moves with it while draggable, so it doesn't need the same compensation.
+        { ...(isDraggable && compounds?.content?.disableDrag === true ? { style: { ...compounds?.content?.style, paddingBottom: autoPadding } as { [key: string]: any }} : {})}
       >
         { Body }
       </Sheet.Content>

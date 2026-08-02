@@ -19,6 +19,8 @@ import { StatefulCollapsibleActionsBar } from "./Actions/StatefulCollapsibleActi
 import { useReaderHeaderBase } from "./hooks/useReaderHeaderBase";
 import { usePreferences } from "@/preferences/hooks";
 
+import { useAppSelector } from "@/lib/hooks";
+
 import classNames from "classnames";
 
 export const StatefulReaderHeader = ({
@@ -39,11 +41,14 @@ export const StatefulReaderHeader = ({
 
   const { preferences } = usePreferences();
 
+  // CLAUDE-ADDED: See StatefulKeepChromeVisible.tsx / StatefulReaderFooter.tsx's equivalent comment.
+  const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
+
   return (
     <>
       <ThInteractiveOverlay
         className={ classNames(readerStyles.barOverlay, readerStyles.headerOverlay) }
-        isActive={ layout === ThLayoutUI.layered && isImmersive && !isHovering }
+        isActive={ layout === ThLayoutUI.layered && isImmersive && !isHovering && !keepChromeVisible }
         onMouseEnter={ setHover }
         onMouseLeave={ removeHover }
       />

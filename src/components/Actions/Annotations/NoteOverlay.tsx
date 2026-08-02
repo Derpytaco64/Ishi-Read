@@ -7,6 +7,8 @@ import remarkGfm from "remark-gfm";
 
 import { ThModal } from "@/core/Components/Containers/ThModal";
 
+import { useWebkitPatch } from "@/components/Sheets/hooks/useWebkitPatch";
+
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { addOrUpdateNote, deleteNote, closeNoteOverlay, setNoteOverlayMode } from "@/lib/annotationsReducer";
 import { StoredNote } from "@/lib/userData/annotationTypes";
@@ -41,6 +43,12 @@ export const NoteOverlay = () => {
   const note = noteOverlay ? notes.find(item => item.id === noteOverlay.noteId) : undefined;
   const isOpen = !!noteOverlay && !!note;
   const isEditing = noteOverlay?.mode === "edit";
+
+  // CLAUDE-ADDED: This ThModal bypassed StatefulModalBase (the only other place in the app that
+  // calls this hook), so opening/closing a note never got the WebKit scroll-reflow fix every other
+  // sheet/modal already relies on -- see useWebkitPatch's own comment for why React Aria's
+  // Popover/Modal breaks scroll on WebKit in scroll mode without it.
+  useWebkitPatch(isOpen);
 
   const close = () => dispatch(closeNoteOverlay());
 

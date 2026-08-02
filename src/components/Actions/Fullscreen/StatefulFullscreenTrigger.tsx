@@ -16,6 +16,7 @@ import { StatefulActionIcon } from "../Triggers/StatefulActionIcon";
 
 import { useActionsPreferences } from "@/preferences/hooks/useActionsPreferences";
 import { useFullscreen } from "@/core/Hooks/useFullscreen";
+import { useEpubNavigator } from "@/core/Hooks/Epub/useEpubNavigator";
 import { useI18n } from "@/i18n/useI18n";
 
 import { useAppDispatch } from "@/lib/hooks";
@@ -35,12 +36,23 @@ export const StatefulFullscreenTrigger = ({ variant }: StatefulActionTriggerProp
   
   const fs = useFullscreen(onChange);
 
+  // CLAUDE-ADDED: useEpubNavigator is a standalone hook keyed off a module-scope singleton, not React
+  // context, so it's safe to call unconditionally here even though this trigger is shared across
+  // reader profiles (createDefaultPlugin.ts registers it generically) -- correctPositionAround just
+  // no-ops (positionBefore stays undefined) when there's no active epub navigator, e.g. audio/webPub.
+  const { correctPositionAround } = useEpubNavigator();
+
   const label = fs.isFullscreen ? t("reader.fullscreen.close") : t("reader.fullscreen.trigger");
   const Icon = fs.isFullscreen ? FullscreenExit : FullscreenCorners;
 
+  // CLAUDE-ADDED: See useEpubNavigator.ts's correctPositionAround -- a fullscreen toggle resizes the
+  // viewport, which can trip the vendor navigator's imprecise reflow auto-snap the same way a
+  // font-size change does, silently reverting forward navigation made while fullscreen.
+  const toggleFullscreen = () => correctPositionAround(() => fs.handleFullscreen());
+
   const handlePress = () => {
-    fs.handleFullscreen();
-    // Has to be dispatched manually, otherwise stays true… 
+    toggleFullscreen();
+    // Has to be dispatched manually, otherwise stays true…
     dispatch(setHovering(false));
     // TODO: fix hover state on exit, if even possible w/o a lot of getting around…
   };
@@ -58,7 +70,7 @@ export const StatefulFullscreenTrigger = ({ variant }: StatefulActionTriggerProp
           label={ label }
           SVGIcon={ Icon } 
           shortcut={ preferences.actionsKeys[ThActionsKeys.fullscreen].shortcut }
-          onAction={ fs.handleFullscreen } 
+          onAction={ toggleFullscreen }
           id={ ThActionsKeys.fullscreen }
         />
       : <StatefulActionIcon

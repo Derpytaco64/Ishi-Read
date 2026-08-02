@@ -32,6 +32,21 @@ html[data-theme="dark"] body {
   margin-bottom: 4.5rem;
 }
 
+/* CLAUDE-ADDED: At desktop widths the centered title has room to sit beside the corner logo/avatar
+   (see their own mobile media queries); on a narrow phone viewport the title runs close to full
+   width and needs to clear both icons vertically instead, so it's pushed below their (now shrunk)
+   footprint rather than trying to coexist beside them. */
+@media (max-width: 600px) {
+  .header {
+    margin-top: 4.5rem;
+    padding: 0 0.5rem;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+  }
+}
+
 .logo-container {
   margin: 1.5rem auto;
   width: 200px;

@@ -19,6 +19,20 @@ import { getBestMatchingProgressionFormat } from "@/core/Helpers/progressionForm
 
 import classNames from "classnames";
 
+// CLAUDE-ADDED: "Page X of Y"-shaped formats are meaningless in continuous scroll (there's no fixed
+// page grid to count against, only the coarse manifest positionsList's ~1024-char chunks), yet they
+// stay "supported" there since currentPositions/totalPositions are still populated -- so a configured
+// preference list that leads with one of these (the default compact/mobile breakpoint does) picks it
+// over a percentage even in scroll mode. Filtered out of the candidate list before matching so scroll
+// mode always falls through to a percent-based format instead.
+const SCROLL_INCOMPATIBLE_FORMATS = new Set<ThProgressionFormat>([
+  ThProgressionFormat.positions,
+  ThProgressionFormat.positionsOfTotal,
+  ThProgressionFormat.positionsPercentOfTotal,
+  ThProgressionFormat.positionsLeft,
+  ThProgressionFormat.readingOrderIndex,
+]);
+
 export const StatefulReaderProgression = ({ 
   className,
   formatPref,
@@ -34,7 +48,14 @@ export const StatefulReaderProgression = ({
   const exactPageCount = useAppSelector(state => state.publication.exactPageCount);
   const isImmersive = useAppSelector(state => state.reader.isImmersive);
   const isFullscreen = useAppSelector(state => state.reader.isFullscreen);
-  const isHovering = useAppSelector(state => state.reader.isHovering);
+  const isHoveringRaw = useAppSelector(state => state.reader.isHovering);
+  // CLAUDE-ADDED: "Keep progress indicator visible while reading" -- see StatefulKeepChromeVisible.tsx.
+  // Combined into isHovering below (used in both immersive/fullscreen blanking checks further down) --
+  // the compact/mobile breakpoint's displayInImmersive:false is what actually blanks this text; the CSS
+  // bar-slide handled in StatefulReader.tsx's getReaderClassNames is a separate, redundant layer this
+  // alone wouldn't stop.
+  const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
+  const isHovering = isHoveringRaw || keepChromeVisible;
   const breakpoint = useAppSelector(state => state.theming.breakpoint);
   // CLAUDE-ADDED: useExactPageCount never produces data for FXL/scroll (see its own gating) -- there,
   // falling back to the coarse positionsList-based totalPositions/currentPositions is correct and
@@ -90,12 +111,15 @@ export const StatefulReaderProgression = ({
     }
     
     if (Array.isArray(variants)) {
-      return getBestMatchingProgressionFormat(variants, unstableTimeline?.progression, exactPageCount) ||
+      const candidateVariants = isScroll
+        ? variants.filter(format => !SCROLL_INCOMPATIBLE_FORMATS.has(format))
+        : variants;
+      return getBestMatchingProgressionFormat(candidateVariants, unstableTimeline?.progression, exactPageCount) ||
         fallbackFormat.variants;
     }
 
-    return variants;
-  }, [variants, unstableTimeline?.progression, exactPageCount, fallbackFormat, isImmersive, isHovering, isFullscreen, displayInImmersive, displayInFullscreen]);
+    return isScroll && SCROLL_INCOMPATIBLE_FORMATS.has(variants) ? ThProgressionFormat.overallProgression : variants;
+  }, [variants, unstableTimeline?.progression, exactPageCount, fallbackFormat, isImmersive, isHovering, isFullscreen, displayInImmersive, displayInFullscreen, isScroll]);
 
   // Compute display text based on current position and timeline
   const displayText = useMemo(() => {

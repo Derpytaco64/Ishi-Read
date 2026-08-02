@@ -70,6 +70,53 @@ const nextFrame = (win: Window): Promise<void> => {
   return new Promise((res) => win.requestAnimationFrame(() => win.requestAnimationFrame(() => res())));
 };
 
+// CLAUDE-ADDED: Per-resource info from a completed scan -- `fixedRange` for image/paired/solo
+// resources (always exactly one on-screen position), `before` + `perScreenPages` for generic
+// (prose/cover/landscape) resources, since which screen of a multi-screen resource is showing can
+// only be read live off the current scroll position. Named here (not just inlined at perResourceRef's
+// declaration) so the resize cache below can share the exact same shape.
+type PerResourceInfo = { before: number; perScreenPages: number; fixedRange?: number[] };
+
+// CLAUDE-ADDED: Shared by notifyLocatorChanged (a live page turn) and the resize-cache hit path below
+// (swapping to a previously-measured viewport size) -- both need "where is the current locator inside
+// whichever per-resource table is active right now," just from different triggers.
+const computeCurrentRange = (
+  perResource: Map<string, PerResourceInfo>,
+  href: string | undefined,
+  win: Window | undefined
+): number[] | null => {
+  if (!href) return null;
+
+  const info = perResource.get(href);
+  if (!info) return null;
+
+  if (info.fixedRange) return info.fixedRange;
+  if (!win) return null;
+
+  const width = win.innerWidth;
+  if (!width) return null;
+
+  const scrollLeft = Math.abs(win.document.scrollingElement?.scrollLeft ?? 0);
+  const screenIndex = Math.floor(scrollLeft / width);
+  const start = info.before + screenIndex * info.perScreenPages + 1;
+  return info.perScreenPages === 2 ? [start, start + 1] : [start];
+};
+
+// CLAUDE-ADDED: Caps the session-only resize cache below -- real-world usage should only ever produce
+// a handful of distinct viewport sizes per book (mobile chrome shown/hidden, maybe an orientation
+// change), but this is a safety net against pathological cases (e.g. continuously dragging a desktop
+// window's edge). Map preserves insertion order, so this evicts the oldest entry first -- not true
+// LRU (a re-hit doesn't bump its position), but enough to bound memory without extra bookkeeping.
+const MAX_RESIZE_CACHE_ENTRIES = 6;
+
+const pruneCache = <V,>(cache: Map<string, V>): void => {
+  while (cache.size > MAX_RESIZE_CACHE_ENTRIES) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey === undefined) break;
+    cache.delete(oldestKey);
+  }
+};
+
 // CLAUDE-ADDED: Renders one resource's body inside the hidden iframe, reusing the live frame's own applied <head> (readium-css stylesheets + preference-derived <style>/custom-property overrides and <html> attributes) so column-count/font/margins match exactly without us having to reimplement readium's preferences-to-CSS mapping by hand.
 const measureResourcePages = async (params: {
   publication: Publication;
@@ -149,8 +196,47 @@ export const useExactPageCount = ({
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const generationRef = useRef(0);
-  // CLAUDE-ADDED: Per-resource info from the most recent scan, filled in progressively as each resource is processed, so notifyLocatorChanged can derive a live page range on every navigation without re-scanning. `fixedRange` is for image/paired/solo resources -- always exactly one on-screen position, so the range never needs live scroll info. Generic (prose/cover/landscape) resources instead get `before` + `perScreenPages`, since which screen of a multi-screen resource is showing can only be read live off the current scroll position. Cleared whenever a new scan starts (layoutSignature changed) so a page turn during that gap can't use info computed under the previous font/column/etc.
-  const perResourceRef = useRef<Map<string, { before: number; perScreenPages: number; fixedRange?: number[] }>>(new Map());
+  // CLAUDE-ADDED: Per-resource info from the most recent scan, filled in progressively as each resource is processed, so notifyLocatorChanged can derive a live page range on every navigation without re-scanning. Cleared whenever a new scan starts (layoutSignature or viewport size changed) so a page turn during that gap can't use info computed under the previous font/column/viewport/etc.
+  const perResourceRef = useRef<Map<string, PerResourceInfo>>(new Map());
+
+  // CLAUDE-ADDED: Session-only cache of completed scans, keyed by layout+viewport size -- mobile
+  // browser chrome (address bar) showing/hiding resizes the reading pane without any setting changing,
+  // and previously this hook only ever rescanned on a layoutSignature change, so the page count could
+  // go stale relative to whatever size is actually on screen (see resizeTick's effect below). Since
+  // real usage only produces a handful of distinct sizes per book, a size seen before is served
+  // instantly from here instead of re-running the full scan. Cleared for free on unmount/book change
+  // since it's a plain ref, not persisted anywhere.
+  const resizeCacheRef = useRef<Map<string, { state: ExactPageCountState; perResource: Map<string, PerResourceInfo> }>>(new Map());
+  const [resizeTick, setResizeTick] = useState(0);
+
+  // CLAUDE-ADDED: The cache key below (layoutSignature + viewport size) has no book identity in it --
+  // two different books opened in the same session could easily land on the exact same font/spacing
+  // settings and the exact same viewport size, which would otherwise serve one book's page counts onto
+  // the other. Wiping the cache whenever the publication reference changes keeps it scoped to "this
+  // book's reading session," matching what it's actually meant to reuse across (viewport wobbles while
+  // reading one book), without needing to fold publication identity into every cache key.
+  useEffect(() => {
+    resizeCacheRef.current = new Map();
+  }, [publication]);
+
+  // CLAUDE-ADDED: Bumping resizeTick just re-triggers the main effect below (it's in that effect's own
+  // dependency array) -- deliberately no separate debounce here, since that effect's own
+  // setTimeout-then-cleanup-cancels-it 400ms debounce already coalesces rapid successive bumps (a
+  // continuous resize) into a single check, the same way it already coalesces rapid layoutSignature
+  // changes. Listens on the outer window/visualViewport rather than the content iframe's own window --
+  // the iframe is what actually gets measured, but its size is *driven by* the outer viewport (the app
+  // shell tracks it via dvh), and the outer window reference is stable for the reader's whole lifetime
+  // where the content iframe's isn't guaranteed to be if Readium ever swaps iframes internally.
+  useEffect(() => {
+    if (!enabled || !navigatorReady || isFXL || isScroll || typeof window === "undefined") return;
+
+    const handleResize = () => setResizeTick((t) => t + 1);
+
+    const target: VisualViewport | Window = window.visualViewport || window;
+    target.addEventListener("resize", handleResize);
+
+    return () => target.removeEventListener("resize", handleResize);
+  }, [enabled, navigatorReady, isFXL, isScroll]);
 
   const ensureIframe = useCallback((width: number, height: number): HTMLIFrameElement => {
     let iframe = iframeRef.current;
@@ -175,6 +261,28 @@ export const useExactPageCount = ({
     };
   }, []);
 
+  // CLAUDE-ADDED: The main effect below early-returns without touching state when isFXL/isScroll are
+  // true, so a value computed while paginated (e.g. "page 214 of 816") stayed in state forever after
+  // switching to scroll mode without a full reader remount -- StatefulReaderProgression consumed it as
+  // if it were still current, showing a frozen page count instead of falling back to totalProgression.
+  // Bumping generationRef here also invalidates any scan still in flight from before the switch, so it
+  // can't land its result afterward and undo this reset.
+  useEffect(() => {
+    if (!isFXL && !isScroll) return;
+
+    generationRef.current++;
+    perResourceRef.current = new Map();
+    setState({
+      totalPages: null,
+      currentPageRange: null,
+      isComputing: false,
+      elapsedMs: null,
+      resourceCount: null,
+      error: null,
+      resourcePages: null,
+    });
+  }, [isFXL, isScroll]);
+
   useEffect(() => {
     if (!enabled || !navigatorReady || !publication || isFXL || isScroll) return;
 
@@ -189,6 +297,22 @@ export const useExactPageCount = ({
         const width = win.innerWidth;
         const height = win.innerHeight;
         if (!width || !height) return;
+
+        // CLAUDE-ADDED: A size we've already measured under this exact layout this session -- reuse it
+        // instantly instead of re-running the full scan. currentPageRange is recomputed fresh (not
+        // taken verbatim from the cached entry) since the reader may have navigated to a different
+        // position since that entry was originally measured; totalPages/resourcePages/perResource are
+        // position-independent, so those are safe to reuse as-is.
+        const resizeCacheKey = `${ layoutSignature }::${ width }x${ height }`;
+        const cached = resizeCacheRef.current.get(resizeCacheKey);
+        if (cached) {
+          perResourceRef.current = cached.perResource;
+          setState({
+            ...cached.state,
+            currentPageRange: computeCurrentRange(cached.perResource, currentLocator()?.href, win),
+          });
+          return;
+        }
 
         setState((prev) => ({ ...prev, isComputing: true, error: null }));
 
@@ -307,7 +431,7 @@ export const useExactPageCount = ({
 
         if (generationRef.current !== generation) return;
 
-        setState({
+        const finalState: ExactPageCountState = {
           totalPages: total,
           currentPageRange: currentRangeAcc,
           isComputing: false,
@@ -315,7 +439,15 @@ export const useExactPageCount = ({
           resourceCount: items.length,
           error: null,
           resourcePages,
-        });
+        };
+
+        // CLAUDE-ADDED: Cached under this exact layout+size so the next time a resize lands back on
+        // it this session (e.g. mobile chrome hiding then reappearing), it's served from here instead
+        // of re-running this whole scan -- see resizeCacheRef's own comment above.
+        resizeCacheRef.current.set(resizeCacheKey, { state: finalState, perResource: new Map(perResourceRef.current) });
+        pruneCache(resizeCacheRef.current);
+
+        setState(finalState);
       };
 
       run().catch((err) => {
@@ -325,7 +457,7 @@ export const useExactPageCount = ({
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [enabled, navigatorReady, publication, isFXL, isScroll, layoutSignature, getCframes, currentLocator, ensureIframe]);
+  }, [enabled, navigatorReady, publication, isFXL, isScroll, layoutSignature, resizeTick, getCframes, currentLocator, ensureIframe]);
 
   // CLAUDE-ADDED: O(1) -- everything needed (the "before" total and whether this resource is a fixed single on-screen position or a multi-screen generic one) was already precomputed by the last full scan, so a page turn only needs a live scroll-position read, no re-summation.
   const notifyLocatorChanged = useCallback((locator: Locator) => {

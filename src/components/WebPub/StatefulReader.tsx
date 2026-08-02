@@ -140,6 +140,9 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   const hasDisplayTransformability = useAppSelector(state => state.publication.hasDisplayTransformability);
   const isImmersive = useAppSelector(state => state.reader.isImmersive);
   const isHovering = useAppSelector(state => state.reader.isHovering);
+  // CLAUDE-ADDED: "Keep progress indicator visible while reading" setting -- see
+  // StatefulKeepChromeVisible.tsx. Same combination as Epub/StatefulReader.tsx's equivalent.
+  const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
   const breakpoint = useAppSelector(state => state.theming.breakpoint);
   const containerBreakpoint = useAppSelector(state => state.theming.containerBreakpoint);
 
@@ -372,7 +375,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
                 getReaderClassNames({
                   isScroll: true,
                   isImmersive,
-                  isHovering,
+                  isHovering: isHovering || keepChromeVisible,
                   layoutUI,
                   breakpoint,
                   containerBreakpoint

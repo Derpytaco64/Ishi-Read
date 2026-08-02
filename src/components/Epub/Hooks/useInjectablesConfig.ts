@@ -8,6 +8,19 @@ import { getLandscapeSpreadScript } from "./landscapeSpreadScript";
 import { getCoverSpreadScript } from "./coverSpreadScript";
 import { getNoteHoverScript } from "./noteHoverScript";
 
+// CLAUDE-ADDED: iOS Safari's long-press text-selection callout (Copy/Look Up/Share) isn't driven by
+// a contextmenu event, so defaultContentProtectionConfig's disableContextMenu (the vendor navigator's
+// Peripherals.addContextMenuPrevention) doesn't suppress it -- only -webkit-touch-callout does. Without
+// this, that native callout visually competes with the app's own SelectionPopover for creating
+// highlights/notes on mobile. Selection itself (and therefore SelectionPopover, which reads it on
+// pointerup) is untouched -- only the OS-level callout UI is suppressed.
+const noteSelectionStyle: ILinkInjectable & IBlobInjectable = {
+  as: "link",
+  rel: "stylesheet",
+  target: "head",
+  blob: new Blob(["* { -webkit-touch-callout: none; }"], { type: "text/css" })
+};
+
 interface UseEpubInjectablesConfigProps {
   isFXL: boolean;
   isFontFamilyUsed: boolean;
@@ -46,7 +59,7 @@ export const useEpubInjectablesConfig = ({
         rules: [{
           resources: [/\.xhtml$/, /\.html$/],
           prepend: [androidPatch],
-          append: [noteHover]
+          append: [noteHover, noteSelectionStyle]
         }]
       };
     }
@@ -73,7 +86,7 @@ export const useEpubInjectablesConfig = ({
     const rules: IInjectableRule[] = [{
       resources: [/\.xhtml$/, /\.html$/],
       prepend: fontResources?.prepend,
-      append: [...(fontResources?.append || []), landscapeSpread, noteHover]
+      append: [...(fontResources?.append || []), landscapeSpread, noteHover, noteSelectionStyle]
     }];
 
     // CLAUDE-ADDED: Separate rule (rather than folding into the one above) since it targets an exact href instead of the blanket regex — only the cover resource should get the right-column spacer.

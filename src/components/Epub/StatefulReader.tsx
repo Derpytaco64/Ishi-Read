@@ -212,6 +212,12 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   
   const isImmersive = useAppSelector(state => state.reader.isImmersive);
   const isHovering = useAppSelector(state => state.reader.isHovering);
+  // CLAUDE-ADDED: "Keep progress indicator visible while reading" setting -- see
+  // StatefulKeepChromeVisible.tsx. Combined only at the getReaderClassNames call below (the CSS class
+  // that slides the whole header/footer bar out of view in immersive mode), not into the base
+  // isHovering used above for useEpubStatelessCache's layout signature, which tracks the real hover
+  // state independent of this display preference.
+  const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
 
   const layoutUI = isFXL 
     ? preferences.theming.layout.ui?.fxl || ThLayoutUI.layered 
@@ -281,6 +287,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
     isScrollEnd,
     getCframes,
     submitPreferences,
+    correctPositionAround,
     applyDecorations,
     registerDecorationObserver,
     unregisterDecorationObserver
@@ -669,7 +676,10 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
           const actionKey = fromActionPeripheralType(data.type);
 
           if (actionKey === ThActionsKeys.fullscreen) {
-            handleFullscreen();
+            // CLAUDE-ADDED: See correctPositionAround's own comment -- a fullscreen toggle resizes the
+            // viewport, which can trip the vendor navigator's imprecise reflow auto-snap the same way a
+            // font-size change does.
+            correctPositionAround(() => handleFullscreen());
             return;
           }
 
@@ -689,7 +699,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
         }
       }
     },
-  }), [navLayout, debouncedSavePosition, dispatch, handleTap, handleClick, handleImageClick, cache, preferences.affordances.scroll, isScrollStart, isScrollEnd, moveTo, goProgression, zoomIn, zoomOut, exitReader, profile, handleFullscreen, getFocusedDockableKey, evaluateSpread, currentLocator]);
+  }), [navLayout, debouncedSavePosition, dispatch, handleTap, handleClick, handleImageClick, cache, preferences.affordances.scroll, isScrollStart, isScrollEnd, moveTo, goProgression, zoomIn, zoomOut, exitReader, profile, handleFullscreen, correctPositionAround, getFocusedDockableKey, evaluateSpread, currentLocator]);
   
   const initialPosition = useMemo(() => getLocalData(), [getLocalData]);
 
@@ -992,7 +1002,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
               getReaderClassNames({
                 isScroll,
                 isImmersive,
-                isHovering,
+                isHovering: isHovering || keepChromeVisible,
                 isFXL,
                 layoutUI,
                 breakpoint,

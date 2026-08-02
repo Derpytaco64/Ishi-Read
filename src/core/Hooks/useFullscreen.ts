@@ -9,14 +9,21 @@ export const useFullscreen = (onChange?: (isFullscreen: boolean) => void) => {
   const { isClient, isClientRef } = useIsClient();
   const isSupported = isClient && !isIOSish() && Boolean(document.fullscreenEnabled);
 
-  const handleFullscreen = useCallback(() => {
-    if (!isClientRef.current || isIOSish()) return;
+  // CLAUDE-ADDED: Returns the underlying requestFullscreen()/exitFullscreen() promise (rather than a
+  // fire-and-forget void call) so callers that need to react *after* the transition has actually
+  // completed -- not just after the call was issued -- have a real signal to await, instead of
+  // guessing with a timeout. See useEpubNavigator.ts's correctPositionAround, used to correct reflow
+  // drift the fullscreen resize can cause.
+  const handleFullscreen = useCallback((): Promise<void> => {
+    if (!isClientRef.current || isIOSish()) return Promise.resolve();
 
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
+      return document.documentElement.requestFullscreen();
     } else if (document.exitFullscreen) {
-      document.exitFullscreen();
+      return document.exitFullscreen();
     }
+
+    return Promise.resolve();
   }, [isClientRef]);
 
   useEffect(() => {

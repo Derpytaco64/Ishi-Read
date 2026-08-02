@@ -85,29 +85,35 @@ export const useEpubNavigator = () => {
   // call's own).
   const submitGenerationRef = useRef(0);
 
-  const submitPreferences = useCallback(async (preferences: IEpubPreferences) => {
-    // CLAUDE-ADDED: EpubNavigator's own post-reflow position recovery (see submitPreferences/
-    // syncLocation in @readium/navigator) approximates "where you were" by clamping the previous
-    // *pixel* scroll offset into the resource's newly reflowed scroll width, then re-deriving
-    // locations.position from that clamped fraction. That's fine for a small nudge, but a large
-    // font-size (or other layout-affecting) change can shrink/grow a resource's total width so much
-    // that the clamped pixel position lands nowhere near the paragraph actually being read --
-    // jumping from position 50 of 800 to 200 of 800 on one big decrease, for example. Capturing
-    // locations.position *before* the change and explicitly re-navigating to that same positions-list
-    // entry afterward -- the identical lookup StatefulJumpToPositionContainer already uses for manual
-    // position jumps -- corrects the drift regardless of how the internal auto-snap landed, since the
-    // positions list itself is a fixed, content-based index that never depends on layout.
+  // CLAUDE-ADDED: Shared by submitPreferences (font size/spacing/etc. changes) and the fullscreen
+  // toggle correction below -- both trigger the same underlying problem: EpubNavigator's post-reflow
+  // position recovery (see submitPreferences/syncLocation in @readium/navigator) approximates "where
+  // you were" by clamping the previous *pixel* scroll offset into the resource's newly reflowed
+  // scroll width, then re-deriving locations.position from that clamped fraction. That's fine for a
+  // small nudge, but a large layout change -- a big font-size jump, or a fullscreen toggle changing
+  // the viewport's available height/width -- can shrink/grow a resource's total width so much that
+  // the clamped pixel position lands nowhere near the paragraph actually being read (jumping from
+  // position 50 of 800 to 200 of 800 on one big font-size decrease, for example, or silently
+  // reverting forward navigation made while fullscreen once exiting resizes the viewport back).
+  // Capturing locations.position *before* the change and explicitly re-navigating to that same
+  // positions-list entry afterward -- the identical lookup StatefulJumpToPositionContainer already
+  // uses for manual position jumps -- corrects the drift regardless of how the internal auto-snap
+  // landed, since the positions list itself is a fixed, content-based index that never depends on
+  // layout. `action` is expected to be whatever synchronously (or via its own returned promise)
+  // triggers the layout change; capturing happens before it runs, which is why this takes a callback
+  // rather than just wrapping a promise passed in already-started.
+  const correctPositionAround = useCallback(async (action: () => void | Promise<void>) => {
     const positionBefore = isFXLRef.current ? undefined : navigatorInstance?.currentLocator?.locations?.position;
     const generation = ++submitGenerationRef.current;
 
-    await navigatorInstance?.submitPreferences(new EpubPreferences(preferences));
+    await action();
 
     if (positionBefore === undefined) return;
 
     // CLAUDE-ADDED: The navigator's own ResizeObserver-driven auto-snap runs off a browser reflow, not
-    // off this submitPreferences promise -- it can still be pending when the above await resolves. Wait
-    // it out first so our corrective go() below is the last word, not something the auto-snap clobbers
-    // a frame later.
+    // off action()'s own promise -- it can still be pending when the above await resolves. Wait it out
+    // first so our corrective go() below is the last word, not something the auto-snap clobbers a
+    // frame later.
     await nextFrame();
 
     if (submitGenerationRef.current !== generation) return;
@@ -117,6 +123,10 @@ export const useEpubNavigator = () => {
 
     await new Promise<void>((resolve) => navigatorInstance?.go(target, false, () => resolve()));
   }, []);
+
+  const submitPreferences = useCallback(async (preferences: IEpubPreferences) => {
+    await correctPositionAround(() => navigatorInstance?.submitPreferences(new EpubPreferences(preferences)));
+  }, [correctPositionAround]);
 
   const getSetting = useCallback(<K extends keyof EpubSettings>(settingKey: K) => {
     return navigatorInstance?.settings[settingKey] as EpubSettings[K];
@@ -285,6 +295,7 @@ export const useEpubNavigator = () => {
     preferencesEditor: navigatorInstance?.preferencesEditor,
     getSetting,
     submitPreferences,
+    correctPositionAround,
     getCframes,
     getScriptMode: currentScriptMode,
     applyDecorations,

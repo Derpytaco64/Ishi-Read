@@ -42,6 +42,10 @@ export const StatefulReaderFooter = ({
   const footerRef = useRef<HTMLDivElement>(null);
   const isImmersive = useAppSelector(state => state.reader.isImmersive);
   const isHovering = useAppSelector(state => state.reader.isHovering);
+  // CLAUDE-ADDED: See StatefulKeepChromeVisible.tsx -- ORed into the overlay's isActive below so the
+  // invisible full-bar tap-catcher doesn't sit on top of the footer once this setting keeps it visible
+  // (ThInteractiveOverlay renders pointerEvents:"auto" at a very high z-index when active).
+  const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
   const hasScrollAffordance = useAppSelector(state => state.reader.hasScrollAffordance);
   const isRTL = useAppSelector(state => state.publication.isRTL);
   const isFXL = useAppSelector(state => state.publication.isFXL);
@@ -153,7 +157,7 @@ export const StatefulReaderFooter = ({
     <>
     <ThInteractiveOverlay
       className={ classNames(readerStyles.barOverlay, readerStyles.footerOverlay) }
-      isActive={ layout === ThLayoutUI.layered && isImmersive && !isHovering }
+      isActive={ layout === ThLayoutUI.layered && isImmersive && !isHovering && !keepChromeVisible }
       onMouseEnter={ setHover }
       onMouseLeave={ removeHover }
     />

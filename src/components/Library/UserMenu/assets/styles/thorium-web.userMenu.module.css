@@ -36,6 +36,18 @@
   font-weight: 600;
 }
 
+/* CLAUDE-ADDED: Matches the library logo's own mobile shrink (see StatefulLibraryMenu's .logo) --
+   at desktop size this and the logo sit far enough apart that the centered header title between
+   them never collides, but on a narrow viewport the title runs nearly full-width and needs both
+   corner icons smaller (plus extra clearance in home.css) to stay clear of it. */
+@media (max-width: 600px) {
+  .avatar {
+    width: 56px;
+    height: 56px;
+    font-size: 1.3rem;
+  }
+}
+
 :global(html[data-theme="dark"]) .avatar {
   background-color: #4a4a4a;
   color: #e8e8e8;

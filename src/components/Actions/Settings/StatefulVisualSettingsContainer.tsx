@@ -23,6 +23,7 @@ import { StatefulActionContainerProps } from "../models/actions";
 import { StatefulSettingsWrapper } from "./StatefulSettingsWrapper";
 import { StatefulSpacingGroupContainer } from "../../Settings/Spacing/StatefulSpacingGroup";
 import { StatefulTextGroupContainer } from "../../Settings/Text/StatefulTextGroup";
+import { StatefulKeepChromeVisible } from "../../Settings/StatefulKeepChromeVisible";
 
 import { usePreferences } from "@/preferences/hooks/usePreferences";
 import { usePlugins } from "@/components/Plugins/PluginProvider";
@@ -144,6 +145,7 @@ export const StatefulVisualSettingsContainer = ({
                 })
               : <></>
             }
+            <StatefulKeepChromeVisible />
           </>
         );
     }

@@ -201,6 +201,10 @@
                 "scrolled": "Scrollable",
                 "title": "Layout"
             },
+            "keepChromeVisible": {
+                "label": "Keep progress indicator visible while reading",
+                "title": "Chrome visibility"
+            },
             "letterSpacing": "Letter spacing",
             "ligatures": {
                 "label": "Enable ligatures",

@@ -528,6 +528,19 @@ export const StatefulBookSheet = ({
         // fully expanded. .scroller below (a class scoped to only this sheet, not the global
         // react-modal-sheet class) overrides just `contain` back to none.
         scroller: { className: styles.scroller },
+        // CLAUDE-ADDED: On touch, react-modal-sheet's own content-area drag gesture is gated by
+        // its internal scroll-position tracking (only hands off to native scroll once a real "scroll"
+        // DOM event has already moved scrollTop away from 0) -- while the sheet sits at rest fully
+        // open with the content scrolled to its very top (the common case right after opening), that
+        // event has never fired, so every further drag on the body keeps being consumed by the
+        // sheet-drag gesture instead of ever reaching the scroller, permanently deadlocking touch
+        // scroll past the point the cover finishes condensing. Tying disableDrag to the snap index we
+        // already track (see FULL_SNAP/handleBodyRef's wheel handoff, which gates the same "are we
+        // fully open" condition for wheel input) sidesteps that scroll-position gate entirely: once
+        // fully open, touch drags on the body always fall through to native scroll from the start.
+        content: {
+          disableDrag: ({ currentSnap }) => currentSnap === FULL_SNAP
+        },
         backdrop: { className: styles.backdrop }
       }}
     >

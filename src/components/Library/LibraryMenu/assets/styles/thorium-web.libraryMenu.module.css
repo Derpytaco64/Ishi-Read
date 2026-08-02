@@ -31,6 +31,23 @@
   pointer-events: none;
 }
 
+/* CLAUDE-ADDED: On narrow viewports the header title (home.css's .header, centered and nearly
+   full-width there) runs underneath this and the user avatar (StatefulUserMenu's .trigger) at
+   their full desktop size -- shrinking both here and there, plus giving the header extra
+   top clearance in home.css, keeps the title clear of both corners. Offset scaled down by the
+   same ratio as the height (56/96) to keep the transparent-png-padding correction from the
+   .trigger comment above proportionally correct at the smaller size. */
+@media (max-width: 600px) {
+  .trigger {
+    top: -9px;
+    left: -5px;
+  }
+
+  .logo {
+    height: 56px;
+  }
+}
+
 /* Underlay: fixed full-viewport scrim, drawer content is pinned to the left edge.
    React Aria applies this className to both the true underlay and its inner
    modal-content boundary (used for outside-click detection) when Modal is used

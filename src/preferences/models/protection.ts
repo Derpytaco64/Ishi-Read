@@ -153,7 +153,13 @@ export const resolveAudioContentProtectionConfig = (
  */
 export const defaultContentProtectionConfig: ContentProtectionConfig = {
   protectCopy: false,
-  disableContextMenu: false,
+  // CLAUDE-ADDED: This is the vendor navigator's own contextmenu-event guard (Peripherals.
+  // addContextMenuPrevention), not a copy-protection measure -- protectCopy/disableSelectAll below
+  // are unaffected. Needed so the browser's native long-press selection callout doesn't compete
+  // with the app's own SelectionPopover for creating highlights/notes; see useInjectablesConfig.ts's
+  // -webkit-touch-callout rule for the iOS-Safari half of the same fix (that callout isn't driven by
+  // a contextmenu event at all, so this alone doesn't cover it).
+  disableContextMenu: true,
   disableDragAndDrop: false,
   protectPrinting: {
     disable: false,
@@ -169,7 +175,7 @@ export const defaultContentProtectionConfig: ContentProtectionConfig = {
  */
 export const defaultAudioContentProtectionConfig: AudioContentProtectionConfig = {
   protectCopy: false,
-  disableContextMenu: false,
+  disableContextMenu: true,
   disableDragAndDrop: false,
   protectPrinting: {
     disable: false,
