@@ -23,7 +23,7 @@ function base64UrlDecode(str: string): string {
 // user-editable setting -- a manifest URL built before a change was saved must still resolve
 // against whatever the setting was at the time it was built, which this always reflects since
 // getReadiumServerUrl() itself is the single cached-until-changed source of truth.
-function resolveLocalFile(manifestUrl: string): string | null {
+export function resolveLocalFile(manifestUrl: string): string | null {
   const prefix = `${ getReadiumServerUrl() }/webpub/`;
   if (!manifestUrl.startsWith(prefix)) return null;
 
