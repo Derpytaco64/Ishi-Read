@@ -55,8 +55,7 @@ import { useZoomCallbacks } from "@/components/Settings/hooks/useZoomCallbacks";
 import { useFocusedDockableKey } from "../Docking/hooks/useFocusedDockableKey";
 
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
-import { anyUIElementPinned } from "@/lib/globalPreferencesReducer";
-import { 
+import {
   setLoading,
   setHovering, 
   toggleImmersive, 
@@ -141,12 +140,6 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   const hasDisplayTransformability = useAppSelector(state => state.publication.hasDisplayTransformability);
   const isImmersive = useAppSelector(state => state.reader.isImmersive);
   const isHovering = useAppSelector(state => state.reader.isHovering);
-  // CLAUDE-ADDED: "Keep progress indicator visible while reading" setting, plus any individual "UI
-  // Element Visibility" toggle pinned on -- see StatefulUIVisibilityToggles.tsx / anyUIElementPinned's
-  // own comment in globalPreferencesReducer.ts. Same combination as Epub/StatefulReader.tsx's equivalent.
-  const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
-  const uiElementVisibility = useAppSelector(state => state.globalPreferences.uiElementVisibility);
-  const chromeAlwaysVisible = keepChromeVisible || anyUIElementPinned(uiElementVisibility);
   const breakpoint = useAppSelector(state => state.theming.breakpoint);
   const containerBreakpoint = useAppSelector(state => state.theming.containerBreakpoint);
 
@@ -265,24 +258,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
     [setLocalData]
   );
 
-  // CLAUDE-ADDED: flush(), not clear() -- see Epub/StatefulReader.tsx's identical fix. clear() silently
-  // drops whatever position change was still pending when this unmounts (exiting via in-app navigation),
-  // leaving the saved position stale by up to one debounce interval. pagehide/visibilitychange cover
-  // exitReader's hard `window.location.href` navigation above and mobile backgrounding, where React's own
-  // unmount cleanup isn't guaranteed to run in time -- same fix as useReadingTimer.ts.
-  useEffect(() => {
-    const flush = () => debouncedSavePosition.flush();
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") flush();
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("pagehide", flush);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("pagehide", flush);
-      flush();
-    };
-  }, [debouncedSavePosition]);
+  useEffect(() => () => debouncedSavePosition.clear(), [debouncedSavePosition]);
 
   const listeners: WebPubNavigatorListeners = useMemo(() => ({
     frameLoaded: async function (_wnd: Window): Promise<void> {},
@@ -396,7 +372,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
                 getReaderClassNames({
                   isScroll: true,
                   isImmersive,
-                  isHovering: isHovering || chromeAlwaysVisible,
+                  isHovering,
                   layoutUI,
                   breakpoint,
                   containerBreakpoint

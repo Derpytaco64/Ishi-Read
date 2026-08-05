@@ -226,24 +226,7 @@ const StatefulPlayerInner = ({ publication, localDataKey, positionStorage, cover
     [setLocalData]
   );
 
-  // CLAUDE-ADDED: flush(), not clear() -- see Epub/StatefulReader.tsx's identical fix. clear() silently
-  // drops whatever position change was still pending when this unmounts (exiting via in-app navigation),
-  // leaving the saved position stale by up to one debounce interval. pagehide/visibilitychange cover
-  // mobile backgrounding (screen off while listening is the normal case here) and hard navigation, where
-  // React's own unmount cleanup isn't guaranteed to run in time -- same fix as useReadingTimer.ts.
-  useEffect(() => {
-    const flush = () => debouncedSavePosition.flush();
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") flush();
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("pagehide", flush);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("pagehide", flush);
-      flush();
-    };
-  }, [debouncedSavePosition]);
+  useEffect(() => () => debouncedSavePosition.clear(), [debouncedSavePosition]);
 
   const listeners: AudioNavigatorListeners = useMemo(() => ({
     timelineItemChanged: (item: TimelineItem | undefined) => {

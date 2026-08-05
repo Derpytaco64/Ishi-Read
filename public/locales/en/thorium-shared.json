@@ -201,10 +201,6 @@
                 "scrolled": "Scrollable",
                 "title": "Layout"
             },
-            "keepChromeVisible": {
-                "label": "Keep progress indicator visible while reading",
-                "title": "Chrome visibility"
-            },
             "letterSpacing": "Letter spacing",
             "ligatures": {
                 "label": "Enable ligatures",
@@ -295,15 +291,6 @@
                 "title": "Themes"
             },
             "title": "Display Settings",
-            "uiVisibility": {
-                "backLink": "Return to library button",
-                "overflowMenu": "More actions menu",
-                "pagination": "Page turn buttons",
-                "progression": "Page number",
-                "readingTimer": "Reading timer",
-                "runningHead": "Chapter name",
-                "title": "UI Element Visibility"
-            },
             "wordSpacing": "Word spacing",
             "zoom": "Zoom"
         },

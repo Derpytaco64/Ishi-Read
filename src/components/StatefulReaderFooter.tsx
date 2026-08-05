@@ -25,7 +25,6 @@ import { setReturnLocator } from "@/lib/annotationsReducer";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { useIsScroll } from "@/hooks";
 import { focusReadingContainer } from "@/core/Helpers/focusUtilities";
-import { anyUIElementPinned } from "@/lib/globalPreferencesReducer";
 
 import classNames from "classnames";
 
@@ -43,16 +42,6 @@ export const StatefulReaderFooter = ({
   const footerRef = useRef<HTMLDivElement>(null);
   const isImmersive = useAppSelector(state => state.reader.isImmersive);
   const isHovering = useAppSelector(state => state.reader.isHovering);
-  // CLAUDE-ADDED: See StatefulUIVisibilityToggles.tsx -- ORed into the overlay's isActive below so the
-  // invisible full-bar tap-catcher doesn't sit on top of the footer once this setting keeps it visible
-  // (ThInteractiveOverlay renders pointerEvents:"auto" at a very high z-index when active).
-  const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
-  // CLAUDE-ADDED: See anyUIElementPinned's own comment in globalPreferencesReducer.ts -- pinning either
-  // progression or pagination keeps the whole footer bar from fading, same as keepChromeVisible alone
-  // already does. progression's own content additionally stays pinned independently of the bar via its
-  // own isHovering merge -- see StatefulReaderProgression.tsx.
-  const uiElementVisibility = useAppSelector(state => state.globalPreferences.uiElementVisibility);
-  const footerAlwaysVisible = keepChromeVisible || anyUIElementPinned(uiElementVisibility);
   const hasScrollAffordance = useAppSelector(state => state.reader.hasScrollAffordance);
   const isRTL = useAppSelector(state => state.publication.isRTL);
   const isFXL = useAppSelector(state => state.publication.isFXL);
@@ -164,7 +153,7 @@ export const StatefulReaderFooter = ({
     <>
     <ThInteractiveOverlay
       className={ classNames(readerStyles.barOverlay, readerStyles.footerOverlay) }
-      isActive={ layout === ThLayoutUI.layered && isImmersive && !isHovering && !footerAlwaysVisible }
+      isActive={ layout === ThLayoutUI.layered && isImmersive && !isHovering }
       onMouseEnter={ setHover }
       onMouseLeave={ removeHover }
     />

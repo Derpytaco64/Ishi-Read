@@ -57,7 +57,6 @@ import { useReadingTimer } from "@/components/Actions/ReadingTimer/hooks/useRead
 import { useReadingSpeedSampler } from "@/components/Actions/ReadingTimer/hooks/useReadingSpeedSampler";
 import { useBookWordCount } from "./Hooks/useBookWordCount";
 import { persistWordCount } from "@/lib/readingTimeReducer";
-import { anyUIElementPinned } from "@/lib/globalPreferencesReducer";
 import { PairedSpreadOverlay } from "./PairedSpreadOverlay";
 import { useEpubNavigator } from "@/core/Hooks/Epub/useEpubNavigator";
 import { useFullscreen } from "@/core/Hooks/useFullscreen";
@@ -213,15 +212,6 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   
   const isImmersive = useAppSelector(state => state.reader.isImmersive);
   const isHovering = useAppSelector(state => state.reader.isHovering);
-  // CLAUDE-ADDED: "Keep progress indicator visible while reading" setting, plus any individual "UI
-  // Element Visibility" toggle pinned on -- see StatefulUIVisibilityToggles.tsx / anyUIElementPinned's
-  // own comment in globalPreferencesReducer.ts. Combined only at the getReaderClassNames call below (the
-  // CSS class that slides the whole header/footer bar out of view in immersive mode), not into the base
-  // isHovering used above for useEpubStatelessCache's layout signature, which tracks the real hover
-  // state independent of this display preference.
-  const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
-  const uiElementVisibility = useAppSelector(state => state.globalPreferences.uiElementVisibility);
-  const chromeAlwaysVisible = keepChromeVisible || anyUIElementPinned(uiElementVisibility);
 
   const layoutUI = isFXL 
     ? preferences.theming.layout.ui?.fxl || ThLayoutUI.layered 
@@ -539,30 +529,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
     [setLocalData, updatePublicationNavigationState]
   );
 
-  // CLAUDE-ADDED: flush(), not clear() -- clear() would silently discard whatever position change was
-  // still pending inside the 250ms debounce window at the moment this unmounts (e.g. exiting the reader
-  // via in-app navigation rather than a full page reload), leaving the server's saved position up to one
-  // debounce interval stale. flush() runs the pending save immediately instead of dropping it.
-  //
-  // That React-unmount cleanup alone isn't enough, though: exitReader below navigates away via a hard
-  // `window.location.href` assignment, not client-side routing, and on mobile in particular the page can
-  // be torn down (backgrounded/killed) before a pending React effect cleanup gets a chance to run at all
-  // -- the exact same problem useReadingTimer.ts already solved for the reading-time counter. pagehide
-  // fires reliably in both cases (hard nav and mobile backgrounding); visibilitychange's "hidden" state
-  // covers app-switch-without-navigating, which pagehide alone would miss.
-  useEffect(() => {
-    const flush = () => debouncedSavePosition.flush();
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") flush();
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("pagehide", flush);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("pagehide", flush);
-      flush();
-    };
-  }, [debouncedSavePosition]);
+  useEffect(() => () => debouncedSavePosition.clear(), [debouncedSavePosition]);
 
   const listeners: EpubNavigatorListeners = useMemo(() => ({
     // CLAUDE-ADDED: Applies the current horizontal margin to every freshly-loaded frame -- see useMarginSync.ts (keeps already-loaded frames in sync when the setting changes).
@@ -574,19 +541,6 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
       wnd.postMessage({ type: NOTE_HOVER_MESSAGE_TYPE, notes: noteHoverEntriesRef.current }, "*");
     },
     positionChanged: async function (locator: Locator): Promise<void> {
-      // CLAUDE-ADDED: correctPositionAround's requestFirstVisibleLocator (useEpubNavigator.ts) triggers
-      // EpubNavigator's own "first_visible_locator" round trip as a side effect, which fires this same
-      // positionChanged listener with a priming locator that has no locations.position/progression at
-      // all (see findFirstVisibleLocator in @readium/navigator-html-injectables -- href is hardcoded to
-      // "#", locations only ever carries a cssSelector). Every real, settled position update in this
-      // library -- syncLocation's scroll/paginate reporting, changeResource's page turns -- always comes
-      // from a positions-list entry and therefore always has .position set, so this is a safe filter
-      // that only drops that one synthetic priming event. Without it, whichever of these four listeners
-      // last received an event before correctPositionAround's own corrective go() lands (up to a few
-      // frames later, sometimes longer on slow devices) could act on/persist this position-less locator
-      // -- debouncedSavePosition in particular could flush it to the server as the resume position.
-      if (locator.locations?.position === undefined) return;
-
       debouncedSavePosition(locator);
 
       // CLAUDE-ADDED: Not debounced, unlike the above -- the pairing/auto-advance logic in useShortImageSpread needs to react to every single position change in sequence to correctly detect "user paged past an already-shown pair".
@@ -1042,7 +996,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
               getReaderClassNames({
                 isScroll,
                 isImmersive,
-                isHovering: isHovering || chromeAlwaysVisible,
+                isHovering,
                 isFXL,
                 layoutUI,
                 breakpoint,

@@ -48,16 +48,7 @@ export const StatefulReaderProgression = ({
   const exactPageCount = useAppSelector(state => state.publication.exactPageCount);
   const isImmersive = useAppSelector(state => state.reader.isImmersive);
   const isFullscreen = useAppSelector(state => state.reader.isFullscreen);
-  const isHoveringRaw = useAppSelector(state => state.reader.isHovering);
-  // CLAUDE-ADDED: "Keep progress indicator visible while reading" and/or this element's own "UI Element
-  // Visibility" pin -- see StatefulUIVisibilityToggles.tsx. Combined into isHovering below (used in both
-  // immersive/fullscreen blanking checks further down) -- the compact/mobile breakpoint's
-  // displayInImmersive:false is what actually blanks this text; the CSS bar-slide handled in
-  // StatefulReader.tsx's getReaderClassNames is a separate, redundant layer this alone wouldn't stop
-  // (see anyUIElementPinned's own comment for why pinning this element also keeps that whole bar up).
-  const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
-  const uiElementVisibility = useAppSelector(state => state.globalPreferences.uiElementVisibility);
-  const isHovering = isHoveringRaw || keepChromeVisible || !!uiElementVisibility?.progression;
+  const isHovering = useAppSelector(state => state.reader.isHovering);
   const breakpoint = useAppSelector(state => state.theming.breakpoint);
   // CLAUDE-ADDED: useExactPageCount never produces data for FXL/scroll (see its own gating) -- there,
   // falling back to the coarse positionsList-based totalPositions/currentPositions is correct and

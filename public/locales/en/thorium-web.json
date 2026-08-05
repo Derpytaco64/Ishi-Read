@@ -172,12 +172,6 @@
           "tooltip": "More options",
           "trigger": "More spacing options"
         }
-      },
-      "uiVisibility": {
-        "advanced": {
-          "tooltip": "More options",
-          "trigger": "UI element visibility options"
-        }
       }
     }
   },

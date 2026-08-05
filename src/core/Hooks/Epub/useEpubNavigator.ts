@@ -221,25 +221,7 @@ export const useEpubNavigator = () => {
       );
 
       navigatorInstance.load().then(() => {
-        // CLAUDE-ADDED: load()'s own initial placement (apply() -> FramePoolManager.update()) only ever
-        // uses locations.progression -- a raw fractional scroll offset within the resource -- to show
-        // the frame (see FramePoolManager.ts's `newFrame.show(locator.locations.progression)`); it never
-        // looks at text.highlight/cssSelector at all. That's the exact same "clamp a pixel-fraction into
-        // whatever the current layout happens to be" approximation correctPositionAround was built to
-        // correct for font-size/fullscreen/scroll-mode changes -- except load() only runs once, for the
-        // *initial* open, which correctPositionAround never wraps. A progression saved last session was
-        // measured against that session's viewport/columns; reopening with a different browser-chrome
-        // height (very common on mobile, where the address bar shows/hides) or orientation reapplies
-        // that same fraction against a different total scroll width and can land many screens off --
-        // even though the saved locator already carries an exact text.highlight anchor for this. Routing
-        // the initial position through go() (the same method correctPositionAround uses for its own
-        // corrections) makes loadLocator try that text.highlight search first, falling back to
-        // cssSelector then progression exactly like every other correction in this codebase already does.
-        if (config.initialPosition?.text?.highlight) {
-          navigatorInstance?.go(config.initialPosition, false, () => cb());
-        } else {
-          cb();
-        }
+        cb();
       });
     }
   }, []);

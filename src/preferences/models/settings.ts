@@ -75,8 +75,7 @@ export enum ThSpacingSettingsKeys {
 export enum ThSettingsContainerKeys {
   initial = "initial",
   text = "text",
-  spacing = "spacing",
-  uiVisibility = "uiVisibility"
+  spacing = "spacing"
 }
 
 export enum ThSettingsRangeVariant {

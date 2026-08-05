@@ -19,9 +19,6 @@ import { StatefulCollapsibleActionsBar } from "./Actions/StatefulCollapsibleActi
 import { useReaderHeaderBase } from "./hooks/useReaderHeaderBase";
 import { usePreferences } from "@/preferences/hooks";
 
-import { useAppSelector } from "@/lib/hooks";
-import { anyUIElementPinned } from "@/lib/globalPreferencesReducer";
-
 import classNames from "classnames";
 
 export const StatefulReaderHeader = ({
@@ -42,19 +39,11 @@ export const StatefulReaderHeader = ({
 
   const { preferences } = usePreferences();
 
-  // CLAUDE-ADDED: See StatefulUIVisibilityToggles.tsx / StatefulReaderFooter.tsx's equivalent comment.
-  const keepChromeVisible = useAppSelector(state => state.globalPreferences.keepChromeVisible);
-  // CLAUDE-ADDED: See anyUIElementPinned's own comment in globalPreferencesReducer.ts -- pinning any one
-  // of backLink/runningHead/overflowMenu/readingTimer keeps the whole header bar from fading, same as
-  // keepChromeVisible alone already does (they share one CSS slide transform, not independent ones).
-  const uiElementVisibility = useAppSelector(state => state.globalPreferences.uiElementVisibility);
-  const headerAlwaysVisible = keepChromeVisible || anyUIElementPinned(uiElementVisibility);
-
   return (
     <>
       <ThInteractiveOverlay
         className={ classNames(readerStyles.barOverlay, readerStyles.headerOverlay) }
-        isActive={ layout === ThLayoutUI.layered && isImmersive && !isHovering && !headerAlwaysVisible }
+        isActive={ layout === ThLayoutUI.layered && isImmersive && !isHovering }
         onMouseEnter={ setHover }
         onMouseLeave={ removeHover }
       />
