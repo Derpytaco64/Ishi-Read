@@ -282,6 +282,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
     getCframes,
     submitPreferences,
     correctPositionAround,
+    getTextAnchoredLocator,
     applyDecorations,
     registerDecorationObserver,
     unregisterDecorationObserver
@@ -521,12 +522,20 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   // debounced function on every positionChanged event -- since each one got its own independent timer,
   // none of them actually coalesced rapid position changes, they just each fired ~250ms later
   // unthrottled. Reusing one stable instance here means only the last position in a burst gets saved.
+  // Also upgrades the raw locator to a text-anchored one (see getTextAnchoredLocator's own comment in
+  // useEpubNavigator.ts) before persisting -- ordinary positionChanged locators only ever carry
+  // locations.position/progression, never a text.highlight anchor, so without this the saved position is
+  // the same pixel-fraction-based approximation that drifts (sometimes backwards) whenever the reading
+  // pane's width differs between sessions (window resize, a docking panel toggled, a margin/font-size
+  // change). Falls back to the raw locator if no anchor is available (FXL, or the positions list not
+  // ready yet -- see captureTextAnchoredLocator's own bail-out conditions).
   const debouncedSavePosition = useMemo(
-    () => debounce((locator: Locator) => {
-      setLocalData(locator);
+    () => debounce(async (locator: Locator) => {
+      const anchored = await getTextAnchoredLocator();
+      setLocalData(anchored ?? locator);
       updatePublicationNavigationState();
     }, 250),
-    [setLocalData, updatePublicationNavigationState]
+    [setLocalData, updatePublicationNavigationState, getTextAnchoredLocator]
   );
 
   useEffect(() => () => debouncedSavePosition.clear(), [debouncedSavePosition]);
@@ -541,6 +550,17 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
       wnd.postMessage({ type: NOTE_HOVER_MESSAGE_TYPE, notes: noteHoverEntriesRef.current }, "*");
     },
     positionChanged: async function (locator: Locator): Promise<void> {
+      // CLAUDE-ADDED: getTextAnchoredLocator's own requestFirstVisibleLocator round trip (called both
+      // from debouncedSavePosition below and from correctPositionAround) is Readium's own
+      // "first_visible_locator" event handling, which re-fires this exact listener with a priming
+      // locator that has no locations.position/progression at all (href hardcoded to "#", only a
+      // cssSelector -- see findFirstVisibleLocator in @readium/navigator-html-injectables). Every real,
+      // settled position update in this library always comes from a positions-list entry and therefore
+      // always has .position set, so this only ever drops that one synthetic priming event -- without it,
+      // debouncedSavePosition would re-enter itself on every anchor capture, and evaluateSpread/exact
+      // page count/reading speed would each act on a garbage locator once per save.
+      if (locator.locations?.position === undefined) return;
+
       debouncedSavePosition(locator);
 
       // CLAUDE-ADDED: Not debounced, unlike the above -- the pairing/auto-advance logic in useShortImageSpread needs to react to every single position change in sequence to correctly detect "user paged past an already-shown pair".

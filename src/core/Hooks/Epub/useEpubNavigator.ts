@@ -109,6 +109,60 @@ export const useEpubNavigator = () => {
     });
   }, []);
 
+  // CLAUDE-ADDED: Shared by correctPositionAround (reflow-drift correction, below) and
+  // getTextAnchoredLocator (exposed for saving the reading position, so a reopened book can re-find the
+  // same text regardless of layout differences between sessions -- see EpubNavigatorLoad's own comment).
+  // Both need the same "capture a text.highlight anchor for wherever the reader currently is, merged onto
+  // a real positions-list entry" Locator, and the same currentLocation repair afterward.
+  const captureTextAnchoredLocator = useCallback(async (): Promise<Locator | undefined> => {
+    if (isFXLRef.current) return undefined;
+
+    const positionBefore = navigatorInstance?.currentLocator?.locations?.position;
+    // CLAUDE-ADDED: positionTarget (not anchor) is the required anchor for everything below -- it's
+    // always a real positions-list entry, so its own locations.position is guaranteed valid. Bail out
+    // before ever calling requestFirstVisibleLocator if we don't have one (positions list not ready yet,
+    // or currentLocator itself has no position), rather than risk the repair below writing back a
+    // locator with no position at all -- see its own comment for why that specifically crashes.
+    const positionTarget = positionBefore !== undefined
+      ? positionsListRef.current.find(item => item.locations.position === positionBefore)
+      : undefined;
+    if (!positionTarget) return undefined;
+
+    const anchor = await requestFirstVisibleLocator();
+
+    const target = anchor?.text?.highlight
+      ? new Locator({
+          href: positionTarget.href,
+          type: positionTarget.type,
+          text: anchor.text,
+          locations: new LocatorLocations({
+            ...positionTarget.locations,
+            otherLocations: anchor.locations?.otherLocations,
+          }),
+        })
+      : positionTarget;
+
+    // CLAUDE-ADDED: requestFirstVisibleLocator's own round trip above is Readium's "first_visible_locator"
+    // event handling (EpubNavigator.ts's eventListener), which unconditionally replaces
+    // navigatorInstance's own currentLocation.locations wholesale with whatever the frame reports -- a
+    // cssSelector only, no position/progression (see helpers/dom.ts's findFirstVisibleLocator, which
+    // never sets either). Harmless for our own read of it above (anchor is a local copy), but left
+    // uncorrected it leaves the navigator's *shared* currentLocation without a valid locations.position --
+    // which crashes FramePoolManager.update's `this.positions.findIndex(l => l.locations.position ===
+    // locator.locations.position)` (throws "Locator not found in position list") the instant something
+    // else triggers a layout switch (scroll <-> paginated, e.g. StatefulLayout's radio group) right after,
+    // since setLayout reads navigatorInstance.currentLocator directly rather than anything of ours.
+    // There's no public setter for currentLocation (private field, TS-only enforced), so this repairs it
+    // directly -- with the exact same well-formed, guaranteed-to-have-a-position locator being returned,
+    // i.e. the same kind of direct currentLocation assignment EpubNavigator's own internal code already
+    // does in several places (e.g. that same first_visible_locator handler). Note this round trip also
+    // re-fires the app's own positionChanged listener with the *uncorrected* (position-less) locator as a
+    // side effect, before this repair runs -- StatefulReader.tsx's listener filters that one out.
+    if (navigatorInstance) (navigatorInstance as unknown as { currentLocation: Locator }).currentLocation = target;
+
+    return target;
+  }, [requestFirstVisibleLocator]);
+
   // CLAUDE-ADDED: Shared by submitPreferences (font size/spacing/etc. changes) and the fullscreen
   // toggle correction below -- both trigger the same underlying problem: EpubNavigator's post-reflow
   // position recovery (see submitPreferences/syncLocation in @readium/navigator) approximates "where
@@ -119,7 +173,7 @@ export const useEpubNavigator = () => {
   // the clamped pixel position lands nowhere near the paragraph actually being read.
   //
   // The primary fix is content-anchored, not index-anchored: capture the actual text of whatever
-  // element is first visible *before* the change (requestFirstVisibleLocator above), then after the
+  // element is first visible *before* the change (captureTextAnchoredLocator above), then after the
   // change ask the frame to re-find that same text via rangeFromLocator's TextQuoteAnchor search (see
   // EpubNavigator.ts's loadLocator -- passing a Locator with text.highlight set makes go() try this
   // automatically) and scroll it into view. That's anchored to the content itself, so it's correct
@@ -131,49 +185,8 @@ export const useEpubNavigator = () => {
   // happens before it runs, which is why this takes a callback rather than just wrapping an
   // already-started promise.
   const correctPositionAround = useCallback(async (action: () => void | Promise<void>) => {
-    if (isFXLRef.current) { await action(); return; }
-
-    const positionBefore = navigatorInstance?.currentLocator?.locations?.position;
-    // CLAUDE-ADDED: positionTarget (not anchorBefore) is the required anchor for everything below --
-    // it's always a real positions-list entry, so its own locations.position is guaranteed valid. Bail
-    // out before ever calling requestFirstVisibleLocator if we don't have one (positions list not ready
-    // yet, or currentLocator itself has no position), rather than risk the repair below writing back a
-    // locator with no position at all -- see its own comment for why that specifically crashes.
-    const positionTarget = positionBefore !== undefined
-      ? positionsListRef.current.find(item => item.locations.position === positionBefore)
-      : undefined;
-    if (!positionTarget) { await action(); return; }
-
-    const anchorBefore = await requestFirstVisibleLocator();
-
-    const target = anchorBefore?.text?.highlight
-      ? new Locator({
-          href: positionTarget.href,
-          type: positionTarget.type,
-          text: anchorBefore.text,
-          locations: new LocatorLocations({
-            ...positionTarget.locations,
-            otherLocations: anchorBefore.locations?.otherLocations,
-          }),
-        })
-      : positionTarget;
-
-    // CLAUDE-ADDED: requestFirstVisibleLocator's own round trip above is Readium's "first_visible_locator"
-    // event handling (EpubNavigator.ts's eventListener), which unconditionally replaces
-    // navigatorInstance's own currentLocation.locations wholesale with whatever the frame reports -- a
-    // cssSelector only, no position/progression (see helpers/dom.ts's findFirstVisibleLocator, which
-    // never sets either). Harmless for our own read of it above (anchorBefore is a local copy), but left
-    // uncorrected it leaves the navigator's *shared* currentLocation without a valid locations.position --
-    // which crashes FramePoolManager.update's `this.positions.findIndex(l => l.locations.position ===
-    // locator.locations.position)` (throws "Locator not found in position list") the instant action()
-    // itself triggers a layout switch (scroll <-> paginated, e.g. StatefulLayout's radio group), since
-    // setLayout reads navigatorInstance.currentLocator directly rather than anything of ours. There's no
-    // public setter for currentLocation (private field, TS-only enforced), so this repairs it directly --
-    // with the exact same well-formed, guaranteed-to-have-a-position locator we're about to navigate back
-    // to anyway once action() finishes, i.e. the same kind of direct currentLocation assignment
-    // EpubNavigator's own internal code already does in several places (e.g. that same
-    // first_visible_locator handler).
-    if (navigatorInstance) (navigatorInstance as unknown as { currentLocation: Locator }).currentLocation = target;
+    const target = await captureTextAnchoredLocator();
+    if (!target) { await action(); return; }
 
     const generation = ++submitGenerationRef.current;
 
@@ -188,7 +201,18 @@ export const useEpubNavigator = () => {
     if (submitGenerationRef.current !== generation) return;
 
     await new Promise<void>((resolve) => navigatorInstance?.go(target, false, () => resolve()));
-  }, [requestFirstVisibleLocator]);
+  }, [captureTextAnchoredLocator]);
+
+  // CLAUDE-ADDED: Exposed for the reading-position save path (see Epub/StatefulReader.tsx's
+  // debouncedSavePosition) -- ordinary position saves during normal reading/scrolling only ever carry
+  // locations.position/progression (from EpubNavigator's own syncLocation reporting), never a
+  // text.highlight anchor; that's only ever produced by this same captureTextAnchoredLocator, previously
+  // only invoked from correctPositionAround. Without an anchor on the *saved* locator, EpubNavigatorLoad's
+  // reopen-time go() (see its own comment) has nothing to search for and silently falls back to the old
+  // progression-only placement -- which is exactly the drift this whole mechanism exists to prevent.
+  const getTextAnchoredLocator = useCallback((): Promise<Locator | undefined> => {
+    return captureTextAnchoredLocator();
+  }, [captureTextAnchoredLocator]);
 
   const submitPreferences = useCallback(async (preferences: IEpubPreferences) => {
     await correctPositionAround(() => navigatorInstance?.submitPreferences(new EpubPreferences(preferences)));
@@ -221,7 +245,27 @@ export const useEpubNavigator = () => {
       );
 
       navigatorInstance.load().then(() => {
-        cb();
+        // CLAUDE-ADDED: load()'s own initial placement (apply() -> FramePoolManager.update()) only ever
+        // uses locations.progression -- a raw scrollLeft/scrollWidth fraction *within the resource* -- to
+        // show the frame (see FramePoolManager.ts's `newFrame.show(locator.locations.progression)`); it
+        // never looks at text.highlight/cssSelector. That fraction was measured against whatever column
+        // width was active when it was saved -- a window resize, a docking panel/sidebar toggled open or
+        // closed, or a margin/font-size change between sessions all change the reading pane's width, so
+        // the same fraction lands somewhere else in the text on reopen (forwards or backwards -- most
+        // visible in single-column mode, where one page holds a lot of text). This is the exact same
+        // approximation correctPositionAround corrects for font-size/fullscreen/scroll-mode changes made
+        // *after* a book is open, via requestFirstVisibleLocator's text-anchor search -- except load()
+        // only runs once, for the initial open, which correctPositionAround never wraps. Routing the
+        // initial position through go() (the same method correctPositionAround uses for its own
+        // corrections) makes loadLocator try the saved text.highlight anchor first, falling back to
+        // cssSelector then progression exactly like every other correction in this codebase already does
+        // -- so reopening a book always lands on the same text regardless of layout differences since it
+        // was saved.
+        if (config.initialPosition?.text?.highlight) {
+          navigatorInstance?.go(config.initialPosition, false, () => cb());
+        } else {
+          cb();
+        }
       });
     }
   }, []);
@@ -362,6 +406,7 @@ export const useEpubNavigator = () => {
     getSetting,
     submitPreferences,
     correctPositionAround,
+    getTextAnchoredLocator,
     getCframes,
     getScriptMode: currentScriptMode,
     applyDecorations,
