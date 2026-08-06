@@ -201,6 +201,22 @@ export const useEpubNavigator = () => {
     if (submitGenerationRef.current !== generation) return;
 
     await new Promise<void>((resolve) => navigatorInstance?.go(target, false, () => resolve()));
+
+    // CLAUDE-ADDED: That ResizeObserver lives on the *iframe's* document.body (ColumnSnapper.ts), not
+    // this window -- nextFrame()'s two parent-window rAFs are a heuristic for "the iframe has reflowed
+    // and its own observer has fired by now", not a guarantee (setCSSProperties itself is a fire-and-
+    // forget postMessage into the iframe, never awaited -- see FrameManager.setCSSProperties). If that
+    // observer's own re-snap (which clamps the *old* pixel scroll offset into the *new* column width --
+    // exactly the drift this whole mechanism exists to override) fires late, it can land after the go()
+    // above and silently undo it. Re-assert the same text-anchored target one more time after giving it
+    // a further frame to have fired, so our correction is still the last word even if the first go()
+    // above won that race. Still gated by the same generation check so a newer click/change in flight
+    // wins over this stale one, same as the first pass.
+    await nextFrame();
+
+    if (submitGenerationRef.current !== generation) return;
+
+    await new Promise<void>((resolve) => navigatorInstance?.go(target, false, () => resolve()));
   }, [captureTextAnchoredLocator]);
 
   // CLAUDE-ADDED: Exposed for the reading-position save path (see Epub/StatefulReader.tsx's
