@@ -26,12 +26,27 @@ import {
 
 import { useAppSelector } from "@/lib/hooks";
 
-// CLAUDE-ADDED: Two rAFs (not a fixed setTimeout) to wait out a browser reflow -- same idiom
-// useExactPageCount.ts's own nextFrame uses for the same reason: a ResizeObserver callback runs
-// "after layout, before paint" of some upcoming frame, not synchronously with the DOM change that
-// triggered it, so a single rAF isn't reliably guaranteed to land after it fires.
-const nextFrame = (): Promise<void> => {
-  return new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve())));
+// CLAUDE-ADDED: How often correctPositionAround polls currentLocator while waiting for a reflow
+// to settle, and the safety-valve ceiling on how long it'll keep re-snapping before giving up --
+// see that function's own comment for why this replaced a fixed rAF-count wait.
+const POSITION_PIN_POLL_INTERVAL_MS = 120;
+const POSITION_PIN_TIMEOUT_MS = 3000;
+
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+// CLAUDE-ADDED: Roughly the same reading position -- same href, and either the same positions-list
+// index or (when that's unavailable) a total-progression fraction within a tight tolerance. Used to
+// tell whether a corrective re-snap has actually landed, without demanding byte-for-byte locator
+// equality (a text-anchor search can resolve to a slightly different cssSelector and still be "the
+// same place" for this purpose).
+const locatorRoughlyMatches = (a: Locator, b: Locator): boolean => {
+  if (a.href !== b.href) return false;
+  const aPos = a.locations?.position;
+  const bPos = b.locations?.position;
+  if (aPos !== undefined && bPos !== undefined) return aPos === bPos;
+  const aProg = a.locations?.totalProgression;
+  const bProg = b.locations?.totalProgression;
+  return aProg !== undefined && bProg !== undefined && Math.abs(aProg - bProg) < 0.001;
 };
 
 type cbb = (ok: boolean) => void;
@@ -184,6 +199,25 @@ export const useEpubNavigator = () => {
   // whatever synchronously (or via its own returned promise) triggers the layout change; capturing
   // happens before it runs, which is why this takes a callback rather than just wrapping an
   // already-started promise.
+  //
+  // CLAUDE-ADDED: This used to re-assert the target exactly twice, each after two parent-window rAFs
+  // (nextFrame()), on the assumption that the navigator's own ResizeObserver-driven auto-snap (which
+  // lives on the *iframe's* document.body, not this window -- see ColumnSnapper.ts) would always have
+  // already re-clamped by then. It doesn't reliably: when that auto-snap fires later than the ~2-frame
+  // window this waited out, it re-derives position from the *old* pixel scroll offset against the
+  // *newly* reflowed (usually wider, for a bigger font/margin) column width, silently undoing our
+  // correction and landing much earlier in the text than before the change -- visibly "the page jumped
+  // way back in the book" after changing a setting or toggling fullscreen, exactly the symptom this
+  // exists to prevent. Polling currentLocator and re-snapping on every drift -- instead of guessing how
+  // many frames to wait -- keeps winning that race for as long as it takes. If you're tempted to go
+  // back to a fixed rAF-count wait here, don't; that's the bug this replaced.
+  //
+  // submitGenerationRef still discards a stale correction loop the moment a newer one (another
+  // slider tick, or the user explicitly navigating elsewhere via go/goLink/goForward/goBackward/
+  // goRight/goLeft, all of which bump it too) supersedes it, so this never fights a real user action
+  // for more than one poll interval. POSITION_PIN_TIMEOUT_MS is a pure safety valve for the case
+  // where the target can never be reproduced (its text no longer exists) -- normal settling is
+  // expected to take a handful of poll intervals at most.
   const correctPositionAround = useCallback(async (action: () => void | Promise<void>) => {
     const target = await captureTextAnchoredLocator();
     if (!target) { await action(); return; }
@@ -192,31 +226,22 @@ export const useEpubNavigator = () => {
 
     await action();
 
-    // CLAUDE-ADDED: The navigator's own ResizeObserver-driven auto-snap runs off a browser reflow, not
-    // off action()'s own promise -- it can still be pending when the above await resolves. Wait it out
-    // first so our corrective go() below is the last word, not something the auto-snap clobbers a
-    // frame later.
-    await nextFrame();
+    const deadline = Date.now() + POSITION_PIN_TIMEOUT_MS;
+    let stableStreak = 0;
+    while (Date.now() < deadline) {
+      await wait(POSITION_PIN_POLL_INTERVAL_MS);
+      if (submitGenerationRef.current !== generation) return;
 
-    if (submitGenerationRef.current !== generation) return;
+      const current = navigatorInstance?.currentLocator;
+      if (current && locatorRoughlyMatches(current, target)) {
+        stableStreak += 1;
+        if (stableStreak >= 2) return;
+        continue;
+      }
 
-    await new Promise<void>((resolve) => navigatorInstance?.go(target, false, () => resolve()));
-
-    // CLAUDE-ADDED: That ResizeObserver lives on the *iframe's* document.body (ColumnSnapper.ts), not
-    // this window -- nextFrame()'s two parent-window rAFs are a heuristic for "the iframe has reflowed
-    // and its own observer has fired by now", not a guarantee (setCSSProperties itself is a fire-and-
-    // forget postMessage into the iframe, never awaited -- see FrameManager.setCSSProperties). If that
-    // observer's own re-snap (which clamps the *old* pixel scroll offset into the *new* column width --
-    // exactly the drift this whole mechanism exists to override) fires late, it can land after the go()
-    // above and silently undo it. Re-assert the same text-anchored target one more time after giving it
-    // a further frame to have fired, so our correction is still the last word even if the first go()
-    // above won that race. Still gated by the same generation check so a newer click/change in flight
-    // wins over this stale one, same as the first pass.
-    await nextFrame();
-
-    if (submitGenerationRef.current !== generation) return;
-
-    await new Promise<void>((resolve) => navigatorInstance?.go(target, false, () => resolve()));
+      stableStreak = 0;
+      await new Promise<void>((resolve) => navigatorInstance?.go(target, false, () => resolve()));
+    }
   }, [captureTextAnchoredLocator]);
 
   // CLAUDE-ADDED: Exposed for the reading-position save path (see Epub/StatefulReader.tsx's
@@ -294,27 +319,36 @@ export const useEpubNavigator = () => {
     });
   }, []);
 
+  // CLAUDE-ADDED: Every explicit navigation call below bumps submitGenerationRef first -- so a
+  // correction loop left running by correctPositionAround (see its own comment) notices on its
+  // next poll and gives up instead of fighting a page-turn/link-jump the user actually asked for.
   const goRight = useCallback((animated: boolean, callback: cbb) => {
+    submitGenerationRef.current += 1;
     navigatorInstance?.goRight(animated, callback);
   }, []);
 
   const goLeft = useCallback((animated: boolean, callback: cbb) => {
+    submitGenerationRef.current += 1;
     navigatorInstance?.goLeft(animated, callback)
   }, []);
 
   const goBackward = useCallback((animated: boolean, callback: cbb) => {
+    submitGenerationRef.current += 1;
     navigatorInstance?.goBackward(animated, callback);
   }, []);
 
   const goForward = useCallback((animated: boolean, callback: cbb) => {
+    submitGenerationRef.current += 1;
     navigatorInstance?.goForward(animated, callback);
   }, []);
 
   const goLink = useCallback((link: Link, animated: boolean, callback: cbb) => {
+    submitGenerationRef.current += 1;
     navigatorInstance?.goLink(link, animated, callback);
   }, []);
 
   const go = useCallback((locator: Locator, animated: boolean, callback: cbb) => {
+    submitGenerationRef.current += 1;
     navigatorInstance?.go(locator, animated, callback);
   }, []);
 
