@@ -201,6 +201,9 @@
                 "small": "Apertada",
                 "title": "Altura da linha"
             },
+            "margin": {
+                "horizontal": "Margem horizontal"
+            },
             "paragraphIndent": "Indentação do parágrafo",
             "paragraphSpacing": "Espaçamento entre parágrafos",
             "publisherStyles": {

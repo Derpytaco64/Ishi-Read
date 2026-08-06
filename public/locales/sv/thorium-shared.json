@@ -213,6 +213,9 @@
                 "small": "Tätt",
                 "title": "Radavstånd"
             },
+            "margin": {
+                "horizontal": "Horisontell marginal"
+            },
             "noRuby": {
                 "label": "Dölj ruby-annoteringar",
                 "title": "Ruby-annoteringar"

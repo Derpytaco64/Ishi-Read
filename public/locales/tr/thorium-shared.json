@@ -85,7 +85,10 @@
                 "title": "Yazı biçimi ailesi"
             },
             "fontSize": "Yazı tipi boyutu",
-            "title": "Görüntüleme Ayarları"
+            "title": "Görüntüleme Ayarları",
+            "margin": {
+                "horizontal": "Yatay kenar boşluğu"
+            }
         },
         "progression": {
             "pagesLeft": {
