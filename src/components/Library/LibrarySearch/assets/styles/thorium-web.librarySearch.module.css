@@ -1,0 +1,80 @@
+/* CLAUDE-ADDED: Sits to the left of StatefulUserMenu's avatar (84px wide, pinned top:0 right:0
+   in #home -- see thorium-web.userMenu.module.css's .trigger/.avatar), so this is offset by that
+   width plus a gap. Colors read var(--th-color-background)/--th-color-text/--th-color-text-secondary
+   straight off #home's own light/dark custom properties (home.css) since this is a descendant of
+   #home and those inherit -- no separate dark-mode block needed here. */
+.search {
+  position: absolute;
+  top: 20px;
+  right: 100px;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  width: 240px;
+  max-width: 32vw;
+}
+
+.searchInput {
+  box-sizing: border-box;
+  width: 100%;
+  border-radius: 999px;
+  border: 1px solid var(--th-color-text-secondary, #999);
+  background: var(--th-color-background, #fff);
+  color: var(--th-color-text, #333);
+  padding: 0.5rem 2.25rem 0.5rem 1rem;
+  font-size: 0.9rem;
+}
+
+.searchInput::-webkit-search-cancel-button,
+.searchInput::-webkit-search-decoration {
+  -webkit-appearance: none;
+}
+
+.searchInput[data-focus-visible] {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 1px;
+}
+
+.searchIcon,
+.clearButton {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  margin-inline-start: -1.9rem;
+  margin-inline-end: 0.6rem;
+}
+
+.searchIcon svg {
+  width: 18px;
+  height: 18px;
+  fill: var(--th-color-text-secondary, #999);
+}
+
+.clearButton svg {
+  width: 16px;
+  height: 16px;
+  fill: var(--th-color-text, #333);
+}
+
+.searchIcon[hidden],
+.clearButton[data-disabled] {
+  display: none;
+}
+
+/* CLAUDE-ADDED: Matches the corner icons' own mobile shrink (avatar goes 84px -> 48px, see
+   thorium-web.userMenu.module.css) -- offset/width follow suit so this stays clear of the avatar
+   and doesn't crowd the shrunk logo on the opposite corner. */
+@media (max-width: 600px) {
+  .search {
+    top: 6px;
+    right: 56px;
+    width: 130px;
+    max-width: 38vw;
+  }
+
+  .searchInput {
+    padding: 0.35rem 1.9rem 0.35rem 0.7rem;
+    font-size: 0.8rem;
+  }
+}

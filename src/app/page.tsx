@@ -11,6 +11,7 @@ import { StatefulShelfView } from "@/components/Library/CustomShelves/StatefulSh
 import { StatefulShelfFormModal } from "@/components/Library/CustomShelves/StatefulShelfFormModal";
 import { StatefulBookContextMenu, BookContextMenuState } from "@/components/Library/BookContextMenu/StatefulBookContextMenu";
 import { StatefulUserMenu } from "@/components/Library/UserMenu/StatefulUserMenu";
+import { StatefulLibrarySearch } from "@/components/Library/LibrarySearch/StatefulLibrarySearch";
 import Image from "next/image";
 
 import { isManifestRouteEnabled } from "./ManifestRouteEnabled";
@@ -96,6 +97,7 @@ export default function Home() {
 
   const [myLibraryBooks, setMyLibraryBooks] = useState<DynamicBook[]>([]);
   const [progressByUrl, setProgressByUrl] = useState<Record<string, number>>({});
+  const [searchQuery, setSearchQuery] = useState("");
 
   // CLAUDE-ADDED: Book-context-menu "Remove from Continue Reading" -- maps a dismissed book's url to
   // the lastReadAt it had at the moment of dismissal. There's no separate "clear" step anywhere: a
@@ -448,6 +450,20 @@ export default function Home() {
   const ebookBooks = myLibraryBooks.filter((book) => !book.isAudiobook);
   const audiobookBooks = myLibraryBooks.filter((book) => book.isAudiobook);
 
+  // CLAUDE-ADDED: StatefulLibrarySearch's query, matched against title/author/tags(genre)/series
+  // across the whole library (both ebooks and audiobooks) rather than just whichever tab is active
+  // -- see the search-results render branch below, which takes over the main content area while
+  // this is non-empty regardless of activeView.
+  const trimmedSearchQuery = searchQuery.trim().toLowerCase();
+  const searchResults = trimmedSearchQuery
+    ? myLibraryBooks.filter((book) => {
+        if (book.title.toLowerCase().includes(trimmedSearchQuery)) return true;
+        if (book.author.toLowerCase().includes(trimmedSearchQuery)) return true;
+        if (book.series?.name.toLowerCase().includes(trimmedSearchQuery)) return true;
+        return book.tags?.some((tag) => tag.toLowerCase().includes(trimmedSearchQuery)) ?? false;
+      })
+    : [];
+
   return (
     <main id="home">
       { /* Logo doubles as the trigger for the left-docked library menu (settings, etc.). */ }
@@ -468,9 +484,26 @@ export default function Home() {
         onChangeCoverSize={ setCoverSize }
       />
 
+      <StatefulLibrarySearch value={ searchQuery } onChange={ setSearchQuery } />
+
       <StatefulUserMenu />
 
-      { activeView === "library" && (
+      { trimmedSearchQuery && (
+        <StatefulMyLibraryView
+          books={ searchResults }
+          coverSize={ coverSize }
+          progressByUrl={ progressByUrl }
+          onSelectBook={ (publication) => {
+            setSelectedBook(publication);
+            setIsBookSheetOpen(true);
+          } }
+          onContextMenu={ openContextMenu }
+          title="Search Results"
+          emptyMessage={ `No books match "${ searchQuery.trim() }".` }
+        />
+      ) }
+
+      { !trimmedSearchQuery && activeView === "library" && (
         <StatefulMyLibraryView
           books={ ebookBooks }
           coverSize={ coverSize }
@@ -485,7 +518,7 @@ export default function Home() {
         />
       ) }
 
-      { activeView === "audiobooks" && (
+      { !trimmedSearchQuery && activeView === "audiobooks" && (
         <StatefulMyLibraryView
           books={ audiobookBooks }
           coverSize={ coverSize }
@@ -500,7 +533,7 @@ export default function Home() {
         />
       ) }
 
-      { activeView === "series" && (
+      { !trimmedSearchQuery && activeView === "series" && (
         <StatefulSeriesView
           books={ myLibraryBooks }
           coverSize={ coverSize }
@@ -514,7 +547,7 @@ export default function Home() {
         />
       ) }
 
-      { activeView === "shelf" && (
+      { !trimmedSearchQuery && activeView === "shelf" && (
         <StatefulShelfView
           shelf={ shelves.find((shelf) => shelf.id === activeShelfId) }
           books={ myLibraryBooks }
@@ -528,7 +561,7 @@ export default function Home() {
         />
       ) }
 
-      { activeView === "home" && (
+      { !trimmedSearchQuery && activeView === "home" && (
       <>
       <header className="header">
         <h1>Library Home Page</h1>
