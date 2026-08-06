@@ -103,6 +103,11 @@
                     "trigger": "Daugiau išretinimo parinkčių"
                 }
             }
+        },
+        "preferences": {
+            "margin": {
+                "horizontal": "Horizontali paraštė"
+            }
         }
     },
     "audio": {

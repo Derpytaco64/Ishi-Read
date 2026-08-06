@@ -190,9 +190,6 @@
                 "small": "Glaudus",
                 "title": "Eilutės aukštis"
             },
-            "margin": {
-                "horizontal": "Horizontali paraštė"
-            },
             "noRuby": {
                 "label": "Slėpti „ruby“ anotacijas",
                 "title": "„Ruby“ anotacijos"

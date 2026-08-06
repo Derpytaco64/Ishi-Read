@@ -103,6 +103,11 @@
                     "trigger": "Opzioni avanzate di spaziatura"
                 }
             }
+        },
+        "preferences": {
+            "margin": {
+                "horizontal": "Margine orizzontale"
+            }
         }
     },
     "audio": {

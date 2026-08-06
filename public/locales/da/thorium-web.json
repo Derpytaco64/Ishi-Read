@@ -103,6 +103,11 @@
                     "trigger": "Flere afstands-indstillinger"
                 }
             }
+        },
+        "preferences": {
+            "margin": {
+                "horizontal": "Horisontal margin"
+            }
         }
     },
     "audio": {

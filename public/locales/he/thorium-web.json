@@ -4,6 +4,11 @@
             "loading": "טעינה",
             "printingDisabled": "הדפסה אינה זמינה",
             "publicationWrapper": "אתה עכשיו בכותר"
+        },
+        "preferences": {
+            "margin": {
+                "horizontal": "שוליים אופקיים"
+            }
         }
     }
 }

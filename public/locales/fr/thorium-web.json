@@ -103,6 +103,11 @@
                     "trigger": "Options d’espacement supplémentaires"
                 }
             }
+        },
+        "preferences": {
+            "margin": {
+                "horizontal": "Marge horizontale"
+            }
         }
     },
     "audio": {

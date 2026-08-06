@@ -213,9 +213,6 @@
                 "small": "Ciasna",
                 "title": "Interlinia"
             },
-            "margin": {
-                "horizontal": "Margines poziomy"
-            },
             "noRuby": {
                 "label": "Ukryj adnotacje ruby",
                 "title": "Adnotacje ruby"

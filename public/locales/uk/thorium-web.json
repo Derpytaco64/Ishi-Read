@@ -1,1 +1,9 @@
-{}
+{
+    "reader": {
+        "preferences": {
+            "margin": {
+                "horizontal": "Горизонтальний відступ"
+            }
+        }
+    }
+}

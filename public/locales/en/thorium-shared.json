@@ -213,9 +213,6 @@
                 "small": "Tight",
                 "title": "Line height"
             },
-            "margin": {
-                "horizontal": "Horizontal margin"
-            },
             "noRuby": {
                 "label": "Hide ruby annotations",
                 "title": "Ruby annotations"

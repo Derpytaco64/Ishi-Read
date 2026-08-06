@@ -103,6 +103,11 @@
                     "trigger": "Lisää välistysasetuksia"
                 }
             }
+        },
+        "preferences": {
+            "margin": {
+                "horizontal": "Vaakasuuntainen marginaali"
+            }
         }
     },
     "audio": {

@@ -103,6 +103,11 @@
                     "trigger": "Täiendavad sõrendamise valikud"
                 }
             }
+        },
+        "preferences": {
+            "margin": {
+                "horizontal": "Horisontaalne veeris"
+            }
         }
     },
     "audio": {

@@ -125,9 +125,6 @@
                 "small": "ضيق",
                 "title": "ارتفاع السطر"
             },
-            "margin": {
-                "horizontal": "الهامش الأفقي"
-            },
             "offsetFirstPage": "عرض الصفحة الأولى بمفردها",
             "paragraphIndent": "مسافة البادئة للفقرات",
             "paragraphSpacing": "تباعد الفقرات",

@@ -103,6 +103,11 @@
                     "trigger": "Más opciones de espaciado de texto"
                 }
             }
+        },
+        "preferences": {
+            "margin": {
+                "horizontal": "Margen horizontal"
+            }
         }
     },
     "audio": {

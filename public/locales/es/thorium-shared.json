@@ -213,9 +213,6 @@
                 "small": "Ajustado",
                 "title": "Interlineado"
             },
-            "margin": {
-                "horizontal": "Margen horizontal"
-            },
             "noRuby": {
                 "label": "Ocultar anotaciones de ruby",
                 "title": "Anotaciones de Ruby"

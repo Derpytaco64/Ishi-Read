@@ -213,9 +213,6 @@
                 "small": "Stretta",
                 "title": "Interlinea"
             },
-            "margin": {
-                "horizontal": "Margine orizzontale"
-            },
             "noRuby": {
                 "label": "Nascondi le annotazioni ruby",
                 "title": "Annotazioni ruby"

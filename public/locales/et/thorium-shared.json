@@ -213,9 +213,6 @@
                 "small": "Tihe",
                 "title": "Rea kõrgus"
             },
-            "margin": {
-                "horizontal": "Horisontaalne veeris"
-            },
             "noRuby": {
                 "label": "Peida „Ruby“ vormingus märkused",
                 "title": "„Ruby“ vormingus märkused"

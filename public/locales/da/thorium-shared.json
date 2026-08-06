@@ -213,9 +213,6 @@
                 "small": "Tæt",
                 "title": "Linjehøjde"
             },
-            "margin": {
-                "horizontal": "Horisontal margin"
-            },
             "noRuby": {
                 "label": "Skjul \"ruby\"-annoteringer",
                 "title": "\"Ruby\"-annoteringer"

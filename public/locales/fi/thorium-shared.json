@@ -213,9 +213,6 @@
                 "small": "Tiivis",
                 "title": "Riviväli"
             },
-            "margin": {
-                "horizontal": "Vaakasuuntainen marginaali"
-            },
             "noRuby": {
                 "label": "Piilota rubi-merkinnät",
                 "title": "Rubi-merkinnät"

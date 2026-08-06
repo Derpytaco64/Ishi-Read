@@ -103,6 +103,11 @@
                     "trigger": "Więcej opcji odstępów"
                 }
             }
+        },
+        "preferences": {
+            "margin": {
+                "horizontal": "Margines poziomy"
+            }
         }
     },
     "audio": {

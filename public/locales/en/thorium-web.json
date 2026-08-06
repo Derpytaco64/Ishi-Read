@@ -173,6 +173,11 @@
           "trigger": "More spacing options"
         }
       }
+    },
+    "preferences": {
+      "margin": {
+        "horizontal": "Horizontal margin"
+      }
     }
   },
   "audio": {

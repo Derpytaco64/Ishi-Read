@@ -65,6 +65,11 @@
         },
         "jumpToPosition": {
             "go": "اذهب"
+        },
+        "preferences": {
+            "margin": {
+                "horizontal": "الهامش الأفقي"
+            }
         }
     }
 }
