@@ -23,6 +23,10 @@
 .card {
   position: relative;
   display: block;
+  /* CLAUDE-ADDED: The cell is a flex box now (see the `.wrapper > li` rule below), and a flex
+     item sizes to its content by default -- without this the aspect-ratio has no width to work
+     from and the card collapses. */
+  width: 100%;
   aspect-ratio: 2 / 3;
   text-decoration: none;
   color: inherit;
@@ -43,6 +47,18 @@
    isAudiobook check, which is what applies this alongside .card. */
 .cardAudiobook {
   aspect-ratio: 1 / 1;
+}
+
+/* CLAUDE-ADDED: A grid row (and the carousel's flex line) is as tall as its tallest card, i.e. a
+   2:3 portrait one -- so a square audiobook card hung from the top of its cell with all the slack
+   dumped underneath it. Making the cell itself a flex box centres the card in whatever slack there
+   is; a row of nothing but audiobooks has none, so no space is wasted there. `.wrapper` is the
+   grid <ul> ThGrid renders (its <li> children carry no class of their own); `.carouselItem` is the
+   equivalent <li> on the carousel side. */
+.wrapper > li,
+.carouselItem {
+  display: flex;
+  align-items: center;
 }
 
 .cover {
