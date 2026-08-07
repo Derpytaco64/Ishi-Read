@@ -294,7 +294,7 @@ export const PublicationGrid = ({
       // CLAUDE-ADDED: Cast to Route since publication.url is a dynamically-built manifest path that next.config.mjs's typedRoutes can't statically verify.
       href={ publication.url as Route }
       key={ index }
-      className={ publicationGridStyles.card }
+      className={ classNames(publicationGridStyles.card, publication.isAudiobook && publicationGridStyles.cardAudiobook) }
       onClick={ (e) => {
         if (!onSelect || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
         e.preventDefault();

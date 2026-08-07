@@ -62,6 +62,16 @@
   --play-size: 75px;
 }
 
+/* CLAUDE-ADDED: Audiobook cover art is conventionally square (like an album/podcast cover),
+   unlike the portrait 2:3 book-jacket ratio every other cover here uses -- same treatment as
+   PublicationGrid's .cardAudiobook. Only --cover-h changes (width stays the same var(--cover-w)
+   used for .heroRow's left padding either way); .cover's top offset and .heroRow's min-height are
+   both expressed as calc() off --cover-h below specifically so this override is the only thing
+   that needs to change, instead of also hand-recomputing those two other magic numbers. */
+.containerAudiobook {
+  --cover-h: var(--cover-w);
+}
+
 /* CLAUDE-ADDED: react-modal-sheet gives this its own `position: relative` by default (see
    Sheet.Content's base style in react-modal-sheet/dist/index.js) and paints it after -- i.e. on
    top of -- this element unless this is positioned too; position: absolute both lifts it out of
@@ -96,7 +106,10 @@
 .cover {
   position: absolute;
   left: 1.75rem;
-  top: -285px;
+  /* CLAUDE-ADDED: Was a bare -285px -- 2/3 of the default 427.5px --cover-h, expressed here as a
+     calc() off --cover-h instead so .containerAudiobook's square override above scales the
+     overhang proportionally instead of poking a fixed-height cover's worth above a shorter one. */
+  top: calc(var(--cover-h) * -2 / 3);
   width: var(--cover-w);
   height: var(--cover-h);
   margin: 0;
@@ -270,13 +283,15 @@
      rendering underneath/overlapping the still-visible bottom of the cover art instead of safely
      below it -- .cover is a sibling in .header now (see the comment there), not a child of
      .heroRow the way it used to be, so nothing was otherwise keeping .heroRow tall enough to clear
-     it regardless of how little text a given book's title/author/series actually need. 135px is
-     .cover's own bottom edge position (427.5px tall, positioned 285px above .header's top --
-     so 427.5 - 285 = 142.5px below it) minus .spacer's 20px (already flow height above .heroRow),
-     plus a little breathing room so short-title books still read as more than a 0px-clearance
-     touch -- has to be kept in sync by hand with --cover-h/.cover's top/.spacer's height if any of
-     those change. */
-  min-height: 135px;
+     it regardless of how little text a given book's title/author/series actually need. --cover-h/3
+     is .cover's own bottom edge position below .header's top (--cover-h tall, positioned
+     --cover-h*2/3 above .header's top per .cover's own top offset -- so --cover-h - --cover-h*2/3
+     = --cover-h/3 below it) minus .spacer's 20px (already flow height above .heroRow), plus a
+     little breathing room so short-title books still read as more than a 0px-clearance touch --
+     expressed as calc() off --cover-h (rather than the original hardcoded 135px, its value at the
+     default 427.5px --cover-h) so .containerAudiobook's square override above doesn't also need
+     its own hand-recomputed constant here. */
+  min-height: calc(var(--cover-h) / 3 - 7.5px);
 }
 
 .meta {

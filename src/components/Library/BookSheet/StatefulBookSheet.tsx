@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
+import classNames from "classnames";
 
 import { Button, Disclosure, DisclosurePanel, Heading } from "react-aria-components";
 
@@ -527,7 +528,7 @@ export const StatefulBookSheet = ({
       onSnap={ setCurrentSnap }
       className={ styles.root }
       compounds={{
-        container: { className: styles.container },
+        container: { className: classNames(styles.container, displayed?.isAudiobook && styles.containerAudiobook) },
         // CLAUDE-ADDED: Gated the same as compounds.content below (currentSnap === FULL_SNAP) --
         // without this, dragging the cover/play-button area (rendered inside Sheet.Header, see
         // ThContainerHeader below) always moved the whole sheet, even once fully open, while dragging

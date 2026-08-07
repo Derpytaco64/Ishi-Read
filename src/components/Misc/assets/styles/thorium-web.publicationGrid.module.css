@@ -38,6 +38,13 @@
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* CLAUDE-ADDED: Audiobook cover art is conventionally distributed square (like an album/podcast
+   cover), unlike the portrait 2:3 book-jacket ratio every other card uses -- see renderCard's
+   isAudiobook check, which is what applies this alongside .card. */
+.cardAudiobook {
+  aspect-ratio: 1 / 1;
+}
+
 .cover {
   position: absolute;
   inset: 0;
