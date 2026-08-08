@@ -34,6 +34,7 @@ import {
 import { Decoration, DecorationActivationEvent, EpubNavigatorListeners, KeyboardPeripheralEventData } from "@readium/navigator";
 import {
   Locator,
+  LocatorLocations,
   LocatorText,
   Publication,
   Layout
@@ -638,6 +639,18 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
     // the tracked reading position, since the two can diverge on a long scrolled/paginated resource.
     // Readium's own decoration renderer resolves this via text search (rangeFromLocator), so href +
     // text is all a highlight/note/selection-bookmark Locator actually needs.
+    //
+    // CLAUDE-ADDED: base.locations is deliberately NOT reused wholesale here. It's
+    // currentLocator()'s locations -- the tracked reading position, i.e. whatever block is first
+    // fully visible in the viewport -- which is unrelated to where the selection actually is.
+    // BasicTextSelection carries no cssSelector of its own (see Peripherals.ts' onPointUp), so the
+    // old code borrowed base.locations.otherLocations wholesale, including its cssSelector. Readium's
+    // renderer (rangeFromLocator/P()) scopes its text search to that cssSelector's element when one
+    // is present, so a wrong one doesn't degrade the match -- it makes the real quote unsearchable,
+    // since it isn't in that element's textContent at all. Dropping otherLocations here leaves no
+    // cssSelector, so the search falls back to the whole document body, which is where the text
+    // actually was selected. progression/position/totalProgression are kept for position bookkeeping
+    // (unaffected by this, since they describe reading position, not selection location).
     textSelected: function (selection: BasicTextSelection): void {
       const base = currentLocator();
       if (!base || !selection.text) return;
@@ -646,7 +659,11 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
         href: base.href,
         type: base.type,
         title: base.title,
-        locations: base.locations,
+        locations: new LocatorLocations({
+          progression: base.locations.progression,
+          totalProgression: base.locations.totalProgression,
+          position: base.locations.position
+        }),
         text: new LocatorText({
           highlight: selection.text,
           before: selection.before,
