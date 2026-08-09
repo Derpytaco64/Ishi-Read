@@ -10,7 +10,8 @@ import { useNavigator } from "@/core/Navigator";
 import { useAppSelector } from "@/lib";
 import { useI18n } from "@/i18n/useI18n";
 import { useAudioPreferences } from "@/preferences/hooks/useAudioPreferences";
-import { ThAudioProgressBarVariant } from "@/preferences/models/ui";
+
+import classNames from "classnames";
 
 export const StatefulAudioProgressBar = () => {
   const { t } = useI18n();
@@ -30,10 +31,9 @@ export const StatefulAudioProgressBar = () => {
   const total = duration();
 
   const [hoverLabel, setHoverLabel] = useState<string | undefined>(undefined);
-
-  const handleSeek = useCallback((time: number) => {
-    seek(time);
-  }, [seek]);
+  // Local display toggle only, not persisted -- seeking always resolves to a whole-book time,
+  // this just changes what's rendered and remaps a chapter-relative drag back to that.
+  const [chapterViewMode, setChapterViewMode] = useState(false);
 
   const handleHoverProgression = useCallback((progression: number | null) => {
     if (progression === null) {
@@ -53,43 +53,75 @@ export const StatefulAudioProgressBar = () => {
     return match ? parseFloat(match[1]) : 0;
   };
 
-  // Get timeline segments for fragmented progress bar
+  // Get timeline segments for the chapter tick marks -- always computed, not just for a particular
+  // progress-bar theming variant, since there's no user-facing way to change that preference.
   const segments = useMemo(() => {
     const locator = currentLocator();
     const tl = timeline();
-    if (!locator || !tl || preferences.theming.layout.progressBar?.variant !== ThAudioProgressBarVariant.segmented) return [];
-    
+    if (!locator || !tl) return [];
+
     const segments = tl.segmentsForHref(locator.href);
     if (!segments || !Array.isArray(segments)) return [];
-    
+
     return segments.map((segment) => {
       // Parse timestamp from first reference href (e.g., "track1.mp3#t=60")
       const referenceHref = segment.references?.[0] || "";
       const timestamp = parseTimestamp(referenceHref);
-      
+
       // Calculate percentage based on timestamp and total duration
       const percentage = total > 0 ? (timestamp / total) * 100 : 0;
-      
+
       return {
         title: segment.title,
         timestamp,
         percentage
       };
     });
-  }, [currentLocator, timeline, total, preferences.theming.layout.progressBar?.variant]);
+  }, [currentLocator, timeline, total]);
+
+  // This chapter's own start/duration/position within the whole-book timeline -- only meaningful
+  // once there's more than one chapter to distinguish "book" from "chapter".
+  const chapterProgress = useMemo(() => {
+    if (!chapterViewMode || segments.length < 2) return null;
+
+    let activeIndex = 0;
+    for (let i = 0; i < segments.length; i++) {
+      if (segments[i].timestamp <= current) activeIndex = i;
+      else break;
+    }
+
+    const start = segments[activeIndex].timestamp;
+    const end = segments[activeIndex + 1] ? segments[activeIndex + 1].timestamp : total;
+    const chapterDuration = Math.max(end - start, 0.001);
+
+    return { start, duration: chapterDuration, position: Math.min(Math.max(current - start, 0), chapterDuration) };
+  }, [chapterViewMode, segments, current, total]);
+
+  const handleSeek = useCallback((time: number) => {
+    seek(chapterProgress ? chapterProgress.start + time : time);
+  }, [seek, chapterProgress]);
 
   return (
     <ThAudioProgress
-      currentTime={ current }
-      duration={ total }
+      currentTime={ chapterProgress ? chapterProgress.position : current }
+      duration={ chapterProgress ? chapterProgress.duration : total }
       playbackRate={ playbackRate }
       onSeek={ handleSeek }
       currentChapter={ currentChapter || "​" } // Zero-width space to prevent shift
       isDisabled={ !isTrackReady || isStalled }
-      seekableRanges={ seekableRanges }
-      hoverLabel={ hoverLabel }
-      onHoverProgression={ handleHoverProgression }
-      segments={ segments }
+      seekableRanges={ chapterProgress ? [] : seekableRanges }
+      hoverLabel={ chapterProgress ? undefined : hoverLabel }
+      onHoverProgression={ chapterProgress ? undefined : handleHoverProgression }
+      segments={ chapterProgress ? [] : segments }
+      modeToggle={ segments.length > 1 &&
+        <button
+          type="button"
+          className={ classNames(audioStyles.chapterToggle, { [audioStyles.chapterToggleActive]: !!chapterProgress }) }
+          onClick={ () => setChapterViewMode(mode => !mode) }
+        >
+          { t(chapterProgress ? "audio.player.progressChapterView" : "audio.player.progressBookView") }
+        </button>
+      }
       compounds={{
         wrapper: {
           className: audioStyles.wrapper,
@@ -115,6 +147,9 @@ export const StatefulAudioProgressBar = () => {
         },
         remainingTime: {
           className: audioStyles.remaining
+        },
+        modeToggle: {
+          className: audioStyles.modeToggle
         },
         seekableRange: {
           className: audioStyles.seekableRange

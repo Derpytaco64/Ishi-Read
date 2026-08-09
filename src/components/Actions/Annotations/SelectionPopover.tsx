@@ -15,6 +15,7 @@ import { HIGHLIGHT_COLORS } from "./helpers/highlightColors";
 import { useI18n } from "@/i18n/useI18n";
 
 import BookmarkIcon from "./assets/icons/bookmark.svg";
+import CopyIcon from "./assets/icons/copy.svg";
 import NoteIcon from "./assets/icons/note.svg";
 import DeleteIcon from "./assets/icons/delete.svg";
 import CheckIcon from "./assets/icons/check.svg";
@@ -127,6 +128,11 @@ export const SelectionPopover = () => {
     close();
   };
 
+  const copySelection = () => {
+    navigator.clipboard.writeText(pendingSelection.text);
+    close();
+  };
+
   const saveBookmark = () => {
     dispatch(addBookmark(manifestUrl, {
       id: crypto.randomUUID(),
@@ -227,6 +233,10 @@ export const SelectionPopover = () => {
               onClick={ () => pickColor(color.id) }
             />
           )) }
+
+          <button type="button" className={ popoverStyles.iconButton } aria-label={ t("reader.annotations.copySelection") } onClick={ copySelection }>
+            <CopyIcon aria-hidden="true" focusable="false" />
+          </button>
 
           { existing?.type === "highlight" &&
             <button type="button" className={ popoverStyles.iconButton } aria-label={ t("reader.annotations.delete") } onClick={ removeHighlight }>

@@ -427,9 +427,18 @@ export default function Home() {
     }
   }
 
-  const lastSeriesRead = (lastSeriesGroupKey ? seriesGroups.get(lastSeriesGroupKey) ?? [] : [])
+  const lastSeriesReadBooks = lastSeriesGroupKey ? seriesGroups.get(lastSeriesGroupKey) ?? [] : [];
+
+  const lastSeriesRead = lastSeriesReadBooks
     .slice()
     .sort((a, b) => (a.series?.position ?? 0) - (b.series?.position ?? 0));
+
+  // CLAUDE-ADDED: The specific book within the winning series that actually holds
+  // lastSeriesReadAt -- passed to the shelf below as focusUrl so it opens scrolled to the volume
+  // you were last reading rather than always at the start of the series.
+  const lastSeriesReadFocusUrl = lastSeriesReadBooks.length > 0
+    ? lastSeriesReadBooks.reduce((latest, book) => (book.lastReadAt ?? -Infinity) > (latest.lastReadAt ?? -Infinity) ? book : latest).url
+    : undefined;
 
   const recentlyAdded = [...myLibraryBooks]
     .sort((a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0))
@@ -603,6 +612,7 @@ export default function Home() {
               } }
               onContextMenu={ openContextMenu }
               carousel={ key === "lastSeriesRead" || key === "recentlyAdded" }
+              focusUrl={ key === "lastSeriesRead" ? lastSeriesReadFocusUrl : undefined }
             />
           </Fragment>
         );

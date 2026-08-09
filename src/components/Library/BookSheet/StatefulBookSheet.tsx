@@ -14,8 +14,12 @@ import { ThContainerHeader } from "@/core/Components/Containers/ThContainerHeade
 import { ThContainerBody } from "@/core/Components/Containers/ThContainerBody";
 import { ThCloseButton } from "@/core/Components/Buttons/ThCloseButton";
 import { ThModal } from "@/core/Components/Containers/ThModal";
+import { StatefulImageOverlay } from "@/components/Epub/ImageOverlay/StatefulImageOverlay";
 
 import { Publication } from "@/components/Misc/PublicationGrid";
+
+import { useAppDispatch } from "@/lib/hooks";
+import { openImageOverlay } from "@/lib/imageOverlayReducer";
 
 import { getManifestUrlFromBookUrl } from "@/helpers/getBookProgress";
 import { fetchPositionFromServer } from "@/lib/userData/positionApi";
@@ -23,7 +27,7 @@ import { fetchReadingTimeFromServer } from "@/lib/userData/readingTimeApi";
 import { fetchWordCountFromServer } from "@/lib/userData/wordCountApi";
 import { fetchPageCountFromServer } from "@/lib/userData/pageCountApi";
 import { fetchGlobalReadingSpeedSamplesFromServer } from "@/lib/userData/readingSpeedApi";
-import { fetchCompletedReadTimesFromServer } from "@/lib/userData/completedReadTimesApi";
+import { fetchCompletedReadTimesFromServer, deleteCompletedReadTimeFromServer } from "@/lib/userData/completedReadTimesApi";
 import { fetchHighlightsFromServer, deleteHighlightFromServer } from "@/lib/userData/highlightsApi";
 import { fetchBookmarksFromServer, deleteBookmarkFromServer } from "@/lib/userData/bookmarksApi";
 import { fetchNotesFromServer, saveNoteToServer, deleteNoteFromServer } from "@/lib/userData/notesApi";
@@ -31,7 +35,7 @@ import { StoredCompletedReadTime } from "@/lib/userData/readingTimeTypes";
 import { StoredNote } from "@/lib/userData/annotationTypes";
 import { computeCurrentWpm, estimateSecondsLeft } from "@/components/Actions/ReadingTimer/helpers/computeReadingSpeed";
 import { formatFullReadingTime, formatEstimatedTime, ReadingTimeUnitLabels } from "@/components/Actions/ReadingTimer/helpers/formatReadingTime";
-import { formatTimestamp, formatDateOnly } from "@/components/Actions/Annotations/helpers/formatTimestamp";
+import { formatTimestamp } from "@/components/Actions/Annotations/helpers/formatTimestamp";
 import { getHighlightColorHex } from "@/components/Actions/Annotations/helpers/highlightColors";
 import { NoteMarkdownExcerpt } from "@/components/Actions/Annotations/helpers/NoteMarkdownExcerpt";
 
@@ -110,7 +114,7 @@ const ReadProgressDial = ({ percent }: { percent: number }) => {
   );
 };
 
-// CLAUDE-ADDED: Everything the "Reading Timer" and "Completed Read" sections need, fetched together
+// CLAUDE-ADDED: Everything the "Reading Timer" and "Completed Reads" sections need, fetched together
 // per book (see the effect below) since they're all keyed by the same manifestUrl and most of them
 // (wpm, secondsLeft) are derived from more than one of the raw values.
 interface ReadingStats {
@@ -118,10 +122,10 @@ interface ReadingStats {
   totalSeconds: number | null;
   wpm: number | null;
   secondsLeft: number | null;
-  // CLAUDE-ADDED: Most recent completed read only (see the effect's sort-and-take-first below), not
-  // the full history -- "the last run", matching the reader's own Completed tab's most-recent-first
-  // ordering, just showing the one entry instead of the whole list.
-  lastCompletedRead: StoredCompletedReadTime | null;
+  // CLAUDE-ADDED: Full history, most-recent-first -- same ordering as the reader's own Completed
+  // tab (StatefulReadingTimerContainer's sortedCompletedReadTimes), so this section can offer the
+  // same delete-any-past-run affordance without needing to enter the reader for it.
+  completedReadTimes: StoredCompletedReadTime[];
 }
 
 // CLAUDE-ADDED: Merges highlights/bookmarks/notes into one list, same union AnnotationListEntry
@@ -192,6 +196,8 @@ export const StatefulBookSheet = ({
     setDisplayed(publication);
   }
 
+  const dispatch = useAppDispatch();
+
   // CLAUDE-ADDED: FocusScope's own autoFocus doesn't reliably land inside the sheet on open (focus
   // stays on the book card that was clicked, so Escape/Tab never reach the sheet), and ThBottomSheet's
   // own focusOptions mechanism fires on a fixed 100ms timer that's shorter than the sheet's actual
@@ -219,7 +225,7 @@ export const StatefulBookSheet = ({
   // than a wrong one.
   const [readingStats, setReadingStats] = useState<ReadingStats | null>(null);
 
-  // CLAUDE-ADDED: The "Annotations" section, between Reading Timer and Completed Read -- a read-only
+  // CLAUDE-ADDED: The "Annotations" section, between Reading Timer and Completed Reads -- a read-only
   // view of the book's highlights/bookmarks/notes, fetched in the same Promise.all as everything
   // above (these are cheap cache reads, same cost as position/wordCount/etc, unlike pageCount's own
   // separate effect below which can trigger an expensive first-time server computation). null while
@@ -246,12 +252,18 @@ export const StatefulBookSheet = ({
   // pressed -- see handleDeleteAnnotation/confirmDeleteAnnotation below.
   const [pendingDeleteAnnotation, setPendingDeleteAnnotation] = useState<AnnotationDisplayEntry | null>(null);
 
+  // CLAUDE-ADDED: Same confirm-first pattern as pendingDeleteAnnotation above, kept as its own piece
+  // of state rather than folded into it -- a completed read isn't an AnnotationDisplayEntry, and the
+  // two are deleted through different server endpoints.
+  const [pendingDeleteCompletedRead, setPendingDeleteCompletedRead] = useState<StoredCompletedReadTime | null>(null);
+
   useEffect(() => {
     setReadingStats(null);
     setAnnotations(null);
     setAnnotationsTab("all");
     setEditingKey(null);
     setPendingDeleteAnnotation(null);
+    setPendingDeleteCompletedRead(null);
 
     if (!displayed) return;
     const manifestUrl = getManifestUrlFromBookUrl(displayed.url);
@@ -281,12 +293,10 @@ export const StatefulBookSheet = ({
         : null;
       // CLAUDE-ADDED: Same most-recent-first ordering as StatefulReadingTimerContainer's own
       // sortedCompletedReadTimes -- upsertCompletedReadTime appends, so completedAt (not array
-      // order) is what actually determines which one is "the last run".
-      const lastCompletedRead = completedReadTimes.length > 0
-        ? completedReadTimes.reduce((latest, item) => item.completedAt > latest.completedAt ? item : latest)
-        : null;
+      // order) is what actually determines recency.
+      const sortedCompletedReadTimes = [...completedReadTimes].sort((a, b) => b.completedAt - a.completedAt);
 
-      setReadingStats({ percent, totalSeconds, wpm, secondsLeft, lastCompletedRead });
+      setReadingStats({ percent, totalSeconds, wpm, secondsLeft, completedReadTimes: sortedCompletedReadTimes });
 
       // CLAUDE-ADDED: Same deserialize-and-drop-unparseable-entries pattern as
       // StatefulAnnotationsContainer.tsx's own `entries` memo (the reader's interactive panel this
@@ -479,6 +489,27 @@ export const StatefulBookSheet = ({
     setPendingDeleteAnnotation(null);
   };
 
+  const handleDeleteCompletedRead = (entry: StoredCompletedReadTime) => {
+    setPendingDeleteCompletedRead(entry);
+  };
+
+  const closeDeleteCompletedReadConfirm = () => setPendingDeleteCompletedRead(null);
+
+  const confirmDeleteCompletedRead = () => {
+    const entry = pendingDeleteCompletedRead;
+    const manifestUrl = displayed ? getManifestUrlFromBookUrl(displayed.url) : null;
+
+    if (entry && manifestUrl) {
+      setReadingStats((prev) => prev && {
+        ...prev,
+        completedReadTimes: prev.completedReadTimes.filter((item) => item.id !== entry.id)
+      });
+      deleteCompletedReadTimeFromServer(manifestUrl, entry.id);
+    }
+
+    setPendingDeleteCompletedRead(null);
+  };
+
   const beginEditingNote = (entry: AnnotationDisplayEntry) => {
     setEditingKey(entry.key);
     setEditDraft(entry.noteText ?? "");
@@ -577,7 +608,14 @@ export const StatefulBookSheet = ({
         { displayed && (
           <>
           <figure className={ styles.cover }>
-            <img src={ displayed.cover } alt="" className={ styles.coverImage } />
+            <button
+              type="button"
+              className={ styles.coverButton }
+              aria-label={ `View cover for ${ displayed.title }` }
+              onClick={ () => dispatch(openImageOverlay({ src: displayed.cover, alt: `${ displayed.title } cover` })) }
+            >
+              <img src={ displayed.cover } alt="" className={ styles.coverImage } />
+            </button>
           </figure>
 
           <Link
@@ -739,12 +777,12 @@ export const StatefulBookSheet = ({
 
             { /* CLAUDE-ADDED: Read-only view of the book's highlights/bookmarks/notes -- the reader's
                  own interactive panel is AnnotationsContent.tsx (edit/delete/jump-to); this is the
-                 same "summary popup, not a replacement" treatment Reading Timer/Completed Read above
+                 same "summary popup, not a replacement" treatment Reading Timer/Completed Reads above
                  and below already get. Sorted book order (start to end), not creation order -- see
                  the bookOrder sort in the fetch effect above. Collapsible (same Disclosure pattern
                  StatefulLibraryMenu's Settings panel uses) since a book with a lot of annotations
                  could otherwise make this an awfully long sheet to scroll past just to reach
-                 Completed Read below it -- collapsed by default, same as that Settings panel. */ }
+                 Completed Reads below it -- collapsed by default, same as that Settings panel. */ }
             { annotations && annotations.length > 0 && (
               <Disclosure
                 className={ styles.disclosure }
@@ -880,57 +918,38 @@ export const StatefulBookSheet = ({
               </Disclosure>
             ) }
 
-            { /* CLAUDE-ADDED: The most recent entry from the reader's own Completed tab (see
-                 lastCompletedRead in the effect above) -- created whenever the in-reader timer is
-                 reset with "save", archiving everything accumulated since the previous reset/save as
-                 one completed run. Only ever the single latest one here, not the full history list
-                 the reader panel shows -- this is a summary popup, not a replacement for it. */ }
-            { readingStats?.lastCompletedRead && (
+            { /* CLAUDE-ADDED: Every past run from the reader's own Completed tab (see
+                 completedReadTimes in the effect above), not just the latest -- each created
+                 whenever the in-reader timer is reset with "save", archiving everything accumulated
+                 since the previous reset/save as one completed run. Deletable directly from here
+                 (see handleDeleteCompletedRead) so managing this history doesn't require entering the
+                 reader -- the per-day breakdown the reader's own panel nests under each entry stays
+                 reader-only, this is a summary popup, not a replacement for it. */ }
+            { readingStats && readingStats.completedReadTimes.length > 0 && (
               <div>
-                <h3 className={ styles.descriptionHeading }>Completed Read</h3>
-                <div className={ styles.statsRow }>
-                  <span className={ styles.chip }>
-                    <strong>Completed:</strong> { formatTimestamp(readingStats.lastCompletedRead.completedAt) }
-                  </span>
-                  <span className={ styles.chip }>
-                    <strong>Duration:</strong> { formatFullReadingTime(readingStats.lastCompletedRead.seconds, READING_TIME_UNITS) }
-                  </span>
-                </div>
-
-                { /* CLAUDE-ADDED: The day-by-day breakdown archived onto this specific completed run
-                     (see DailyReadingBucket/lastCompletedRead.dailyHistory) -- each bucket is one
-                     day's reading session within it, same data the reader's own Completed tab shows
-                     nested under each entry (see DailyHistoryRows in StatefulReadingTimerContainer),
-                     just re-sorted/re-rendered here with this component's own chip styling instead of
-                     that panel's baseline-aligned row layout. wpm is derived from the bucket's raw
-                     seconds/words the same way computeCurrentWpm derives the rolling estimate --
-                     never stored pre-computed, so it can't drift from its own inputs. */ }
-                { readingStats.lastCompletedRead.dailyHistory && readingStats.lastCompletedRead.dailyHistory.length > 0 && (
-                  <ul className={ styles.sessionsList }>
-                    { [...readingStats.lastCompletedRead.dailyHistory]
-                      .sort((a, b) => b.date.localeCompare(a.date))
-                      .map((bucket) => {
-                        const wpm = bucket.seconds > 0 ? Math.round(bucket.words / (bucket.seconds / 60)) : null;
-                        const percent = Number.isFinite(bucket.progressionDelta) ? Math.round(bucket.progressionDelta * 100) : 0;
-
-                        return (
-                          <li key={ bucket.date } className={ styles.sessionRow }>
-                            <span className={ styles.chip }>
-                              { formatDateOnly(new Date(`${ bucket.date }T00:00:00`)) }
-                            </span>
-                            <span className={ styles.chip }>{ formatFullReadingTime(bucket.seconds, READING_TIME_UNITS) }</span>
-                            { /* CLAUDE-ADDED: Always rendered (an em dash when there's no pace data for
-                                 this day) rather than omitted -- .sessionsList aligns every row into the
-                                 same 4 grid columns (see the stylesheet), so a row that skipped this cell
-                                 entirely would shift its own percent cell left into the pace column,
-                                 misaligning it against every other row's. */ }
-                            <span className={ styles.chip }>{ wpm !== null ? `${ wpm } wpm` : "—" }</span>
-                            <span className={ styles.chip }>{ percent }%</span>
-                          </li>
-                        );
-                      }) }
-                  </ul>
-                ) }
+                <h3 className={ styles.descriptionHeading }>Completed Reads</h3>
+                <ul className={ styles.completedReadsList }>
+                  { readingStats.completedReadTimes.map((item) => (
+                    <li key={ item.id } className={ styles.completedReadRow }>
+                      <div className={ styles.statsRow }>
+                        <span className={ styles.chip }>
+                          <strong>Completed:</strong> { formatTimestamp(item.completedAt) }
+                        </span>
+                        <span className={ styles.chip }>
+                          <strong>Duration:</strong> { formatFullReadingTime(item.seconds, READING_TIME_UNITS) }
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className={ styles.annotationIconButton }
+                        aria-label="Delete completed read"
+                        onClick={ () => handleDeleteCompletedRead(item) }
+                      >
+                        <DeleteIcon aria-hidden="true" focusable="false" />
+                      </button>
+                    </li>
+                  )) }
+                </ul>
               </div>
             ) }
           </div>
@@ -938,6 +957,12 @@ export const StatefulBookSheet = ({
         ) }
       </ThContainerBody>
     </ThBottomSheet>
+
+    { /* CLAUDE-ADDED: Same overlay the in-reader StatefulReader.tsx mounts for images clicked inside
+         the reading iframe -- driven entirely by imageOverlayReducer's global state, so mounting it
+         here too just gives this sheet's own cover click (see .coverButton above) somewhere to open
+         into on the library page, where StatefulReader's own instance isn't mounted. */ }
+    <StatefulImageOverlay />
 
     { /* CLAUDE-ADDED: Standalone centered ThModal, not routed through react-modal-sheet's own
          overlay -- needs to appear "in the middle of the screen" above the book-detail sheet
@@ -971,6 +996,41 @@ export const StatefulBookSheet = ({
           Cancel
         </button>
         <button type="button" className={ `${ styles.confirmButton } ${ styles.confirmButtonPrimary }` } onClick={ confirmDeleteAnnotation }>
+          Delete
+        </button>
+      </div>
+    </ThModal>
+
+    { /* CLAUDE-ADDED: Same standalone-ThModal confirm pattern as the annotation delete above, kept as
+         its own modal instance rather than merged into it -- see pendingDeleteCompletedRead. */ }
+    <ThModal
+      isOpen={ pendingDeleteCompletedRead !== null }
+      onOpenChange={ open => { if (!open) closeDeleteCompletedReadConfirm(); } }
+      isDismissable={ true }
+      className={ styles.confirmBackdrop }
+      compounds={ {
+        dialog: {
+          className: styles.confirmDialog,
+          "aria-label": "Delete this completed read?"
+        }
+      } }
+    >
+      <div className={ styles.confirmText }>
+        <button
+          type="button"
+          className={ styles.confirmClose }
+          aria-label="Close"
+          onClick={ closeDeleteCompletedReadConfirm }
+        >
+          <CloseIcon aria-hidden="true" focusable="false" />
+        </button>
+        This can't be undone.
+      </div>
+      <div className={ styles.confirmActions }>
+        <button type="button" className={ styles.confirmButton } onClick={ closeDeleteCompletedReadConfirm }>
+          Cancel
+        </button>
+        <button type="button" className={ `${ styles.confirmButton } ${ styles.confirmButtonPrimary }` } onClick={ confirmDeleteCompletedRead }>
           Delete
         </button>
       </div>

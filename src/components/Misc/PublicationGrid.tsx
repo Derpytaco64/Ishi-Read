@@ -157,6 +157,11 @@ export interface PublicationGridProps {
   // instead of a multi-row wrapping grid -- for shelves like "Last Series Read"/"Recently Added"
   // where the point is a short, scannable strip rather than a full library browse.
   carousel?: boolean;
+  // CLAUDE-ADDED: Carousel-only. When set, the strip auto-scrolls once (on mount, or whenever this
+  // itself changes to a different url) to center the matching publication instead of always opening
+  // scrolled to the start -- used by the "Last Series Read" shelf so it opens already positioned on
+  // the volume you were actually last reading rather than volume 1.
+  focusUrl?: string;
 }
 
 export const PublicationGrid = ({
@@ -174,6 +179,7 @@ export const PublicationGrid = ({
   onSelect,
   onContextMenu,
   carousel = false,
+  focusUrl,
 }: PublicationGridProps) => {
   // CLAUDE-ADDED: Progress now comes from the server (see getBookProgress.ts). Only fetched here
   // when the caller hasn't already provided it via the progressByUrl prop.
@@ -237,6 +243,33 @@ export const PublicationGrid = ({
     if (!el) return;
     el.scrollBy({ left: direction * el.clientWidth * 0.9, behavior: "smooth" });
   };
+
+  // CLAUDE-ADDED: Guards against re-centering on every unrelated re-render (e.g. a window resize
+  // recomputing carouselCardWidth) once the user has already scrolled the strip themselves -- only a
+  // genuine change of *which* url to focus (a different "last read" volume) schedules another
+  // auto-scroll. The scroll itself is deferred a frame so it reads the track's real, settled layout
+  // (ResizeObserver's own initial measurement above lands asynchronously too) rather than the
+  // default columnWidth guess still in place on the very first paint.
+  const autoScrolledFocusUrlRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!carousel || !focusUrl || autoScrolledFocusUrlRef.current === focusUrl) return;
+
+    const el = trackRef.current;
+    if (!el) return;
+    const index = publications.findIndex((publication) => publication.url === focusUrl);
+    if (index === -1) return;
+
+    autoScrolledFocusUrlRef.current = focusUrl;
+
+    const frame = requestAnimationFrame(() => {
+      const item = el.children[index] as HTMLElement | undefined;
+      if (!item) return;
+      const target = item.offsetLeft - (el.clientWidth - item.clientWidth) / 2;
+      el.scrollLeft = Math.max(0, Math.min(target, el.scrollWidth - el.clientWidth));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [carousel, focusUrl, publications]);
 
   useEffect(() => {
     if (providedProgressByUrl) return;

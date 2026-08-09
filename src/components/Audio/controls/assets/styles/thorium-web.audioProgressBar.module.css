@@ -132,6 +132,27 @@
   color: var(--th-theme-text);
 }
 
+.modeToggle {
+  grid-row: 3;
+  grid-column: 2;
+  justify-self: center;
+}
+
+.chapterToggle {
+  border: none;
+  border-radius: 999px;
+  padding: 0.15rem 0.75rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  background: var(--th-theme-subdue);
+  color: var(--th-theme-text);
+}
+
+.chapterToggle.chapterToggleActive {
+  background: var(--th-theme-primary);
+  color: var(--th-theme-onPrimary);
+}
+
 @container (max-width: 300px) {
   .current {
     font-size: 0.875rem;

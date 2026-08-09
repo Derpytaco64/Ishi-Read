@@ -15,6 +15,7 @@ import { StatefulReaderPagination } from "./StatefulReaderPagination";
 import { ThPaginationLinkProps } from "@/core/Components/Reader/ThPagination";
 
 import UndoIcon from "@/core/Components/Settings/assets/icons/undo.svg";
+import CloseIcon from "./assets/icons/close.svg";
 
 import { useNavigator } from "@/core/Navigator";
 import { useFocusWithin, useLocale } from "react-aria";
@@ -87,6 +88,12 @@ export const StatefulReaderFooter = ({
       focusReadingContainer();
     });
   }, [returnLocator, go, dispatch]);
+
+  // Dismisses the return-to-position indicator without navigating -- otherwise it has no way
+  // to be cleared short of actually using (and thus undoing) the jump.
+  const handleDismissReturn = useCallback(() => {
+    dispatch(setReturnLocator(null));
+  }, [dispatch]);
 
   const buildNode = useCallback((
     locator: ReturnType<typeof previousLocator>,
@@ -192,14 +199,24 @@ export const StatefulReaderFooter = ({
                 fallbackVariant={ progressionFormatFallback }
               />
               { !!returnLocator &&
-                <button
-                  type="button"
-                  className={ readerStyles.returnButton }
-                  aria-label={ t("reader.annotations.returnToPosition") }
-                  onClick={ handleReturn }
-                >
-                  <UndoIcon aria-hidden="true" focusable="false" />
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className={ readerStyles.returnButton }
+                    aria-label={ t("reader.annotations.returnToPosition") }
+                    onClick={ handleReturn }
+                  >
+                    <UndoIcon aria-hidden="true" focusable="false" />
+                  </button>
+                  <button
+                    type="button"
+                    className={ readerStyles.returnButton }
+                    aria-label={ t("reader.annotations.dismissReturnToPosition") }
+                    onClick={ handleDismissReturn }
+                  >
+                    <CloseIcon aria-hidden="true" focusable="false" />
+                  </button>
+                </>
               }
             </span>
           </StatefulReaderPagination>
@@ -209,14 +226,24 @@ export const StatefulReaderFooter = ({
               fallbackVariant={ progressionFormatFallback }
             />
             { !!returnLocator &&
-              <button
-                type="button"
-                className={ readerStyles.returnButton }
-                aria-label={ t("reader.annotations.returnToPosition") }
-                onClick={ handleReturn }
-              >
-                <UndoIcon aria-hidden="true" focusable="false" />
-              </button>
+              <>
+                <button
+                  type="button"
+                  className={ readerStyles.returnButton }
+                  aria-label={ t("reader.annotations.returnToPosition") }
+                  onClick={ handleReturn }
+                >
+                  <UndoIcon aria-hidden="true" focusable="false" />
+                </button>
+                <button
+                  type="button"
+                  className={ readerStyles.returnButton }
+                  aria-label={ t("reader.annotations.dismissReturnToPosition") }
+                  onClick={ handleDismissReturn }
+                >
+                  <CloseIcon aria-hidden="true" focusable="false" />
+                </button>
+              </>
             }
           </span> }
     </ThFooter>

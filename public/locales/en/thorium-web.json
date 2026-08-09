@@ -76,6 +76,7 @@
       "addNote": "Add note",
       "bookmarkPage": "Bookmark this page",
       "bookmarkSelection": "Bookmark selection",
+      "copySelection": "Copy",
       "colors": {
         "blue": "Blue",
         "green": "Green",
@@ -89,6 +90,7 @@
       "emptyState": "Highlights, bookmarks, and notes added while reading will show up here.",
       "lastEdited": "Last edited {{ date }}",
       "notePlaceholder": "Add a note…",
+      "dismissReturnToPosition": "Dismiss return to position",
       "returnToPosition": "Return to previous position",
       "save": "Save",
       "sortOrder": {
@@ -183,6 +185,8 @@
   "audio": {
     "player": {
       "progress": "Playback progress",
+      "progressBookView": "Whole book",
+      "progressChapterView": "This chapter",
       "controls": "Playback controls",
       "mediaControls": "Audio settings",
       "coverAlt": "Audiobook cover"

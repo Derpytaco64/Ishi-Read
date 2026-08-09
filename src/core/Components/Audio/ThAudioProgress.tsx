@@ -36,6 +36,7 @@ export interface ThAudioProgressProps {
   hoverLabel?: string;
   onHoverProgression?: (progression: number | null) => void;
   segments?: TimelineSegment[];
+  modeToggle?: React.ReactNode;
   compounds?: {
     wrapper?: React.HTMLAttributes<HTMLDivElement>;
     current?: React.HTMLAttributes<HTMLDivElement>;
@@ -48,6 +49,7 @@ export interface ThAudioProgressProps {
     fragmentTick?: React.HTMLAttributes<HTMLDivElement>;
     tooltip?: WithRef<PositionProps & React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>;
     overlayContainer?: OverlayContainerProps;
+    modeToggle?: React.HTMLAttributes<HTMLDivElement>;
   };
 }
 
@@ -62,6 +64,7 @@ export const ThAudioProgress = ({
   hoverLabel,
   onHoverProgression,
   segments,
+  modeToggle,
   compounds
 }: ThAudioProgressProps) => {
   const anchorRef = useRef<HTMLSpanElement>(null);
@@ -201,6 +204,11 @@ export const ThAudioProgress = ({
         </OverlayContainer>
       ) }
       <span { ...compounds?.elapsedTime } aria-hidden="true">{ defaultElapsedTime }</span>
+      { modeToggle &&
+        <div { ...compounds?.modeToggle }>
+          { modeToggle }
+        </div>
+      }
       <span { ...compounds?.remainingTime } aria-hidden="true">{ defaultRemainingTime }</span>
     </div>
   );
