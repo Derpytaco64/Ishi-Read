@@ -263,9 +263,19 @@
    and is genuinely below the browser window's bottom edge until the content-scroller is scrolled
    -- there's no separate inner box with its own boundary, the whole card (details through
    description) is one continuous scrollable region, same as scrolling an ordinary long page. */
+/* CLAUDE-ADDED: react-modal-sheet's own Sheet.Content wraps this in a motion.div with Framer
+   Motion's `drag` prop set (see react-modal-sheet's SheetContent -- ...dragProps spread onto that
+   outer element) -- whenever `drag` is set, Framer Motion inline-styles that element's own
+   userSelect/WebkitUserSelect/WebkitTouchCallout to "none" (see framer-motion's useHTMLProps) so a
+   drag gesture doesn't fight the browser's native text-selection drag. That's an *inherited* CSS
+   property, so without this override it silently makes every book detail (title, chips,
+   description, stats, annotation excerpts) unselectable, not just the sheet's own drag surface. */
 .body {
   display: flex;
   flex-direction: column;
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
 }
 
 /* CLAUDE-ADDED: Pushes .heroRow's title/author/series text down to a reasonable position below

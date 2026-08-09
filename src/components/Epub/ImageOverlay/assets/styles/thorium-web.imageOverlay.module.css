@@ -1,6 +1,10 @@
 /* CLAUDE-ADDED: Above the reader's own header/footer hover zones (z-index:1000, see
    thorium-web.reader.app.module.css) -- those sit in the same (unestablished) stacking context as this
    fixed overlay since neither the app root nor <body> creates one, so 20 wasn't enough to cover them.
+   Also above react-modal-sheet's own default z-index:9999 (see its Sheet component -- it falls back
+   to 9999 whenever the consumer doesn't set one explicitly), which StatefulBookSheet's book-detail
+   sheet never overrides -- without clearing that, the cover viewer this overlay is also used for (see
+   StatefulBookSheet's .coverButton) opened *behind* the still-open sheet instead of on top of it.
    Background is fully opaque, not a near-opaque rgba -- confirmed by direct testing (headed and
    headless, Chromium and WebKit) that a semi-transparent background here lets the reader's own header
    (which gets its own compositor layer from its transform/box-shadow transition) bleed through despite
@@ -8,7 +12,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 2000;
+  z-index: 10000;
   background-color: #000;
 }
 
