@@ -15,6 +15,8 @@ import { fetchStatsFromServer } from "@/lib/userData/statsApi";
 import { UserStats } from "@/lib/userData/statsTypes";
 import { formatFullReadingTime, ReadingTimeUnitLabels } from "@/components/Actions/ReadingTimer/helpers/formatReadingTime";
 
+import { MigrateBookDataDialog } from "./MigrateBookDataDialog";
+
 import styles from "./assets/styles/thorium-web.userMenu.module.css";
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -43,6 +45,8 @@ export const StatefulUserMenu = () => {
   // same "null means not there yet" convention as StatefulBookSheet's per-book readingStats.
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [stats, setStats] = useState<UserStats | null>(null);
+
+  const [isMigrateOpen, setIsMigrateOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
@@ -218,6 +222,9 @@ export const StatefulUserMenu = () => {
           </MenuItem>
           <MenuItem className={ styles.menuItem } onAction={ openStats }>
             Stats
+          </MenuItem>
+          <MenuItem className={ styles.menuItem } onAction={ () => setIsMigrateOpen(true) }>
+            Migrate Book Data
           </MenuItem>
           { user.isAdmin && (
             <MenuItem className={ styles.menuItem } href="/admin">
@@ -457,6 +464,8 @@ export const StatefulUserMenu = () => {
         ) }
       </ThContainerBody>
     </ThModal>
+
+    <MigrateBookDataDialog isOpen={ isMigrateOpen } onOpenChange={ setIsMigrateOpen } />
     </>
   );
 };
