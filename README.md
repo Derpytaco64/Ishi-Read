@@ -5,7 +5,7 @@ A self-hosted, multi-user EPUB/audiobook reader server. It started as a clone of
 ### Disclaimer
 I cloned the Thorium repository and have been vibecoding the hell out of it so that the reader and library page behave the way I want them to. I can not promise that this is a stable, secure, or well engineered app, but I can say that I test every feature I try to have Claude make so that it functions at the least. If you happen to try this personal project, bug reports would be nice.
 
-## Screenshots
+## Screenshots (Old)
 ![](./screenshots/Screenshot_20260725_011246.png)
 ![](./screenshots/Screenshot_20260725_011309.png)
 ![](./screenshots/Screenshot_20260725_011340.png)
@@ -18,6 +18,43 @@ I cloned the Thorium repository and have been vibecoding the hell out of it so t
 - For now I think you can just install it from Docker Hub: `dt64/ishi-read`. A `Dockerfile` and `docker-compose.yml` are included in this repo if you'd rather build it yourself.
 - You will need to set up a reverse proxy (e.g. nginx) so Readium can serve covers, metadata, and manifests over HTTPS to non-local devices — Readium doesn't like cross-origin/mixed-content requests.
 - A first-run setup wizard walks you through picking a book folder, a userdata folder, and the Readium URL/port on first launch.
+
+## Nginx (required)
+Ishi-Read runs **two** servers side by side: the Next.js app (port `3000`) and the Readium CLI server (`readium serve`, port `15080` by default) that actually streams manifests, covers, and page images to the reader. A reverse proxy in front of both is not optional if you want anything but local, plain-HTTP access:
+
+- **Readium itself has no HTTPS/TLS support** — `readium serve` only speaks plain HTTP. If the Next.js app is served over HTTPS (which it needs to be for cookies/auth to work correctly off `localhost`) but Readium is still plain HTTP, browsers block the mixed-content requests and books simply fail to load their manifest, cover, or pages.
+- The reader's client-side code calls the Readium URL directly from the browser, so Readium has to be reachable at a real hostname/port from wherever you're reading — not just from inside the server/container.
+- Without a shared origin, cross-origin requests from the app to Readium can also get blocked outright depending on browser/network config.
+
+The fix is to put nginx (or any reverse proxy) in front of both processes, terminate TLS there, and forward to each backend by path or subdomain. A minimal example, assuming both processes run on the same host:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name reader.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/reader.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/reader.example.com/privkey.pem;
+
+    # Next.js app
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Readium server (manifests, covers, page images)
+    location /readium/ {
+        proxy_pass http://127.0.0.1:15080/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Then point the admin panel's **Readium URL** setting at `https://reader.example.com/readium` so the browser fetches Readium through the same HTTPS origin instead of hitting the raw HTTP port directly. If you're running via the included `docker-compose.yml`, set `READIUM_ADDRESS=0.0.0.0` (already set there) so the container's Readium process is reachable from outside the container for nginx to proxy to, and set `ISHI_INSECURE_COOKIES=true` only if you are *not* fronting the app with HTTPS — remove it once nginx is terminating TLS.
 
 ## Built on
 Ishi-Read isn't built from scratch — it's a heavily modified fork of Thorium Web, layered on top of the Readium web toolkit. Credit for the reading-engine foundation goes to [EDRLab](https://www.edrlab.org/) and the [Readium](https://readium.org/) project.
