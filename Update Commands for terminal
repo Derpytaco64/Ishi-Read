@@ -1,10 +1,3 @@
-# update
-git pull
-docker push dt64/ishi-read:latest
-
-then go n portain and do a recreate pull
-
-
 # me push update:
 cd /DATA/AppData/Ishi-Reader
 git pull
