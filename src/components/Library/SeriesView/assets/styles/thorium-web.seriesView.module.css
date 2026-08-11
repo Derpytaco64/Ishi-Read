@@ -125,10 +125,14 @@
   margin-bottom: 1.25rem;
 }
 
+/* CLAUDE-ADDED: Was pinned top-right (right: 0), which put it directly under the user avatar
+   (StatefulUserMenu's .trigger, also right: 0 but with a higher z-index) -- moved to sit to the
+   right of the library logo (StatefulLibraryMenu's .trigger, ~96px wide at left: -9px) instead,
+   clear of the avatar entirely. */
 .backButton {
   position: absolute;
   top: 0;
-  right: 0;
+  left: 100px;
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -141,6 +145,14 @@
   border-radius: 8px;
   cursor: pointer;
   outline: none;
+}
+
+/* Mirrors the logo's own mobile shrink (see StatefulLibraryMenu's .trigger media query) so the
+   button stays clear of the smaller logo instead of leaving an oversized gap. */
+@media (max-width: 600px) {
+  .backButton {
+    left: 70px;
+  }
 }
 
 .backButton:hover {
