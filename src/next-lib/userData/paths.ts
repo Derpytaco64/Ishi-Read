@@ -72,3 +72,7 @@ export function getCompletedListensFilePath(userId: string, bookHash: string): s
   return path.join(getUserDir(userId), "completedListens", `${ bookHash }.json`);
 }
 
+export function getDailyListeningHistoryFilePath(userId: string, bookHash: string): string {
+  return path.join(getUserDir(userId), "dailyListeningHistory", `${ bookHash }.json`);
+}
+
