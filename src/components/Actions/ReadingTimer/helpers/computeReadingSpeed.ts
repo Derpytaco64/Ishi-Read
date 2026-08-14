@@ -11,6 +11,14 @@ const MIN_SAMPLES_FOR_TRIM = 5;
 // trim, since a fixed percentile always throws away *something* even when every sample is honest.
 const MAD_THRESHOLD = 2.5;
 
+// CLAUDE-ADDED: Hard sanity ceiling on a single sample's implied wpm, applied before the median/MAD
+// trim above ever runs. Median/MAD is a "majority wins" statistic -- it can't tell which side of a
+// split is the real reading pace, so if enough inhuman-fast samples (e.g. flipping past a book's
+// cover/title pages) land in the buffer together, they can outnumber genuine reading and make *that*
+// the "outlier" that gets trimmed instead. This removes anything no human reading pace could produce
+// before the trim runs, so it can't be out-voted by a cluster of bad data.
+const PLAUSIBLE_WPM_CEILING = 600;
+
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -29,18 +37,36 @@ function weightedRate(samples: ReadingSpeedSample[]): number | null {
 // a full-page one.
 export function computeCurrentWpm(samples: ReadingSpeedSample[]): number | null {
   if (samples.length === 0) return null;
-  if (samples.length < MIN_SAMPLES_FOR_TRIM) return weightedRate(samples);
 
   const rates = samples.map(s => s.deltaWords / (s.deltaSeconds / 60));
-  const med = median(rates);
-  const mad = median(rates.map(r => Math.abs(r - med)));
+  const plausible = samples.filter((_, i) => rates[i]! >= 0 && rates[i]! <= PLAUSIBLE_WPM_CEILING);
+  // CLAUDE-ADDED: If literally every sample is above the ceiling (a consistently very fast reader),
+  // fall back to the full buffer rather than returning nothing -- the ceiling is meant to stop a
+  // minority of bad data from out-voting good data, not to cap a real reader's pace.
+  const pool = plausible.length > 0 ? plausible : samples;
+
+  if (process.env.NODE_ENV !== "production") {
+    console.debug(
+      `[WpmDebug] buffer=${ samples.length } plausible(<=${ PLAUSIBLE_WPM_CEILING }wpm)=${ plausible.length } rates=[${ rates.map(r => r.toFixed(0)).join(", ") }]`
+    );
+  }
+
+  if (pool.length < MIN_SAMPLES_FOR_TRIM) return weightedRate(pool);
+
+  const poolRates = pool.map(s => s.deltaWords / (s.deltaSeconds / 60));
+  const med = median(poolRates);
+  const mad = median(poolRates.map(r => Math.abs(r - med)));
 
   // CLAUDE-ADDED: mad === 0 means every sample already has (near) the same rate -- nothing to trim.
   const survivors = mad === 0
-    ? samples
-    : samples.filter((_, i) => Math.abs(rates[i]! - med) / mad <= MAD_THRESHOLD);
+    ? pool
+    : pool.filter((_, i) => Math.abs(poolRates[i]! - med) / mad <= MAD_THRESHOLD);
 
-  return weightedRate(survivors.length > 0 ? survivors : samples);
+  if (process.env.NODE_ENV !== "production") {
+    console.debug(`[WpmDebug] median=${ med.toFixed(0) } mad=${ mad.toFixed(0) } survivors=${ survivors.length }/${ pool.length }`);
+  }
+
+  return weightedRate(survivors.length > 0 ? survivors : pool);
 }
 
 // CLAUDE-ADDED: Kindle-style "time left in book" -- words remaining (from the book's total word count
