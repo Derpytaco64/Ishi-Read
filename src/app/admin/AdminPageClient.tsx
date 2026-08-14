@@ -40,6 +40,26 @@ interface AdminUser {
   isActive: boolean;
 }
 
+// CLAUDE-ADDED: Mirrors OrphanedDataReport/OrphanedUserData/OrphanedBook in
+// next-lib/userData/orphanedData.ts -- the shape /api/admin/orphaned-data's GET/DELETE both return.
+interface OrphanedBook {
+  hash: string;
+  subdirs: string[];
+}
+
+interface OrphanedUserData {
+  userId: string;
+  username: string;
+  name: string;
+  books: OrphanedBook[];
+  fileCount: number;
+}
+
+interface OrphanedDataReport {
+  users: OrphanedUserData[];
+  totalFiles: number;
+}
+
 const MIN_PASSWORD_LENGTH = 8;
 
 function avatarUrlFor(user: AdminUser): string | null {
@@ -172,6 +192,57 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
     if (userDataFolderDraft === userDataFolder) return;
     setUserDataFolderSaved(false);
     if (await saveUserDataFolder(userDataFolderDraft)) setUserDataFolderSaved(true);
+  };
+
+  const [orphanedReport, setOrphanedReport] = useState<OrphanedDataReport | null>(null);
+  const [isScanningOrphaned, setIsScanningOrphaned] = useState(false);
+  const [isDeletingOrphaned, setIsDeletingOrphaned] = useState(false);
+  const [orphanedError, setOrphanedError] = useState<string | null>(null);
+  const [deletedOrphanedReport, setDeletedOrphanedReport] = useState<OrphanedDataReport | null>(null);
+
+  const scanOrphanedData = async () => {
+    setIsScanningOrphaned(true);
+    setOrphanedError(null);
+    setDeletedOrphanedReport(null);
+    try {
+      const res = await fetch("/api/admin/orphaned-data");
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setOrphanedError(data?.error || "Failed to scan for orphaned data");
+        return;
+      }
+      setOrphanedReport(data);
+    } catch (err) {
+      console.error("Failed to scan for orphaned data:", err);
+      setOrphanedError("Failed to scan for orphaned data");
+    } finally {
+      setIsScanningOrphaned(false);
+    }
+  };
+
+  const confirmDeleteOrphanedData = async () => {
+    if (!orphanedReport || orphanedReport.totalFiles === 0) return;
+    if (!window.confirm(`Delete ${ orphanedReport.totalFiles } orphaned data file(s) across ${ orphanedReport.users.length } user(s)? This can't be undone.`)) {
+      return;
+    }
+
+    setIsDeletingOrphaned(true);
+    setOrphanedError(null);
+    try {
+      const res = await fetch("/api/admin/orphaned-data", { method: "DELETE" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setOrphanedError(data?.error || "Failed to delete orphaned data");
+        return;
+      }
+      setDeletedOrphanedReport(data);
+      setOrphanedReport(null);
+    } catch (err) {
+      console.error("Failed to delete orphaned data:", err);
+      setOrphanedError("Failed to delete orphaned data");
+    } finally {
+      setIsDeletingOrphaned(false);
+    }
   };
 
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -603,6 +674,74 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
             ) }
             { !isSavingUserDataFolder && !userDataFolderError && userDataFolderSaved && (
               <p className={ styles.textSettingStatus }>Saved</p>
+            ) }
+          </DisclosurePanel>
+        </Disclosure>
+
+        <Disclosure className={ styles.disclosure }>
+          <Heading className={ styles.disclosureHeading }>
+            <Button slot="trigger" className={ styles.disclosureTrigger }>
+              <span className={ styles.disclosureLabel }>Orphaned Data Cleanup</span>
+              <ChevronDown aria-hidden="true" focusable="false" className={ styles.disclosureChevron } />
+            </Button>
+          </Heading>
+
+          <DisclosurePanel className={ styles.disclosurePanel }>
+            <p className={ styles.textSettingStatus }>
+              Finds reading progress, annotations, and other saved data left behind by books that are
+              no longer in the library (deleted or moved files), across every user. Review the preview
+              before deleting -- this can&apos;t be undone.
+            </p>
+
+            <button
+              type="button"
+              className={ styles.confirmButton }
+              onClick={ scanOrphanedData }
+              disabled={ isScanningOrphaned }
+            >
+              { isScanningOrphaned ? "Scanning…" : "Scan for Orphaned Data" }
+            </button>
+
+            { orphanedError && <p className={ styles.textSettingStatusError }>{ orphanedError }</p> }
+
+            { orphanedReport && (
+              orphanedReport.totalFiles === 0 ? (
+                <p className={ styles.textSettingStatus }>No orphaned data found.</p>
+              ) : (
+                <>
+                  <p className={ styles.textSettingStatus }>
+                    Found { orphanedReport.totalFiles } orphaned file(s) across { orphanedReport.users.length } user(s):
+                  </p>
+                  <ul className={ styles.userList }>
+                    { orphanedReport.users.map((user) => (
+                      <li key={ user.userId } className={ styles.userRow }>
+                        <div className={ styles.userInfo }>
+                          <span className={ styles.userName }>{ user.name } <span className={ styles.userUsername }>@{ user.username }</span></span>
+                          { user.books.map((book) => (
+                            <span key={ book.hash } className={ styles.textSettingStatus }>
+                              <code>{ book.hash.slice(0, 12) }…</code> — { book.subdirs.join(", ") }
+                            </span>
+                          )) }
+                        </div>
+                      </li>
+                    )) }
+                  </ul>
+                  <button
+                    type="button"
+                    className={ classNames(styles.confirmButton, styles.confirmButtonDanger) }
+                    onClick={ confirmDeleteOrphanedData }
+                    disabled={ isDeletingOrphaned }
+                  >
+                    { isDeletingOrphaned ? "Deleting…" : `Delete ${ orphanedReport.totalFiles } Orphaned File(s)` }
+                  </button>
+                </>
+              )
+            ) }
+
+            { deletedOrphanedReport && (
+              <p className={ styles.textSettingStatus }>
+                Deleted { deletedOrphanedReport.totalFiles } orphaned file(s) across { deletedOrphanedReport.users.length } user(s).
+              </p>
             ) }
           </DisclosurePanel>
         </Disclosure>

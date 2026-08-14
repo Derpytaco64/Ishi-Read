@@ -4,18 +4,14 @@ import path from "path";
 
 import { getCurrentUserId } from "@/next-lib/userData/session";
 import { getUserDir } from "@/next-lib/userData/paths";
-import { getPublicationsDir } from "@/next-lib/userData/publicationsConfig";
+import { scanLibrary } from "@/next-lib/userData/bookIdentity";
 import { readJsonFile } from "@/next-lib/userData/jsonStore";
-import { computePartialMD5 } from "@/next-lib/userData/kosyncHash";
 import { StoredCompletedReadTime, DailyReadingBucket } from "@/lib/userData/readingTimeTypes";
 import { StoredCompletedListen, StoredListeningTime } from "@/lib/userData/listeningTimeTypes";
 import { UserStats } from "@/lib/userData/statsTypes";
 
 export const runtime = "nodejs";
 
-const EBOOK_EXTENSIONS = [".epub", ".pdf", ".cbz"];
-const AUDIOBOOK_EXTENSIONS = [".m4b"];
-const LIBRARY_EXTENSIONS = [...EBOOK_EXTENSIONS, ...AUDIOBOOK_EXTENSIONS];
 // CLAUDE-ADDED: Safety cap on the backward-walk below -- with real data the loop stops at the first
 // gap day, this only guards against ever spinning on a pathological/corrupt dataset.
 const MAX_STREAK_LOOKBACK_DAYS = 3650;
@@ -28,8 +24,15 @@ function listJsonFiles(dir: string): string[] {
   }
 }
 
-function sumArrayLengths(dir: string): number {
-  return listJsonFiles(dir).reduce((sum, file) => {
+// CLAUDE-ADDED: Only files whose bookHash (the filename minus .json) still matches a book on disk --
+// a file left behind by a book that's since been deleted/moved out of the library is orphaned data,
+// and its counts/seconds/words shouldn't keep inflating a user's stats forever. See scanLibrary.
+function listJsonFilesInLibrary(dir: string, libraryHashes: Set<string>): string[] {
+  return listJsonFiles(dir).filter(file => libraryHashes.has(file.replace(/\.json$/, "")));
+}
+
+function sumArrayLengths(dir: string, libraryHashes: Set<string>): number {
+  return listJsonFilesInLibrary(dir, libraryHashes).reduce((sum, file) => {
     const items = readJsonFile<unknown[]>(path.join(dir, file));
     return sum + (Array.isArray(items) ? items.length : 0);
   }, 0);
@@ -52,53 +55,24 @@ export async function GET() {
   const userDir = getUserDir(userId);
 
   // CLAUDE-ADDED: The publications directory is shared by every user (see api/books/route.ts) --
-  // this is library-wide size, not a per-user count of books owned. Audiobooks are split out into
-  // their own count, and their per-user-data hashes (see resolveBookIdentity/computePartialMD5,
-  // which key every positions/readingTime/etc file by a content hash of the local file, not the
-  // manifest URL) are collected into a Set so the per-user data below -- which is bucketed by hash,
-  // not format -- can be split the same way.
-  let booksInLibrary = 0;
-  let audiobooksInLibrary = 0;
-  const audiobookHashes = new Set<string>();
-  try {
-    const publicationsDir = getPublicationsDir();
-    const files = fs.readdirSync(publicationsDir, { recursive: true }) as string[];
+  // booksInLibrary/audiobooksInLibrary are library-wide sizes, not a per-user count of books owned.
+  // libraryHashes is the membership test every per-user hash-keyed collection below is filtered
+  // through, so a file left behind by a book that's since been deleted/moved out of the library
+  // (orphaned data) doesn't keep inflating these stats -- see scanLibrary.
+  const { booksInLibrary, audiobooksInLibrary, audiobookHashes, libraryHashes } = scanLibrary();
 
-    for (const file of files) {
-      const ext = path.extname(file).toLowerCase();
-      if (!LIBRARY_EXTENSIONS.includes(ext)) continue;
-
-      const fullPath = path.join(publicationsDir, file);
-      if (!fs.statSync(fullPath).isFile()) continue;
-
-      if (AUDIOBOOK_EXTENSIONS.includes(ext)) {
-        audiobooksInLibrary++;
-        try {
-          audiobookHashes.add(computePartialMD5(fullPath));
-        } catch {
-          // Unreadable file -- leave it out of the hash set, its per-user data (if any) will just
-          // fall through to the ebook counts below rather than crashing the whole stats response.
-        }
-      } else {
-        booksInLibrary++;
-      }
-    }
-  } catch {
-    booksInLibrary = 0;
-    audiobooksInLibrary = 0;
-  }
-
-  const positionHashes = listJsonFiles(path.join(userDir, "positions")).map(file => file.replace(/\.json$/, ""));
+  const positionHashes = listJsonFilesInLibrary(path.join(userDir, "positions"), libraryHashes)
+    .map(file => file.replace(/\.json$/, ""));
   const booksStarted = positionHashes.filter(hash => !audiobookHashes.has(hash)).length;
   const audiobooksStarted = positionHashes.filter(hash => audiobookHashes.has(hash)).length;
 
-  const highlightsCount = sumArrayLengths(path.join(userDir, "highlights"));
-  const bookmarksCount = sumArrayLengths(path.join(userDir, "bookmarks"));
-  const notesCount = sumArrayLengths(path.join(userDir, "notes"));
+  const highlightsCount = sumArrayLengths(path.join(userDir, "highlights"), libraryHashes);
+  const bookmarksCount = sumArrayLengths(path.join(userDir, "bookmarks"), libraryHashes);
+  const notesCount = sumArrayLengths(path.join(userDir, "notes"), libraryHashes);
 
   // In-progress accumulated seconds, one number per book that's currently mid-read.
   const readingTimeDir = path.join(userDir, "readingTime");
-  const inProgressSeconds = listJsonFiles(readingTimeDir).reduce((sum, file) => {
+  const inProgressSeconds = listJsonFilesInLibrary(readingTimeDir, libraryHashes).reduce((sum, file) => {
     const seconds = readJsonFile<number>(path.join(readingTimeDir, file));
     return sum + (typeof seconds === "number" ? seconds : 0);
   }, 0);
@@ -114,7 +88,9 @@ export async function GET() {
   for (const file of listJsonFiles(completedReadTimesDir)) {
     // CLAUDE-ADDED: Defensive -- audiobooks never write to completedReadTimes (they get their own
     // completedListens, see below), but skip by hash anyway rather than assume that invariant holds.
-    if (audiobookHashes.has(file.replace(/\.json$/, ""))) continue;
+    // Also skip anything orphaned by a since-deleted/moved book, same as every other dir below.
+    const hash = file.replace(/\.json$/, "");
+    if (audiobookHashes.has(hash) || !libraryHashes.has(hash)) continue;
 
     const entries = readJsonFile<StoredCompletedReadTime[]>(path.join(completedReadTimesDir, file)) ?? [];
     if (entries.length > 0) booksFinished++;
@@ -127,7 +103,7 @@ export async function GET() {
   // The currently-open accumulation period for every book still being read (cleared to [] on
   // completion/reset, so this never overlaps with the archived buckets collected above).
   const dailyHistoryDir = path.join(userDir, "dailyReadingHistory");
-  for (const file of listJsonFiles(dailyHistoryDir)) {
+  for (const file of listJsonFilesInLibrary(dailyHistoryDir, libraryHashes)) {
     const buckets = readJsonFile<DailyReadingBucket[]>(path.join(dailyHistoryDir, file)) ?? [];
     dailyBuckets.push(...buckets);
   }
@@ -179,14 +155,14 @@ export async function GET() {
   // unlike totalReadingSeconds above there's no separate "completed" bucket to add in -- summing
   // every book's own listeningTime file already covers both in-progress and finished audiobooks.
   const listeningTimeDir = path.join(userDir, "listeningTime");
-  const totalListeningSeconds = listJsonFiles(listeningTimeDir).reduce((sum, file) => {
+  const totalListeningSeconds = listJsonFilesInLibrary(listeningTimeDir, libraryHashes).reduce((sum, file) => {
     const data = readJsonFile<StoredListeningTime>(path.join(listeningTimeDir, file));
     return sum + (typeof data?.accumulatedSeconds === "number" ? data.accumulatedSeconds : 0);
   }, 0);
 
   const completedListensDir = path.join(userDir, "completedListens");
   let audiobooksFinished = 0;
-  for (const file of listJsonFiles(completedListensDir)) {
+  for (const file of listJsonFilesInLibrary(completedListensDir, libraryHashes)) {
     const entries = readJsonFile<StoredCompletedListen[]>(path.join(completedListensDir, file)) ?? [];
     if (entries.length > 0) audiobooksFinished++;
   }

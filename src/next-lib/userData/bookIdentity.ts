@@ -10,6 +10,65 @@ import { computePartialMD5 } from "./kosyncHash";
 type CachedIdentity = { mtimeMs: number; hash: string };
 const identityCache = new Map<string, CachedIdentity>();
 
+const EBOOK_EXTENSIONS = [".epub", ".pdf", ".cbz"];
+const AUDIOBOOK_EXTENSIONS = [".m4b"];
+const LIBRARY_EXTENSIONS = [...EBOOK_EXTENSIONS, ...AUDIOBOOK_EXTENSIONS];
+
+export interface LibraryScan {
+  booksInLibrary: number;
+  audiobooksInLibrary: number;
+  // CLAUDE-ADDED: hashes of every audiobook currently on disk, used to split per-user hash-keyed
+  // data (which doesn't otherwise know ebook from audiobook) the same way stats/route.ts always has.
+  audiobookHashes: Set<string>;
+  // CLAUDE-ADDED: hashes of every book (ebook or audiobook) currently on disk -- the membership test
+  // for "is this per-user data file still attached to a real library entry, or orphaned by a
+  // deleted/moved book." Same computePartialMD5 identity every positions/highlights/etc file is
+  // keyed by (see resolveBookIdentity), so a file whose hash isn't in this set has no matching book.
+  libraryHashes: Set<string>;
+}
+
+// CLAUDE-ADDED: One filesystem walk of the publications dir, shared by the stats route (counts) and
+// the admin orphaned-data route (membership) so the two can never disagree about what's "in the
+// library." computePartialMD5 is cheap (12 fixed-size samples per file, see kosyncHash.ts) even over
+// a large library, so hashing every book -- not just audiobooks, as the original stats-only version
+// of this walk did -- is fine to do on every call rather than caching across requests.
+export function scanLibrary(): LibraryScan {
+  const audiobookHashes = new Set<string>();
+  const libraryHashes = new Set<string>();
+  let booksInLibrary = 0;
+  let audiobooksInLibrary = 0;
+
+  try {
+    const publicationsDir = getPublicationsDir();
+    const files = fs.readdirSync(publicationsDir, { recursive: true }) as string[];
+
+    for (const file of files) {
+      const ext = path.extname(file).toLowerCase();
+      if (!LIBRARY_EXTENSIONS.includes(ext)) continue;
+
+      const fullPath = path.join(publicationsDir, file);
+      if (!fs.statSync(fullPath).isFile()) continue;
+
+      const isAudiobook = AUDIOBOOK_EXTENSIONS.includes(ext);
+      if (isAudiobook) audiobooksInLibrary++;
+      else booksInLibrary++;
+
+      try {
+        const hash = computePartialMD5(fullPath);
+        libraryHashes.add(hash);
+        if (isAudiobook) audiobookHashes.add(hash);
+      } catch {
+        // Unreadable file -- leave it out of the hash sets, its per-user data (if any) will just
+        // fall through as orphaned rather than crashing the whole scan.
+      }
+    }
+  } catch {
+    // Publications dir missing/unreadable -- counts stay zero, hash sets stay empty.
+  }
+
+  return { booksInLibrary, audiobooksInLibrary, audiobookHashes, libraryHashes };
+}
+
 function base64UrlDecode(str: string): string {
   const padded = str.replace(/-/g, "+").replace(/_/g, "/");
   return Buffer.from(padded, "base64").toString("utf-8");
