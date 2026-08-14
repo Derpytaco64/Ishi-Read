@@ -437,7 +437,7 @@ export const StatefulUserMenu = () => {
                   <span className={ styles.statLabel }>Audiobooks Finished</span>
                 </div>
                 <div className={ styles.statTile }>
-                  <span className={ styles.statValue }>{ formatFullReadingTime(stats.totalListeningSeconds, READING_TIME_UNITS) }</span>
+                  <span className={ styles.statValue }>{ formatFullReadingTime(Math.round(stats.totalListeningSeconds), READING_TIME_UNITS) }</span>
                   <span className={ styles.statLabel }>Time Listened</span>
                 </div>
               </div>
