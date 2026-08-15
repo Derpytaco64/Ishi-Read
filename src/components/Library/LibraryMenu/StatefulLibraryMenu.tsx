@@ -237,15 +237,6 @@ export const StatefulLibraryMenu = ({
         }
       }}
     >
-      <a
-        href="https://github.com/Derpytaco64/Ishi-Read"
-        target="_blank"
-        rel="noopener noreferrer"
-        className={ styles.versionBadge }
-      >
-        v{ process.env.NEXT_PUBLIC_APP_VERSION }
-      </a>
-
       <ThContainerHeaderWithClose
         label="Menu"
         className={ styles.header }
@@ -260,6 +251,15 @@ export const StatefulLibraryMenu = ({
       />
 
       <ThContainerBody className={ styles.body }>
+        <a
+          href="https://github.com/Derpytaco64/Ishi-Read"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={ styles.versionBadge }
+        >
+          v{ process.env.NEXT_PUBLIC_APP_VERSION }
+        </a>
+
         <div className={ styles.brand }>
           <Image src={ floofLogo } alt="" className={ styles.logoLarge } />
         </div>
