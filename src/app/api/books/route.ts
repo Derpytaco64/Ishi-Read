@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import { parseFile } from "music-metadata";
 import { getPublicationsDir, getReadiumServerUrl } from "@/next-lib/userData/publicationsConfig";
 import { resolveBookIdentity } from "@/next-lib/userData/bookIdentity";
@@ -13,7 +14,7 @@ export const runtime = "nodejs";
 
 // If connecting to thorium from anything besides localhost, you will need to change the Readium URL (now configurable from the Settings panel, same as the book folder) to the URL of your Readium Web Publication Server. It will most likely need to be proxied to https as well.
 
-// CLAUDE-ADDED: In-memory manifest cache, keyed by filename. Module-scope state survives across requests in the same server process, so revisiting the homepage doesn't re-hit the Readium server (and re-parse the EPUB) for books we've already resolved. Each entry is stamped with the file's mtime so an edited/replaced file is transparently re-fetched.
+// CLAUDE-ADDED: In-memory manifest cache, keyed by filename. Module-scope state survives across requests in the same server process, so revisiting the homepage doesn't re-hit the Readium server (and re-parse the EPUB) for books we've already resolved. Each entry is stamped with a content fingerprint (not mtime) so a file replaced at the same path is transparently re-fetched even if the replacement happens to land on the same mtime (e.g. `cp -p`, or a filesystem with coarse mtime resolution) -- that mtime collision previously let a stale/broken cover survive a file swap.
 type Series = { name: string; position?: number };
 // CLAUDE-ADDED: Surfaces the same metadata calibre's own book-detail page shows (see the book detail
 // panel in calibre-web) -- everything here comes straight out of manifest.metadata except fileSize,
@@ -34,10 +35,43 @@ type CachedBook = {
   uuid: string | null;
   fileSize: string | null;
 };
-const manifestCache = new Map<string, { mtimeMs: number; data: CachedBook }>();
+const manifestCache = new Map<string, { fingerprint: string; data: CachedBook }>();
 
 // CLAUDE-ADDED: fetch() has no built-in timeout, so a Readium server that's slow or hung on one file would previously stall the whole Promise.all response forever. This caps how long we wait per-book before falling back to the default title/cover.
 const MANIFEST_FETCH_TIMEOUT_MS = 5000;
+
+// CLAUDE-ADDED: Cheap stand-in for hashing the whole file -- books (especially .m4b audiobooks)
+// can be hundreds of MB, and this fingerprint gets recomputed on every books-list request (even
+// on cache hits) to actually catch content changes, so a full read would defeat the point of
+// caching. Sampling the head, tail, and size is enough to distinguish "same file" from "a
+// different file swapped into this path" for the archive/container formats we support (EPUB/CBZ
+// are zips, PDF has header/xref-table structure, M4B has MP4 box headers) without reading the
+// whole thing.
+const FINGERPRINT_SAMPLE_BYTES = 65536;
+
+function computeContentFingerprint(filePath: string, size: number): string {
+  const hash = crypto.createHash("sha1");
+  const fd = fs.openSync(filePath, "r");
+  try {
+    const headSize = Math.min(FINGERPRINT_SAMPLE_BYTES, size);
+    if (headSize > 0) {
+      const headBuf = Buffer.alloc(headSize);
+      fs.readSync(fd, headBuf, 0, headSize, 0);
+      hash.update(headBuf);
+    }
+
+    if (size > FINGERPRINT_SAMPLE_BYTES) {
+      const tailSize = Math.min(FINGERPRINT_SAMPLE_BYTES, size);
+      const tailBuf = Buffer.alloc(tailSize);
+      fs.readSync(fd, tailBuf, 0, tailSize, size - tailSize);
+      hash.update(tailBuf);
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+  hash.update(String(size));
+  return hash.digest("hex");
+}
 
 function base64UrlEncode(str: string): string {
   return Buffer.from(str, "utf-8")
@@ -317,11 +351,15 @@ export async function GET() {
         // "File sizes" field on the book detail page this is otherwise mirroring.
         let fileSize: string | null = null;
 
-        // CLAUDE-ADDED: Check the manifest cache before hitting the Readium server. Keyed by filename + mtime, so a cache hit only happens if the file on disk hasn't changed since we last resolved it.
-        const stat = fs.statSync(path.join(publicationsDir, file));
+        // CLAUDE-ADDED: Check the manifest cache before hitting the Readium server. Keyed by filename +
+        // content fingerprint, so a cache hit only happens if the file's actual content (not just its
+        // mtime, which a copy/restore can coincidentally preserve or collide on) matches what we last resolved.
+        const filePath = path.join(publicationsDir, file);
+        const stat = fs.statSync(filePath);
         fileSize = formatFileSize(stat.size);
+        const fingerprint = computeContentFingerprint(filePath, stat.size);
         const cached = manifestCache.get(file);
-        if (cached && cached.mtimeMs === stat.mtimeMs) {
+        if (cached && cached.fingerprint === fingerprint) {
           title = cached.data.title;
           author = cached.data.author;
           cover = cached.data.cover;
@@ -336,7 +374,7 @@ export async function GET() {
           calibreId = cached.data.calibreId;
           uuid = cached.data.uuid;
           // fileSize is recomputed above from the current stat rather than read from cache -- it's
-          // the one field that isn't gated by the manifest's own mtime-keyed cache validity.
+          // the one field that isn't gated by the manifest's own fingerprint-keyed cache validity.
         } else {
           try {
             // CLAUDE-ADDED: AbortSignal.timeout() aborts the request if the Readium server hasn't responded in time, instead of hanging indefinitely.
@@ -374,9 +412,9 @@ export async function GET() {
                 cover = new URL(coverHref, manifestUrl).toString();
               }
 
-              // CLAUDE-ADDED: Populate the cache so the next request for this file (same mtime) skips the Readium server round-trip entirely.
+              // CLAUDE-ADDED: Populate the cache so the next request for this file (same content fingerprint) skips the Readium server round-trip entirely.
               manifestCache.set(file, {
-                mtimeMs: stat.mtimeMs,
+                fingerprint,
                 data: { title, author, cover, series, description, publisher, published, modified, language, tags, isbn, calibreId, uuid, fileSize }
               });
             }
