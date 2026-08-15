@@ -2,8 +2,11 @@ import { ReadingSpeedSample } from "@/lib/userData/readingTimeTypes";
 
 // CLAUDE-ADDED: Below this many samples, a median/MAD estimate is too noisy to trust (e.g. 2 samples
 // always have MAD 0 or a single "outlier" that's actually half the data) -- just average everything
-// instead of trying to trim.
-const MIN_SAMPLES_FOR_TRIM = 5;
+// instead of trying to trim. Matches MAX_SPEED_SAMPLES (the rolling buffer's own cap, see
+// readingTimeReducer.ts) so trimming never kicks in until the buffer is completely full of real
+// samples -- otherwise an early, still-warming-up buffer could have a genuine read trimmed out as an
+// "outlier" against only a handful of other samples.
+const MIN_SAMPLES_FOR_TRIM = 50;
 
 // CLAUDE-ADDED: A sample survives if its rate is within this many median-absolute-deviations of the
 // median rate -- the Kindle/Moon+-style "discard outliers" step, using a robust (not mean/stddev,

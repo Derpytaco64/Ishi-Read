@@ -245,6 +245,34 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
     }
   };
 
+  const [isClearingSpeedSamples, setIsClearingSpeedSamples] = useState(false);
+  const [speedSamplesError, setSpeedSamplesError] = useState<string | null>(null);
+  const [clearedSpeedSamplesCount, setClearedSpeedSamplesCount] = useState<number | null>(null);
+
+  const confirmClearSpeedSamples = async () => {
+    if (!window.confirm("Clear the rolling WPM sample buffer for every user? This can't be undone.")) {
+      return;
+    }
+
+    setIsClearingSpeedSamples(true);
+    setSpeedSamplesError(null);
+    setClearedSpeedSamplesCount(null);
+    try {
+      const res = await fetch("/api/admin/reading-speed-samples", { method: "DELETE" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setSpeedSamplesError(data?.error || "Failed to clear WPM samples");
+        return;
+      }
+      setClearedSpeedSamplesCount(data.clearedCount ?? 0);
+    } catch (err) {
+      console.error("Failed to clear WPM samples:", err);
+      setSpeedSamplesError("Failed to clear WPM samples");
+    } finally {
+      setIsClearingSpeedSamples(false);
+    }
+  };
+
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -741,6 +769,40 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
             { deletedOrphanedReport && (
               <p className={ styles.textSettingStatus }>
                 Deleted { deletedOrphanedReport.totalFiles } orphaned file(s) across { deletedOrphanedReport.users.length } user(s).
+              </p>
+            ) }
+          </DisclosurePanel>
+        </Disclosure>
+
+        <Disclosure className={ styles.disclosure }>
+          <Heading className={ styles.disclosureHeading }>
+            <Button slot="trigger" className={ styles.disclosureTrigger }>
+              <span className={ styles.disclosureLabel }>Reading Speed Samples</span>
+              <ChevronDown aria-hidden="true" focusable="false" className={ styles.disclosureChevron } />
+            </Button>
+          </Heading>
+
+          <DisclosurePanel className={ styles.disclosurePanel }>
+            <p className={ styles.textSettingStatus }>
+              Clears the rolling words-per-minute sample buffer for every user, resetting their live
+              pace estimate back to &quot;not enough data&quot;. Useful if a bad batch of samples (a bug,
+              a device clock issue) has thrown off the estimate.
+            </p>
+
+            <button
+              type="button"
+              className={ classNames(styles.confirmButton, styles.confirmButtonDanger) }
+              onClick={ confirmClearSpeedSamples }
+              disabled={ isClearingSpeedSamples }
+            >
+              { isClearingSpeedSamples ? "Clearing…" : "Clear WPM Samples for All Users" }
+            </button>
+
+            { speedSamplesError && <p className={ styles.textSettingStatusError }>{ speedSamplesError }</p> }
+
+            { clearedSpeedSamplesCount !== null && (
+              <p className={ styles.textSettingStatus }>
+                Cleared WPM samples for { clearedSpeedSamplesCount } user(s).
               </p>
             ) }
           </DisclosurePanel>
