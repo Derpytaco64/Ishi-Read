@@ -1,6 +1,6 @@
 "use client";
 
-// CLAUDE-ADDED: Spike/test for an "exact" page-turn count (see conversation) -- unlike positionsList (a fixed ~1024-char-per-chunk count from the manifest, unrelated to actual rendered layout -- see useTimeline.ts), this walks every reading-order resource in a hidden, off-screen iframe styled identically to the live reading pane and measures how many real page-turns (scrollWidth / viewportWidth) each one takes, then sums them. This is a genuinely expensive full-book layout pass -- it exists to test whether that cost is tolerable, not as a finished feature. Gated off entirely for FXL (page-per-resource already exact) and scroll mode (no discrete pages to count).
+// CLAUDE-ADDED: An "exact" page-turn count -- unlike positionsList (a fixed ~1024-char-per-chunk count from the manifest, unrelated to actual rendered layout -- see useTimeline.ts), this walks every reading-order resource in a hidden, off-screen iframe styled identically to the live reading pane and measures how many real page-turns (scrollWidth / viewportWidth) each one takes, then sums them. This is a genuinely expensive full-book layout pass -- started as a spike to test whether that cost is tolerable, but notifyLocatorChanged's result now also feeds useReadingSpeedSampler's wpm calculation (see StatefulReader.tsx's positionChanged), so it's no longer test-only scaffolding. Gated off entirely for FXL (page-per-resource already exact) and scroll mode (no discrete pages to count).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Locator, Publication } from "@readium/shared";
 import { ShortImageInfo, detectShortImage } from "./detectShortImage";
@@ -19,9 +19,26 @@ export interface ExactPageCountState {
   resourcePages: ExactPageResourceEntry[] | null;
 }
 
+// CLAUDE-ADDED: Synchronous result of a single notifyLocatorChanged call -- null fields mean "not
+// available for this locator" (not enabled, FXL/scroll, no scan finished yet for this resource, or
+// no live frame to read scroll position from), matching the null-means-fall-back convention the
+// wpm sampler already uses for locator.locations.totalProgression.
+export interface ExactPageResult {
+  currentPageRange: number[] | null;
+  totalPages: number | null;
+}
+
 export interface ExactPageCountApi extends ExactPageCountState {
-  // CLAUDE-ADDED: Cheap per-navigation update -- reuses the per-resource page counts cached by the last full scan instead of re-measuring the whole book on every page turn. Call this from the navigator's positionChanged listener, the same way evaluateSpread is called there.
-  notifyLocatorChanged: (locator: Locator) => void;
+  // CLAUDE-ADDED: Cheap per-navigation update -- reuses the per-resource page counts cached by the
+  // last full scan instead of re-measuring the whole book on every page turn. Call this from the
+  // navigator's positionChanged listener, the same way evaluateSpread is called there. Returns the
+  // freshly-computed range/total synchronously (in addition to scheduling the setState side effect)
+  // so a caller in the same listener -- e.g. useReadingSpeedSampler, which needs this locator's exact
+  // progression *now*, not after the next render -- doesn't have to read the async React state and
+  // risk it still reflecting the previous locator (same ordering hazard the Android app's
+  // exactPageFraction avoids by recomputing fresh from the locator instead of trusting a
+  // separately-updated counter).
+  notifyLocatorChanged: (locator: Locator) => ExactPageResult;
 }
 
 interface UseExactPageCountProps {
@@ -459,22 +476,23 @@ export const useExactPageCount = ({
     return () => clearTimeout(timer);
   }, [enabled, navigatorReady, publication, isFXL, isScroll, layoutSignature, resizeTick, getCframes, currentLocator, ensureIframe]);
 
-  // CLAUDE-ADDED: O(1) -- everything needed (the "before" total and whether this resource is a fixed single on-screen position or a multi-screen generic one) was already precomputed by the last full scan, so a page turn only needs a live scroll-position read, no re-summation.
-  const notifyLocatorChanged = useCallback((locator: Locator) => {
-    if (!enabled || !publication || isFXL || isScroll) return;
+  // CLAUDE-ADDED: O(1) -- everything needed (the "before" total and whether this resource is a fixed single on-screen position or a multi-screen generic one) was already precomputed by the last full scan, so a page turn only needs a live scroll-position read, no re-summation. Also returns what it computed (see ExactPageResult's doc comment) so a same-tick caller doesn't have to wait on the setState below to land.
+  const notifyLocatorChanged = useCallback((locator: Locator): ExactPageResult => {
+    const unavailable: ExactPageResult = { currentPageRange: null, totalPages: state.totalPages };
+    if (!enabled || !publication || isFXL || isScroll) return unavailable;
 
     const info = perResourceRef.current.get(locator.href);
-    if (!info) return;
+    if (!info) return unavailable;
 
     if (info.fixedRange) {
       setState((prev) => prev.currentPageRange === info.fixedRange ? prev : { ...prev, currentPageRange: info.fixedRange! });
-      return;
+      return { currentPageRange: info.fixedRange, totalPages: state.totalPages };
     }
 
     const win = getCframes()?.[0]?.window;
-    if (!win) return;
+    if (!win) return unavailable;
     const width = win.innerWidth;
-    if (!width) return;
+    if (!width) return unavailable;
 
     const scrollLeft = Math.abs(win.document.scrollingElement?.scrollLeft ?? 0);
     const screenIndex = Math.floor(scrollLeft / width);
@@ -482,7 +500,8 @@ export const useExactPageCount = ({
     const range = info.perScreenPages === 2 ? [start, start + 1] : [start];
 
     setState((prev) => ({ ...prev, currentPageRange: range }));
-  }, [enabled, publication, isFXL, isScroll, getCframes]);
+    return { currentPageRange: range, totalPages: state.totalPages };
+  }, [enabled, publication, isFXL, isScroll, getCframes, state.totalPages]);
 
   return { ...state, notifyLocatorChanged };
 };

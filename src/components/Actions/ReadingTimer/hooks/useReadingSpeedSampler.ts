@@ -133,9 +133,17 @@ export const useReadingSpeedSampler = () => {
     };
   }, [debouncedSave]);
 
-  const notifyLocatorChanged = useCallback((locator: Locator) => {
+  // CLAUDE-ADDED: [exactProgression], when supplied, is a real layout-aware page/total fraction (see
+  // useExactPageCount) preferred over locator.locations.totalProgression for every progression/wpm
+  // computation below. totalProgression is chunk-weighted off Publication.positions, not actual
+  // rendered pages -- it can disagree with real page density enough per chapter that a wholly
+  // plausible-looking, well within RAPID_TURN_WPM_CEILING/PLAUSIBLE_WPM_CEILING, sample's implied wpm
+  // is wrong by multiples even though nothing about it looks rejectable. Falls back to
+  // totalProgression when null/undefined (FXL, scroll, or the full-book scan hasn't finished yet).
+  // Mirrors the equivalent fix in the Android app's ReadingTimerTracker.onLocatorChanged.
+  const notifyLocatorChanged = useCallback((locator: Locator, exactProgression?: number | null) => {
     const manifestUrl = manifestUrlRef.current;
-    const totalProgression = locator.locations.totalProgression;
+    const totalProgression = typeof exactProgression === "number" ? exactProgression : locator.locations.totalProgression;
     if (typeof totalProgression !== "number") return;
 
     if (manifestUrl) dispatch(setCurrentProgression(totalProgression));

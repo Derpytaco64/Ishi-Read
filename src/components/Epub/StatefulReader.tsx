@@ -53,7 +53,7 @@ import { useEpubStatelessCache } from "./Hooks/useEpubStatelessCache";
 import { useEpubReaderInit } from "./Hooks/useReaderInit";
 import { useMarginSync, applyMargin } from "./Hooks/useMarginSync";
 import { useShortImageSpread } from "./Hooks/useShortImageSpread";
-import { useExactPageCount } from "./Hooks/useExactPageCount";
+import { useExactPageCount, ExactPageResult } from "./Hooks/useExactPageCount";
 import { useReadingTimer } from "@/components/Actions/ReadingTimer/hooks/useReadingTimer";
 import { useReadingSpeedSampler } from "@/components/Actions/ReadingTimer/hooks/useReadingSpeedSampler";
 import { useBookWordCount } from "./Hooks/useBookWordCount";
@@ -304,12 +304,16 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   useMarginSync({ getCframes, marginHorizontal });
 
   // CLAUDE-ADDED: useExactPageCount is called later (it needs navigatorReady, which itself comes from useEpubReaderInit, which consumes `listeners` below) -- listeners.positionChanged needs to call its notifyLocatorChanged on every navigation, so that call is routed through this ref instead of the hook's return value directly, breaking the circular ordering.
-  const notifyExactPageCountRef = useRef<(locator: Locator) => void>(() => {});
+  const notifyExactPageCountRef = useRef<(locator: Locator) => ExactPageResult>(
+    () => ({ currentPageRange: null, totalPages: null })
+  );
 
   // CLAUDE-ADDED: Same ref-indirection as notifyExactPageCountRef above -- useReadingSpeedSampler has
   // no actual ordering dependency on navigatorReady, but keeping both positionChanged hookups in the
-  // same shape (and next to each other) keeps this section easy to scan.
-  const notifyReadingSpeedRef = useRef<(locator: Locator) => void>(() => {});
+  // same shape (and next to each other) keeps this section easy to scan. Takes the exact page/total
+  // fraction (see positionChanged below) as a second arg -- see useReadingSpeedSampler's own doc
+  // comment on notifyLocatorChanged for why.
+  const notifyReadingSpeedRef = useRef<(locator: Locator, exactProgression?: number | null) => void>(() => {});
   const { notifyLocatorChanged: notifyReadingSpeed } = useReadingSpeedSampler();
   notifyReadingSpeedRef.current = notifyReadingSpeed;
 
@@ -568,8 +572,15 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
       evaluateSpread(locator);
 
       // CLAUDE-ADDED: See notifyExactPageCountRef's declaration above for why this is a ref call.
-      notifyExactPageCountRef.current(locator);
-      notifyReadingSpeedRef.current(locator);
+      // notifyReadingSpeed gets the same call's result (not a separately-read state value) so it
+      // always sees this exact locator's page/total, never a stale one from before this navigation --
+      // see ExactPageResult's own doc comment for why that ordering matters here.
+      const exactPage = notifyExactPageCountRef.current(locator);
+      const exactFirstPage = exactPage.currentPageRange?.[0];
+      const exactProgression = typeof exactFirstPage === "number" && exactPage.totalPages
+        ? exactFirstPage / exactPage.totalPages
+        : undefined;
+      notifyReadingSpeedRef.current(locator, exactProgression);
     },
     // CLAUDE-ADDED: tap/click only ever fire when the iframe's selection is collapsed at pointerup (see
     // Peripherals.onPointUp's own early returns) -- i.e. never on the same pointerup that just produced
