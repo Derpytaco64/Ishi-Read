@@ -500,3 +500,16 @@ export async function GET() {
     return NextResponse.json({ books: [], error: "Failed to read directory" }, { status: 500 });
   }
 }
+
+// CLAUDE-ADDED: Manual escape hatch for manifestCache, exposed via the "Refresh Manifest Cache"
+// item in the user menu. The content-fingerprint check above already catches a file being
+// replaced, but not every stale-cache case -- e.g. the Readium server itself returning an
+// incomplete manifest for a moment while a large file is still being written into the book
+// folder, which then gets cached under the *finished* file's fingerprint since stat/hash both run
+// after the fetch. This lets a user force everything to be re-resolved without restarting the
+// server.
+export async function DELETE() {
+  const clearedCount = manifestCache.size;
+  manifestCache.clear();
+  return NextResponse.json({ clearedCount });
+}

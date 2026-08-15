@@ -48,6 +48,8 @@ export const StatefulUserMenu = () => {
 
   const [isMigrateOpen, setIsMigrateOpen] = useState(false);
 
+  const [isRefreshingCache, setIsRefreshingCache] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -198,6 +200,21 @@ export const StatefulUserMenu = () => {
     fetchStatsFromServer().then(setStats);
   };
 
+  // CLAUDE-ADDED: Clears the server-side manifest/cover cache (src/app/api/books/route.ts's
+  // manifestCache) and reloads so the library grid re-resolves every book's title/author/cover
+  // from scratch instead of whatever's currently in memory.
+  const refreshManifestCache = async () => {
+    if (isRefreshingCache) return;
+    setIsRefreshingCache(true);
+    try {
+      await fetch("/api/books", { method: "DELETE" });
+    } catch (err) {
+      console.error("Failed to refresh manifest cache:", err);
+    } finally {
+      window.location.reload();
+    }
+  };
+
   const logOut = async () => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
@@ -225,6 +242,9 @@ export const StatefulUserMenu = () => {
           </MenuItem>
           <MenuItem className={ styles.menuItem } onAction={ () => setIsMigrateOpen(true) }>
             Migrate Book Data
+          </MenuItem>
+          <MenuItem className={ styles.menuItem } onAction={ refreshManifestCache }>
+            { isRefreshingCache ? "Refreshing…" : "Refresh Manifest Cache" }
           </MenuItem>
           { user.isAdmin && (
             <MenuItem className={ styles.menuItem } href="/admin">
