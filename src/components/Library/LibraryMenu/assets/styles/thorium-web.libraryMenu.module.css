@@ -97,6 +97,7 @@
   --th-color-text-secondary: #666;
   --th-color-primary: #e0e0e0;
 
+  position: relative;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -167,6 +168,20 @@
   justify-content: flex-end;
   flex-shrink: 0;
   padding: 0.35rem 0.35rem 0;
+}
+
+.versionBadge {
+  position: absolute;
+  top: 0.45rem;
+  left: 0.6rem;
+  font-size: 0.7rem;
+  color: var(--th-color-text-secondary);
+  text-decoration: none;
+  z-index: 1;
+}
+
+.versionBadge:hover {
+  text-decoration: underline;
 }
 
 .visuallyHidden {

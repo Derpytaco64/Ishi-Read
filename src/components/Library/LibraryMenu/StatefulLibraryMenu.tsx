@@ -237,6 +237,15 @@ export const StatefulLibraryMenu = ({
         }
       }}
     >
+      <a
+        href="https://github.com/Derpytaco64/Ishi-Read"
+        target="_blank"
+        rel="noopener noreferrer"
+        className={ styles.versionBadge }
+      >
+        v{ process.env.NEXT_PUBLIC_APP_VERSION }
+      </a>
+
       <ThContainerHeaderWithClose
         label="Menu"
         className={ styles.header }

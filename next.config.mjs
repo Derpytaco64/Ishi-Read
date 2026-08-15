@@ -1,12 +1,23 @@
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { version: appVersion } = require("./package.json");
+
 /** @type {import("next").NextConfig} */
 const nextConfig = {
   // Disable React running twice as it messes up with iframes
   reactStrictMode: false,
   typedRoutes: true,
-  
+
+  // Exposes package.json's version to the client so UI (e.g. the library menu) can display it
+  // without hardcoding a duplicate copy.
+  env: {
+    NEXT_PUBLIC_APP_VERSION: appVersion,
+  },
+
   // Configure asset prefix for CDN or subdirectory support
   assetPrefix: process.env.ASSET_PREFIX || undefined,
-  
+
   // Configure image domains for Next.js Image component
   images: {
     remotePatterns: [
