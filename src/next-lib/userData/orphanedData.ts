@@ -4,6 +4,7 @@ import path from "path";
 import { listUsers } from "./auth";
 import { getUserDir } from "./paths";
 import { scanLibrary } from "./bookIdentity";
+import { getBookTitles, removeBookTitles } from "./bookTitles";
 
 // CLAUDE-ADDED: Every per-book UserData subdirectory (see paths.ts's getXFilePath functions) --
 // each holds one `${bookHash}.json` file per book that's ever had that kind of data. Deliberately
@@ -30,6 +31,12 @@ export interface OrphanedBook {
   // CLAUDE-ADDED: Which of PER_BOOK_DATA_SUBDIRS actually have a file for this hash -- lets the
   // preview UI show e.g. "highlights, notes, reading time" instead of just a bare hash.
   subdirs: string[];
+  // CLAUDE-ADDED: Looked up from bookTitles.ts's registry, populated whenever /api/books last saw
+  // this hash in the library -- null if the book vanished before that registry ever recorded it
+  // (e.g. it was deleted before this feature shipped). Lets the admin preview show what's actually
+  // being deleted instead of a bare hash.
+  title: string | null;
+  manifestUrl: string | null;
 }
 
 export interface OrphanedUserData {
@@ -67,7 +74,12 @@ function findOrphanedBooksForUser(userId: string, libraryHashes: Set<string>): O
     }
   }
 
-  return Array.from(subdirsByHash.entries()).map(([hash, subdirs]) => ({ hash, subdirs }));
+  const titles = getBookTitles(subdirsByHash.keys());
+
+  return Array.from(subdirsByHash.entries()).map(([hash, subdirs]) => {
+    const entry = titles.get(hash);
+    return { hash, subdirs, title: entry?.title ?? null, manifestUrl: entry?.manifestUrl ?? null };
+  });
 }
 
 // CLAUDE-ADDED: Shared by the admin preview (GET) and delete (DELETE) routes so the two can never
@@ -94,9 +106,11 @@ export function findOrphanedData(): OrphanedDataReport {
 // saw and confirmed, in case a book was added back to the library in between.
 export function deleteOrphanedData(): OrphanedDataReport {
   const report = findOrphanedData();
+  const deletedHashes = new Set<string>();
 
   for (const user of report.users) {
     for (const book of user.books) {
+      deletedHashes.add(book.hash);
       for (const subdir of book.subdirs) {
         const filePath = path.join(getUserDir(user.userId), subdir, `${ book.hash }.json`);
         try {
@@ -107,6 +121,11 @@ export function deleteOrphanedData(): OrphanedDataReport {
       }
     }
   }
+
+  // CLAUDE-ADDED: The saved title/manifest for a hash only exists to label its orphaned data in this
+  // report -- once that data is actually deleted, nothing else looks it up, so remove it here too
+  // rather than leaving it to grow the registry forever.
+  if (deletedHashes.size > 0) removeBookTitles(deletedHashes);
 
   return report;
 }

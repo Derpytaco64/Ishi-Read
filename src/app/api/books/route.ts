@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { parseFile } from "music-metadata";
 import { getPublicationsDir, getReadiumServerUrl } from "@/next-lib/userData/publicationsConfig";
 import { resolveBookIdentity } from "@/next-lib/userData/bookIdentity";
+import { recordBookTitles } from "@/next-lib/userData/bookTitles";
 import { getPositionFilePath } from "@/next-lib/userData/paths";
 import { getCurrentUserId } from "@/next-lib/userData/session";
 
@@ -351,6 +352,11 @@ export async function GET() {
       fs.statSync(path.join(publicationsDir, file)).isFile()
     );
 
+    // CLAUDE-ADDED: Collected below as each book resolves, then flushed to bookTitles.ts's registry
+    // in one batched write after the whole request is done -- see recordBookTitles at the bottom of
+    // this handler for why that's a single call rather than one per book.
+    const titleEntries: { hash: string; title: string; manifestUrl: string }[] = [];
+
     // CLAUDE-ADDED: mapWithConcurrency (rather than Promise.allSettled(epubFiles.map(...))) both
     // bounds how many books are resolved at once (see MANIFEST_FETCH_CONCURRENCY above) and keeps
     // the same allSettled-style guarantee -- a book whose per-file processing throws outside the
@@ -459,6 +465,8 @@ export async function GET() {
           }
         }
 
+        titleEntries.push({ hash: resolveBookIdentity(manifestUrl), title, manifestUrl });
+
         return {
           title,
           author,
@@ -501,6 +509,7 @@ export async function GET() {
         addedAt = fs.statSync(path.join(publicationsDir, file)).mtimeMs;
         const manifestUrl = `${readiumServerUrl}/webpub/${base64UrlEncode(file)}/manifest.json`;
         lastReadAt = getLastReadAt(userId, manifestUrl);
+        titleEntries.push({ hash: resolveBookIdentity(manifestUrl), title: path.parse(file).name, manifestUrl });
       } catch {
         // Keep the defaults above.
       }
@@ -529,6 +538,8 @@ export async function GET() {
         fileSize: null
       };
     });
+
+    if (titleEntries.length > 0) recordBookTitles(titleEntries);
 
     return NextResponse.json({ books });
   } catch (error) {

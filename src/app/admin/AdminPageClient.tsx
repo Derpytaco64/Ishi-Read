@@ -45,6 +45,8 @@ interface AdminUser {
 interface OrphanedBook {
   hash: string;
   subdirs: string[];
+  title: string | null;
+  manifestUrl: string | null;
 }
 
 interface OrphanedUserData {
@@ -747,7 +749,11 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
                           <span className={ styles.userName }>{ user.name } <span className={ styles.userUsername }>@{ user.username }</span></span>
                           { user.books.map((book) => (
                             <span key={ book.hash } className={ styles.textSettingStatus }>
-                              <code>{ book.hash.slice(0, 12) }…</code> — { book.subdirs.join(", ") }
+                              { book.title ? (
+                                <>&quot;{ book.title }&quot; <code>({ book.hash.slice(0, 12) }…)</code></>
+                              ) : (
+                                <code>{ book.hash.slice(0, 12) }…</code>
+                              ) } — { book.subdirs.join(", ") }
                             </span>
                           )) }
                         </div>
