@@ -90,7 +90,7 @@ function startReadium() {
 }
 
 function restartReadium() {
-  console.log("[readium] Config changed -- restarting");
+  console.log("[readium] Book folder or port changed -- restarting");
   readiumProcess?.kill();
   startReadium();
 }
@@ -99,6 +99,16 @@ function restartReadium() {
 // told to change live -- so a book-folder or port change from the Settings panel (which just
 // rewrites this same config file) needs to be picked up by restarting the subprocess, not just
 // re-reading a value.
+//
+// config.json is shared by every admin setting (book folder, Readium URL/port, login accent
+// color, login theme mode, user data folder, setup-completed flag, ...) since they all go through
+// the same writeConfigFile() in publicationsConfig.ts. Without tracking what actually changed,
+// *any* write to that file -- including ones with nothing to do with Readium, like tweaking the
+// login accent color -- would kill and respawn the server, dropping every in-flight manifest/cover
+// request for the ~1s the process takes to come back up. Comparing against the last-seen values
+// means only an actual book-folder or port change triggers a restart.
+let lastBookFolder = getConfiguredBookFolder();
+let lastReadiumPort = getConfiguredReadiumPort();
 let restartTimer = null;
 function watchConfigFile() {
   const dir = path.dirname(CONFIG_FILE);
@@ -107,7 +117,15 @@ function watchConfigFile() {
   fs.watch(dir, (_event, filename) => {
     if (filename !== path.basename(CONFIG_FILE)) return;
     clearTimeout(restartTimer);
-    restartTimer = setTimeout(restartReadium, 200);
+    restartTimer = setTimeout(() => {
+      const bookFolder = getConfiguredBookFolder();
+      const readiumPort = getConfiguredReadiumPort();
+      if (bookFolder === lastBookFolder && readiumPort === lastReadiumPort) return;
+
+      lastBookFolder = bookFolder;
+      lastReadiumPort = readiumPort;
+      restartReadium();
+    }, 200);
   });
 }
 
