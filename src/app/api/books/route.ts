@@ -102,18 +102,29 @@ function getLastReadAt(userId: string, manifestUrl: string): number | null {
 // per spec it can be a single object or an array (mirrors how author is handled above); "name" can
 // itself be a plain string or a localized-string map. Only the first series entry is used since a
 // book belonging to multiple series is rare and the "last series read" shelf only needs one.
-function extractSeries(belongsTo: any): Series | null {
-  const series = belongsTo?.series;
-  if (!series) return null;
-
+//
+// calibre never writes the EPUB3 belongs-to-collection property it'd take to populate belongsTo.series
+// -- it always stamps its own calibre:series/calibre:series_index OPF meta instead (confirmed against
+// the bundled Readium binary directly: feeding it a calibre-tagged EPUB2 surfaces the series name as a
+// flat "https://calibre-ebook.com#series" metadata key, not under belongsTo at all). So this falls back
+// to that raw namespaced key when belongsTo.series is absent.
+function extractSeries(metadata: any): Series | null {
+  const series = metadata?.belongsTo?.series;
   const entry = Array.isArray(series) ? series[0] : series;
-  if (!entry) return null;
+  if (entry) {
+    const name = typeof entry === "string" ? entry : extractName(entry.name);
+    const position = typeof entry?.position === "number" ? entry.position : undefined;
+    if (name) return { name, position };
+  }
 
-  const name = typeof entry === "string" ? entry : extractName(entry.name);
-  if (!name) return null;
+  const calibreSeries = metadata?.["https://calibre-ebook.com#series"];
+  if (typeof calibreSeries === "string" && calibreSeries.trim()) {
+    const rawIndex = metadata?.["https://calibre-ebook.com#series_index"];
+    const position = typeof rawIndex === "string" ? Number(rawIndex) : typeof rawIndex === "number" ? rawIndex : NaN;
+    return { name: calibreSeries.trim(), position: Number.isFinite(position) ? position : undefined };
+  }
 
-  const position = typeof entry?.position === "number" ? entry.position : undefined;
-  return { name, position };
+  return null;
 }
 
 // CLAUDE-ADDED: Readium's manifest for M4B audiobooks never has a belongsTo.series -- confirmed
@@ -343,7 +354,7 @@ export async function GET() {
                 author = extractAuthor(manifest.metadata.author);
               }
 
-              series = extractSeries(manifest.metadata?.belongsTo);
+              series = extractSeries(manifest.metadata);
               if (isAudiobook) {
                 series = await extractAudiobookSeries(path.join(publicationsDir, file));
               }
