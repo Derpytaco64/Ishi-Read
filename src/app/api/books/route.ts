@@ -40,6 +40,36 @@ const manifestCache = new Map<string, { fingerprint: string; data: CachedBook }>
 // CLAUDE-ADDED: fetch() has no built-in timeout, so a Readium server that's slow or hung on one file would previously stall the whole Promise.all response forever. This caps how long we wait per-book before falling back to the default title/cover.
 const MANIFEST_FETCH_TIMEOUT_MS = 5000;
 
+// CLAUDE-ADDED: Firing one manifest fetch per book with no concurrency limit meant a large library
+// (especially one with deeply nested multi-volume folders) sent every request to the readium
+// server at once -- observed in production as manifest fetches timing out under the resulting
+// load. Capping how many are in flight at a time keeps the server from being hammered on every
+// library load.
+const MANIFEST_FETCH_CONCURRENCY = 6;
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const i = nextIndex++;
+      try {
+        results[i] = { status: "fulfilled", value: await fn(items[i]) };
+      } catch (reason) {
+        results[i] = { status: "rejected", reason };
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 // CLAUDE-ADDED: Cheap stand-in for hashing the whole file -- books (especially .m4b audiobooks)
 // can be hundreds of MB, and this fingerprint gets recomputed on every books-list request (even
 // on cache hits) to actually catch content changes, so a full read would defeat the point of
@@ -321,9 +351,15 @@ export async function GET() {
       fs.statSync(path.join(publicationsDir, file)).isFile()
     );
 
-    // CLAUDE-ADDED: Promise.allSettled (rather than Promise.all) so that a book whose per-file processing throws outside the inner try/catch (e.g. a stat() failure) can't take down the whole response — it just falls back below instead of rejecting the entire batch.
-    const results = await Promise.allSettled(
-      epubFiles.map(async (file) => {
+    // CLAUDE-ADDED: mapWithConcurrency (rather than Promise.allSettled(epubFiles.map(...))) both
+    // bounds how many books are resolved at once (see MANIFEST_FETCH_CONCURRENCY above) and keeps
+    // the same allSettled-style guarantee -- a book whose per-file processing throws outside the
+    // inner try/catch (e.g. a stat() failure) can't take down the whole response, it just falls
+    // back below instead of rejecting the entire batch.
+    const results = await mapWithConcurrency(
+      epubFiles,
+      MANIFEST_FETCH_CONCURRENCY,
+      async (file) => {
         const encodedFilename = base64UrlEncode(file);
         const manifestUrl = `${readiumServerUrl}/webpub/${encodedFilename}/manifest.json`;
         const encodedManifestUrl = encodeURIComponent(manifestUrl);
@@ -446,7 +482,7 @@ export async function GET() {
           uuid,
           fileSize
         };
-      })
+      }
     );
 
     // CLAUDE-ADDED: Unwrap allSettled results, substituting a minimal fallback entry for any book whose promise actually rejected.
