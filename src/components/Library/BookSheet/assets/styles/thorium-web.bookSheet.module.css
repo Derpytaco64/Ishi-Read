@@ -470,11 +470,17 @@
    names) -- .chip's own white-space: nowrap let that run past .detailsChips' width and pass behind
    .progressDial (which overlaps leftward via its own negative `left` offset) instead of wrapping.
    align-items: flex-start (instead of .chip's center) keeps the "Narrated by:" label pinned to the
-   first line rather than re-centering against the full wrapped block's height. */
+   first line rather than re-centering against the full wrapped block's height.
+
+   max-width alone (100%) still wasn't enough: 100% resolves against .chipRow's *layout* width, which
+   already excludes .progressDial's box -- but position: relative only shifts the dial's paint, not
+   its layout box, so the dial's -50px `left` offset (see .progressDial) visually overlaps 50px
+   *into* that already-excluded space. Subtracting that same 50px here keeps wrapped text clear of
+   where the dial actually paints, not just where its unshifted layout box would be. */
 .chipWrap {
   white-space: normal;
   align-items: flex-start;
-  max-width: 100%;
+  max-width: calc(100% - 50px);
 }
 
 .chipButton {
