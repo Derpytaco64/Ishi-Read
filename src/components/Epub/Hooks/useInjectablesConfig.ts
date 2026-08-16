@@ -21,6 +21,29 @@ const noteSelectionStyle: ILinkInjectable & IBlobInjectable = {
   blob: new Blob(["* { -webkit-touch-callout: none; }"], { type: "text/css" })
 };
 
+// CLAUDE-ADDED: Some conversion tools (Calibre's "PDF Reflow" mode is a common source) emit <img>
+// with an explicit fixed-pixel width/height class baked in from the original PDF page/region
+// dimensions. readium-css only force-caps max-height (!important) -- width and height themselves
+// aren't important, so a book's own class (higher specificity than readium-css's plain `img`
+// selector) wins the cascade on those two axes independently, and the image's CSS box stops
+// preserving its own aspect ratio (only the painted picture does, via object-fit:contain
+// letterboxing inside the now-mismatched box). When several such images stack in one flow (a
+// full-page scan followed by a few tiny extraction-artifact crops, which PDF Reflow output
+// commonly includes), their combined miscalculated height can exceed what fits in one column,
+// producing genuine overflow/blank pages. Forcing both axes back to auto with !important removes
+// any book-supplied fixed pixel dimensions so only readium-css's own max-width/max-height
+// (aspect-ratio-correct) sizing applies -- a no-op for normal books whose images don't carry fixed
+// px classes, since auto is already their default. Deliberately scoped to plain <img> only, not
+// svg|svg -- Calibre's own cover-page trick (see detectShortImage.ts) intentionally wraps a cover
+// image in an SVG with a fixed viewBox/width/height to force it to fill the page regardless of its
+// native size, and this must not undo that.
+const imageAutoSizeStyle: ILinkInjectable & IBlobInjectable = {
+  as: "link",
+  rel: "stylesheet",
+  target: "head",
+  blob: new Blob(["img { width: auto !important; height: auto !important; }"], { type: "text/css" })
+};
+
 interface UseEpubInjectablesConfigProps {
   isFXL: boolean;
   isFontFamilyUsed: boolean;
@@ -86,7 +109,7 @@ export const useEpubInjectablesConfig = ({
     const rules: IInjectableRule[] = [{
       resources: [/\.xhtml$/, /\.html$/],
       prepend: fontResources?.prepend,
-      append: [...(fontResources?.append || []), landscapeSpread, noteHover, noteSelectionStyle]
+      append: [...(fontResources?.append || []), imageAutoSizeStyle, landscapeSpread, noteHover, noteSelectionStyle]
     }];
 
     // CLAUDE-ADDED: Separate rule (rather than folding into the one above) since it targets an exact href instead of the blanket regex — only the cover resource should get the right-column spacer.
