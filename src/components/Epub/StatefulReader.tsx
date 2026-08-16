@@ -551,12 +551,21 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
       // unhandled rejection here would silently skip setLocalData for that call, which is what feeds
       // both the persisted server position and the displayed percentage (see useTimeline.ts), leaving
       // both stuck at whatever the last successful save was while position-only UI (driven
-      // independently, see activeCurrentPositions below) kept right on updating.
+      // independently, see activeCurrentPositions below) kept right on updating. The try/catch and
+      // timeout below cover any resource type as a last resort, but short-image pages are the one
+      // case guaranteed to have nothing to anchor to at all (detectShortImage's own body.textContent
+      // check -- see useShortImageMap.ts) -- for those, skip the round trip outright rather than
+      // eating its up-to-500ms timeout on every single page turn of an image-only book.
+      const index = publication?.readingOrder.findIndexWithHref(locator.href);
+      const isShortImagePage = index !== undefined && shortImageMap.entries.has(index);
+
       let anchored: Locator | undefined;
-      try {
-        anchored = await getTextAnchoredLocator();
-      } catch {
-        anchored = undefined;
+      if (!isShortImagePage) {
+        try {
+          anchored = await getTextAnchoredLocator();
+        } catch {
+          anchored = undefined;
+        }
       }
       const toSave = anchored ?? locator;
 
@@ -602,7 +611,7 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
       setLocalData(toPersist);
       updatePublicationNavigationState();
     }, 250),
-    [setLocalData, updatePublicationNavigationState, getTextAnchoredLocator, publication, positionsList]
+    [setLocalData, updatePublicationNavigationState, getTextAnchoredLocator, publication, positionsList, shortImageMap]
   );
 
   useEffect(() => () => debouncedSavePosition.clear(), [debouncedSavePosition]);
