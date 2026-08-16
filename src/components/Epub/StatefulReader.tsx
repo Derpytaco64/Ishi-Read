@@ -550,10 +550,27 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
       // here too since this is the locator that actually gets persisted server-side (via
       // setLocalData -> positionStorage.set), not just displayed -- without this, a saved position
       // on the cover would still read e.g. 0.4% rather than 0% even though the on-screen percentage
-      // now shows 0%. copyWithLocations merges into the existing locations (fragments/position/text
-      // anchor all preserved), only progression/totalProgression are overridden.
+      // now shows 0%. Deliberately NOT toSave.copyWithLocations(...) -- locators reaching this
+      // callback have round-tripped through the navigator's postMessage/iframe bridge (see
+      // positionChanged below), which structured-clones them and strips the Locator class's own
+      // prototype methods, leaving a plain object with the same shape but no copyWithLocations. The
+      // Locator/LocatorLocations constructors imported at the top of this file are unaffected (real
+      // local class instances), so building a fresh one from toSave's plain fields is what actually
+      // survives at runtime -- calling toSave.copyWithLocations directly threw
+      // "toSave.copyWithLocations is not a function" on every cover visit, silently aborting this
+      // whole callback before setLocalData ever ran (that's *why* neither the save nor the on-screen
+      // percentage were budging).
       const isCover = publication?.readingOrder.findIndexWithHref(toSave.href) === 0;
-      setLocalData(isCover ? toSave.copyWithLocations({ progression: 0, totalProgression: 0 }) : toSave);
+      const toPersist = isCover
+        ? new Locator({
+            href: toSave.href,
+            type: toSave.type,
+            title: toSave.title,
+            locations: new LocatorLocations({ ...toSave.locations, progression: 0, totalProgression: 0 }),
+            text: toSave.text,
+          })
+        : toSave;
+      setLocalData(toPersist);
       updatePublicationNavigationState();
     }, 250),
     [setLocalData, updatePublicationNavigationState, getTextAnchoredLocator, publication]
