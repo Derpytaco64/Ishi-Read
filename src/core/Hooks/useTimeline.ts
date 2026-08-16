@@ -343,10 +343,24 @@ export const useTimeline = ({
     // while on it, rather than trusting the navigator's raw locator.
     const isCover = !!currentLocation && publication?.readingOrder.findIndexWithHref(currentLocation.href) === 0;
 
+    // CLAUDE-ADDED: Mirror image of the cover fix, at the other end of the book. In two-column mode
+    // the same scrollLeft/scrollWidth-based progression math (see the isCover comment above) can land
+    // short of exactly 1 on the true last page -- readium-css's column layout doesn't guarantee the
+    // reachable scrollLeft maximum lines up with scrollWidth minus viewport width once a spread's
+    // trailing column is only partially used. currentPositions/positionsList are a different,
+    // independent signal for "where am I" -- the same positionsList-based unit totalProgression is
+    // itself measured in (unlike useExactPageCount's per-column count, which the codebase already
+    // treats as a deliberately different unit -- see StatefulReaderProgression's effectivePercentage
+    // comment), not derived from the same live scroll math this is working around. If the current
+    // on-screen position(s) already include the very last positionsList entry, we're definitively on
+    // the true last page regardless of what the navigator's own locator reports.
+    const totalPositions = positionsList?.length;
+    const isLastPage = totalPositions !== undefined && !!currentPositions?.includes(totalPositions);
+
     // Update progression state when location changes
-    setRelativeProgression(isCover ? 0 : currentLocation?.locations.progression);
-    setTotalProgression(isCover ? 0 : currentLocation?.locations.totalProgression);
-  }, [currentLocation, currentPositions, tocTree, timelineItems, handleTocEntryOnNav, updateTimelineItems, publication]);
+    setRelativeProgression(isCover ? 0 : isLastPage ? 1 : currentLocation?.locations.progression);
+    setTotalProgression(isCover ? 0 : isLastPage ? 1 : currentLocation?.locations.totalProgression);
+  }, [currentLocation, currentPositions, positionsList, tocTree, timelineItems, handleTocEntryOnNav, updateTimelineItems, publication]);
 
   // Update the singleton and call onChange
   useEffect(() => {

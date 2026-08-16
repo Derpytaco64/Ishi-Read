@@ -561,19 +561,34 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
       // whole callback before setLocalData ever ran (that's *why* neither the save nor the on-screen
       // percentage were budging).
       const isCover = publication?.readingOrder.findIndexWithHref(toSave.href) === 0;
-      const toPersist = isCover
+      // CLAUDE-ADDED: Mirror of isCover at the other end of the book -- see useTimeline.ts's isLastPage
+      // comment for the underlying mechanism. toSave.locations.position is the same positionsList-based
+      // unit as totalProgression itself (unlike useExactPageCount's independently-measured page count),
+      // so comparing it directly against positionsList's own length is a reliable, scroll-math-independent
+      // "am I on the true last page" check -- no currentPositions array available in this closure (only
+      // the single locator being saved), but for the boundary case that matters here position alone is
+      // enough: >= (not strictly ===) as a safety margin in case position is ever reported one past the
+      // recorded last entry.
+      const isLastPage = positionsList?.length !== undefined
+        && toSave.locations.position !== undefined
+        && toSave.locations.position >= positionsList.length;
+      const toPersist = (isCover || isLastPage)
         ? new Locator({
             href: toSave.href,
             type: toSave.type,
             title: toSave.title,
-            locations: new LocatorLocations({ ...toSave.locations, progression: 0, totalProgression: 0 }),
+            locations: new LocatorLocations({
+              ...toSave.locations,
+              progression: isCover ? 0 : 1,
+              totalProgression: isCover ? 0 : 1,
+            }),
             text: toSave.text,
           })
         : toSave;
       setLocalData(toPersist);
       updatePublicationNavigationState();
     }, 250),
-    [setLocalData, updatePublicationNavigationState, getTextAnchoredLocator, publication]
+    [setLocalData, updatePublicationNavigationState, getTextAnchoredLocator, publication, positionsList]
   );
 
   useEffect(() => () => debouncedSavePosition.clear(), [debouncedSavePosition]);
