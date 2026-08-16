@@ -37,11 +37,29 @@ const noteSelectionStyle: ILinkInjectable & IBlobInjectable = {
 // svg|svg -- Calibre's own cover-page trick (see detectShortImage.ts) intentionally wraps a cover
 // image in an SVG with a fixed viewBox/width/height to force it to fill the page regardless of its
 // native size, and this must not undo that.
+//
+// The width/height:auto fix alone still wasn't enough for PDF Reflow output specifically: each such
+// "page" is a `<p class="calibre1"><img/></p>` block, and .calibre1 carries `margin: 1em 0` (the
+// converter's own paragraph spacing, applied uniformly to every wrapper regardless of content).
+// readium-css's :root is a hard `height:100vh` column with `overflow:hidden`/`clip` (see
+// ReadiumCSS-after.css) and `break-inside:avoid` on img -- so an image sized right up against the
+// 95vh cap, PLUS its wrapper's ~2em of margin on top, pushes that one block's total height past the
+// column's 100vh ceiling. break-inside:avoid can't split it, and no column (however empty) is ever
+// tall enough to hold it, so the browser's only option is to let it overflow/clip in place --
+// visually exactly "one image's tail is cut off, rest pushed off screen downward". Lowering the cap
+// to 88vh (readium-css's own --RS__maxMediaHeight custom property, so this rides the same
+// !important rule rather than needing a separate max-height override) leaves enough headroom for
+// that wrapper margin -- and any similar per-book paragraph spacing -- to fit inside one column
+// without pushing the total past 100vh. A ~7% smaller image cap is imperceptible for normal
+// standalone illustrations, which is the only case where this constant ever actually binds.
 const imageAutoSizeStyle: ILinkInjectable & IBlobInjectable = {
   as: "link",
   rel: "stylesheet",
   target: "head",
-  blob: new Blob(["img { width: auto !important; height: auto !important; }"], { type: "text/css" })
+  blob: new Blob([
+    "img { width: auto !important; height: auto !important; } " +
+    ":root { --RS__maxMediaHeight: 88vh !important; }"
+  ], { type: "text/css" })
 };
 
 interface UseEpubInjectablesConfigProps {
