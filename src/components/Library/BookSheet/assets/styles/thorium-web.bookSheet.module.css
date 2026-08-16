@@ -466,6 +466,17 @@
   font-weight: 700;
 }
 
+/* CLAUDE-ADDED: Narrators can be a long comma-joined list (multi-cast audiobooks easily list 8+
+   names) -- .chip's own white-space: nowrap let that run past .detailsChips' width and pass behind
+   .progressDial (which overlaps leftward via its own negative `left` offset) instead of wrapping.
+   align-items: flex-start (instead of .chip's center) keeps the "Narrated by:" label pinned to the
+   first line rather than re-centering against the full wrapped block's height. */
+.chipWrap {
+  white-space: normal;
+  align-items: flex-start;
+  max-width: 100%;
+}
+
 .chipButton {
   border: none;
   border-radius: 999px;

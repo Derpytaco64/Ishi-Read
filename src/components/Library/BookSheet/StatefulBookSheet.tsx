@@ -753,7 +753,7 @@ export const StatefulBookSheet = ({
                       <span className={ styles.chip }><strong>Published:</strong> { formatDate(displayed.published) }</span>
                     ) }
                     { displayed.narrators && displayed.narrators.length > 0 && (
-                      <span className={ styles.chip }><strong>Narrated by:</strong> { displayed.narrators.join(", ") }</span>
+                      <span className={ classNames(styles.chip, styles.chipWrap) }><strong>Narrated by:</strong> { displayed.narrators.join(", ") }</span>
                     ) }
                   </div>
                 ) }
