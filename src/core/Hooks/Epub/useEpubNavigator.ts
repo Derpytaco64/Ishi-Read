@@ -115,13 +115,28 @@ export const useEpubNavigator = () => {
   // from the same synchronous handler in the frame, so postMessage ordering guarantees the event lands
   // first.
   const requestFirstVisibleLocator = useCallback((): Promise<Locator | undefined> => {
-    return new Promise((resolve) => {
+    const request = new Promise<Locator | undefined>((resolve) => {
       const frame = navigatorInstance?._cframes?.[0];
       if (!frame?.msg) { resolve(undefined); return; }
       frame.msg.send("first_visible_locator", undefined, () => {
         resolve(navigatorInstance?.currentLocator);
       });
     });
+    // CLAUDE-ADDED: This round trip's ack is sent from the same frame instance the request went to
+    // (see requestFirstVisibleLocator's own comment on postMessage ordering) -- if that frame gets
+    // torn down and replaced before it acks (e.g. a same-tick real navigation, like
+    // useShortImageSpread's silent auto-advance, swapping in a new resource's iframe), the old
+    // frame's callback never fires and this promise hangs forever. Every caller of
+    // requestFirstVisibleLocator (via captureTextAnchoredLocator) awaits it before doing anything
+    // else -- debouncedSavePosition in particular -- so a single hung round trip on a fast-paging
+    // book silently stops the reading position (and therefore the displayed/saved percentage) from
+    // ever updating again, while position-only UI (page numbers, driven independently -- see
+    // StatefulReader.tsx's activeCurrentPositions) keeps working fine. Racing against a short timeout
+    // guarantees this always eventually resolves either way.
+    const timeout = new Promise<Locator | undefined>((resolve) => {
+      setTimeout(() => resolve(undefined), 500);
+    });
+    return Promise.race([request, timeout]);
   }, []);
 
   // CLAUDE-ADDED: Shared by correctPositionAround (reflow-drift correction, below) and

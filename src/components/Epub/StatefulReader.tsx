@@ -543,7 +543,21 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   // ready yet -- see captureTextAnchoredLocator's own bail-out conditions).
   const debouncedSavePosition = useMemo(
     () => debounce(async (locator: Locator) => {
-      const anchored = await getTextAnchoredLocator();
+      // CLAUDE-ADDED: getTextAnchoredLocator's round trip can fail for reasons specific to a given
+      // resource (e.g. an image-only page has no text for findFirstVisibleLocator to anchor to, or
+      // the frame it was sent to got torn down mid-flight by a same-tick real navigation -- see
+      // requestFirstVisibleLocator's own comment). Anchoring is a nice-to-have (a more precise resume
+      // position on reopen); it must never be able to block the save itself -- without this guard, an
+      // unhandled rejection here would silently skip setLocalData for that call, which is what feeds
+      // both the persisted server position and the displayed percentage (see useTimeline.ts), leaving
+      // both stuck at whatever the last successful save was while position-only UI (driven
+      // independently, see activeCurrentPositions below) kept right on updating.
+      let anchored: Locator | undefined;
+      try {
+        anchored = await getTextAnchoredLocator();
+      } catch {
+        anchored = undefined;
+      }
       const toSave = anchored ?? locator;
 
       // CLAUDE-ADDED: Same cover-progression correction as useTimeline.ts's display fix, applied
