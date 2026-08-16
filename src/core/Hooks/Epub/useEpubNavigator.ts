@@ -285,27 +285,10 @@ export const useEpubNavigator = () => {
       
       publication.current = config.publication;
 
-      // CLAUDE-ADDED-DIAG: Temporary -- wraps every listener the navigator was constructed with so we
-      // can see from the console which ones (if any) the compiled @readium/navigator actually invokes
-      // while paging through an image-only book, since StatefulReader.tsx's own positionChanged log
-      // never fires there. Safe to remove once that's confirmed either way.
-      const diagListeners = Object.fromEntries(
-        Object.entries(config.listeners).map(([key, fn]) => [
-          key,
-          typeof fn === "function"
-            ? (...args: unknown[]) => {
-                // eslint-disable-next-line no-console
-                console.log("[ISHI-DIAG] listener fired:", key, args[0]);
-                return (fn as (...a: unknown[]) => unknown)(...args);
-              }
-            : fn,
-        ])
-      ) as unknown as EpubNavigatorListeners;
-
       navigatorInstance = new EpubNavigator(
         config.container,
         config.publication,
-        diagListeners,
+        config.listeners,
         config.positionsList,
         config.initialPosition,
         {

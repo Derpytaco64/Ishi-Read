@@ -543,8 +543,6 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   // ready yet -- see captureTextAnchoredLocator's own bail-out conditions).
   const debouncedSavePosition = useMemo(
     () => debounce(async (locator: Locator) => {
-      // eslint-disable-next-line no-console
-      console.log("[ISHI-DIAG] debouncedSavePosition start", locator.href, locator.locations?.position);
       // CLAUDE-ADDED: getTextAnchoredLocator's round trip can fail for reasons specific to a given
       // resource (e.g. an image-only page has no text for findFirstVisibleLocator to anchor to, or
       // the frame it was sent to got torn down mid-flight by a same-tick real navigation -- see
@@ -560,24 +558,16 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
       // eating its up-to-500ms timeout on every single page turn of an image-only book.
       const index = publication?.readingOrder.findIndexWithHref(locator.href);
       const isShortImagePage = index !== undefined && shortImageMap.entries.has(index);
-      // eslint-disable-next-line no-console
-      console.log("[ISHI-DIAG] index", index, "isShortImagePage", isShortImagePage, "mapComplete", shortImageMap.isComplete);
 
       let anchored: Locator | undefined;
       if (!isShortImagePage) {
         try {
           anchored = await getTextAnchoredLocator();
-          // eslint-disable-next-line no-console
-          console.log("[ISHI-DIAG] anchored result", anchored?.href, anchored?.locations?.position, anchored?.locations?.totalProgression);
-        } catch (err) {
-          // eslint-disable-next-line no-console
-          console.log("[ISHI-DIAG] anchoring threw", err);
+        } catch {
           anchored = undefined;
         }
       }
       const toSave = anchored ?? locator;
-      // eslint-disable-next-line no-console
-      console.log("[ISHI-DIAG] toSave", toSave.href, toSave.locations?.position, toSave.locations?.totalProgression);
 
       // CLAUDE-ADDED: Same cover-progression correction as useTimeline.ts's display fix, applied
       // here too since this is the locator that actually gets persisted server-side (via
@@ -605,21 +595,26 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
       const isLastPage = positionsList?.length !== undefined
         && toSave.locations.position !== undefined
         && toSave.locations.position >= positionsList.length;
-      const toPersist = (isCover || isLastPage)
-        ? new Locator({
-            href: toSave.href,
-            type: toSave.type,
-            title: toSave.title,
-            locations: new LocatorLocations({
-              ...toSave.locations,
-              progression: isCover ? 0 : 1,
-              totalProgression: isCover ? 0 : 1,
-            }),
-            text: toSave.text,
-          })
-        : toSave;
-      // eslint-disable-next-line no-console
-      console.log("[ISHI-DIAG] setLocalData", toPersist.href, toPersist.locations?.position, toPersist.locations?.totalProgression);
+      // CLAUDE-ADDED: Always rebuild as a real Locator instance here, not just for the cover/last-page
+      // cases above. toSave is often the raw, prototype-stripped plain object described above (whenever
+      // anchoring was skipped or came back undefined) -- calling setLocalData with that plain object
+      // reaches positionStorage.set -> savePositionToServer, which calls locator.serialize() and throws
+      // "t.serialize is not a function" (uncaught, since debouncedSavePosition isn't awaited by its
+      // caller), silently dropping the save every time. That's the actual bug behind "page number
+      // updates but percentage doesn't" for short-image-only books: anchoring is now always skipped for
+      // them (see isShortImagePage above), so toSave was always the stripped plain object, so every save
+      // for these books hit this crash.
+      const toPersist = new Locator({
+        href: toSave.href,
+        type: toSave.type,
+        title: toSave.title,
+        locations: new LocatorLocations({
+          ...toSave.locations,
+          progression: isCover ? 0 : isLastPage ? 1 : toSave.locations?.progression,
+          totalProgression: isCover ? 0 : isLastPage ? 1 : toSave.locations?.totalProgression,
+        }),
+        text: toSave.text,
+      });
       setLocalData(toPersist);
       updatePublicationNavigationState();
     }, 250),
@@ -648,12 +643,8 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
       // debouncedSavePosition would re-enter itself on every anchor capture, and evaluateSpread/exact
       // page count/reading speed would each act on a garbage locator once per save.
       if (locator.locations?.position === undefined) {
-        // eslint-disable-next-line no-console
-        console.log("[ISHI-DIAG] positionChanged dropped (no position)", locator.href, locator.locations);
         return;
       }
-      // eslint-disable-next-line no-console
-      console.log("[ISHI-DIAG] positionChanged", locator.href, JSON.parse(JSON.stringify(locator.locations)));
 
       debouncedSavePosition(locator);
 

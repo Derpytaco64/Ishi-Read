@@ -156,8 +156,6 @@ export const usePublication = ({
 
             // Detect profile from parsed manifest
             const detectedProfile = detectProfile(manifestObj);
-            // eslint-disable-next-line no-console
-            console.log("[ISHI-DIAG] detectProfile", detectedProfile, "conformsTo:", manifestObj.metadata?.conformsTo);
             setProfile(detectedProfile);
             dispatch(setReaderProfile(detectedProfile));
 
