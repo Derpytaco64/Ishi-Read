@@ -332,10 +332,21 @@ export const useTimeline = ({
 
     updateTimelineItems(currentLocation);
 
+    // CLAUDE-ADDED: In two-column mode, coverSpreadScript prepends a 1px spacer div to the cover
+    // resource so it visually starts in the second column -- readium-css's own scrollLeft/scrollWidth
+    // -based progression math (see @readium/navigator's dist) still counts that spacer as real
+    // content, so simply viewing the cover -- literally the start of the book -- reports a small
+    // nonzero progression within the resource instead of exactly 0 (shows up as e.g. "0.4%" instead
+    // of "0%" overall). The cover already isn't treated as real content anywhere else in this app
+    // (useExactPageCount reports it as page 0, excluded from the running total; useShortImageSpread
+    // never pairs or measures it) -- same treatment here: force both progression fields to exactly 0
+    // while on it, rather than trusting the navigator's raw locator.
+    const isCover = !!currentLocation && publication?.readingOrder.findIndexWithHref(currentLocation.href) === 0;
+
     // Update progression state when location changes
-    setRelativeProgression(currentLocation?.locations.progression);
-    setTotalProgression(currentLocation?.locations.totalProgression);
-  }, [currentLocation, currentPositions, tocTree, timelineItems, handleTocEntryOnNav, updateTimelineItems]);
+    setRelativeProgression(isCover ? 0 : currentLocation?.locations.progression);
+    setTotalProgression(isCover ? 0 : currentLocation?.locations.totalProgression);
+  }, [currentLocation, currentPositions, tocTree, timelineItems, handleTocEntryOnNav, updateTimelineItems, publication]);
 
   // Update the singleton and call onChange
   useEffect(() => {

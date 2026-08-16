@@ -544,10 +544,19 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   const debouncedSavePosition = useMemo(
     () => debounce(async (locator: Locator) => {
       const anchored = await getTextAnchoredLocator();
-      setLocalData(anchored ?? locator);
+      const toSave = anchored ?? locator;
+
+      // CLAUDE-ADDED: Same cover-progression correction as useTimeline.ts's display fix, applied
+      // here too since this is the locator that actually gets persisted server-side (via
+      // setLocalData -> positionStorage.set), not just displayed -- without this, a saved position
+      // on the cover would still read e.g. 0.4% rather than 0% even though the on-screen percentage
+      // now shows 0%. copyWithLocations merges into the existing locations (fragments/position/text
+      // anchor all preserved), only progression/totalProgression are overridden.
+      const isCover = publication?.readingOrder.findIndexWithHref(toSave.href) === 0;
+      setLocalData(isCover ? toSave.copyWithLocations({ progression: 0, totalProgression: 0 }) : toSave);
       updatePublicationNavigationState();
     }, 250),
-    [setLocalData, updatePublicationNavigationState, getTextAnchoredLocator]
+    [setLocalData, updatePublicationNavigationState, getTextAnchoredLocator, publication]
   );
 
   useEffect(() => () => debouncedSavePosition.clear(), [debouncedSavePosition]);
