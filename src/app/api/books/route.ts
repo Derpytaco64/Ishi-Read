@@ -227,7 +227,26 @@ const EMPTY_AUDIOBOOK_METADATA: AudiobookFileMetadata = {
   series: null, narrators: [], subtitle: null, asin: null, tags: [], publisher: null, language: null, published: null
 };
 
-async function extractAudiobookMetadata(filePath: string): Promise<AudiobookFileMetadata> {
+// CLAUDE-ADDED: M4B has no dedicated subtitle atom either (only the freeform "----:com.apple.iTunes:
+// SUBTITLE", which most audiobook rips don't set) -- verified against a real Audible-sourced M4B
+// (Dungeon Crawler Carl) that instead puts the full "Title: Subtitle" text in the Album tag while
+// Title itself stays bare ("Dungeon Crawler Carl" vs. album "Dungeon Crawler Carl: A LitRPG/Gamelit
+// Adventure"). Strips the redundant title prefix so the subtitle chip doesn't repeat what's already
+// shown as the book's title; returns null when there's nothing beyond the title to show.
+function deriveSubtitleFromAlbum(album: string | undefined, title: string): string | null {
+  const trimmedAlbum = album?.trim();
+  if (!trimmedAlbum) return null;
+  const trimmedTitle = title.trim();
+  if (trimmedAlbum.toLowerCase() === trimmedTitle.toLowerCase()) return null;
+
+  const prefix = `${trimmedTitle}:`;
+  if (trimmedAlbum.toLowerCase().startsWith(prefix.toLowerCase())) {
+    return trimmedAlbum.slice(prefix.length).trim() || null;
+  }
+  return trimmedAlbum;
+}
+
+async function extractAudiobookMetadata(filePath: string, title: string): Promise<AudiobookFileMetadata> {
   try {
     const { common } = await parseFile(filePath, { duration: false, skipCovers: true });
 
@@ -252,13 +271,23 @@ async function extractAudiobookMetadata(filePath: string): Promise<AudiobookFile
     // labels this field "Narrated by" in its UI) is to store narrator names in the Composer tag.
     const narrators = common.composer ?? [];
 
+    // CLAUDE-ADDED: Verified against a real Audible-sourced M4B (Dungeon Crawler Carl) -- its ©gen
+    // atom holds one string of multiple genres joined with "; " ("Literature & Fiction; Mystery,
+    // Thriller & Suspense; Science Fiction & Fantasy"), not one atom instance per genre. Splitting
+    // keeps them as separate chips instead of one run-on pill; flatMap also handles the case where a
+    // tagger *did* write separate instances (multiple already-split array entries).
+    const tags = (common.genre ?? []).flatMap((entry) => entry.split(";").map((g) => g.trim()).filter(Boolean));
+
     return {
       series,
       narrators,
-      subtitle: common.subtitle?.[0] ?? null,
+      subtitle: common.subtitle?.[0] ?? deriveSubtitleFromAlbum(common.album, title),
       asin: common.asin ?? null,
-      tags: common.genre ?? [],
-      publisher: common.label?.[0] ?? null,
+      tags,
+      // CLAUDE-ADDED: No dedicated publisher atom either -- falls back to the copyright tag (©cpy/
+      // cprt) when there's no explicit label, since Audible-sourced files (that same Dungeon Crawler
+      // Carl file) put the actual publisher/production company there ("Audible Studios") instead.
+      publisher: common.label?.[0] ?? common.copyright ?? null,
       language: common.language ?? null,
       published: common.year ? String(common.year) : common.date ?? null
     };
@@ -514,7 +543,7 @@ export async function GET() {
               // extractAudiobookMetadata's comment) -- read them straight off the file's own MP4 tags
               // instead, filling in only what the manifest left empty above.
               if (isAudiobook) {
-                const fileMeta = await extractAudiobookMetadata(path.join(publicationsDir, file));
+                const fileMeta = await extractAudiobookMetadata(path.join(publicationsDir, file), title);
                 series = fileMeta.series;
                 if (narrators.length === 0) narrators = fileMeta.narrators;
                 if (subtitle === null) subtitle = fileMeta.subtitle;
