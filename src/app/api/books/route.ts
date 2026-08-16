@@ -22,7 +22,9 @@ type Series = { name: string; position?: number };
 // which is a filesystem stat since EPUB byte size was never part of the manifest to begin with.
 type CachedBook = {
   title: string;
+  subtitle: string | null;
   author: string;
+  narrators: string[];
   cover: string;
   series: Series | null;
   description: string | null;
@@ -32,9 +34,11 @@ type CachedBook = {
   language: string | null;
   tags: string[];
   isbn: string | null;
+  asin: string | null;
   calibreId: string | null;
   uuid: string | null;
   fileSize: string | null;
+  duration: number | null;
 };
 const manifestCache = new Map<string, { fingerprint: string; data: CachedBook }>();
 
@@ -135,11 +139,11 @@ function collectAuthorNames(author: unknown): string[] {
 }
 
 // CLAUDE-ADDED: Some manifests (e.g. calibre-exported ones) list the same contributor multiple times under slightly different casing/sortAs — dedupe case-insensitively, keeping the first-seen casing, so the card doesn't show "You Shiina, quof, ..., You Shiina, Quof, ...".
-function extractAuthor(author: unknown): string {
+function dedupeNames(names: string[]): string[] {
   const seen = new Set<string>();
   const unique: string[] = [];
 
-  for (const name of collectAuthorNames(author)) {
+  for (const name of names) {
     const key = name.toLowerCase();
     if (!seen.has(key)) {
       seen.add(key);
@@ -147,7 +151,18 @@ function extractAuthor(author: unknown): string {
     }
   }
 
-  return unique.join(", ");
+  return unique;
+}
+
+function extractAuthor(author: unknown): string {
+  return dedupeNames(collectAuthorNames(author)).join(", ");
+}
+
+// CLAUDE-ADDED: manifest.metadata.narrator is Contributor-shaped per the RWPM spec, same as author —
+// reuses the same string-or-object-or-array handling and dedup, just kept as a list instead of a
+// joined string since the detail panel renders narrators as individual chips.
+function extractNarrators(narrator: unknown): string[] {
+  return dedupeNames(collectAuthorNames(narrator));
 }
 
 // CLAUDE-ADDED: The position file is rewritten every time the reader saves reading progress, so its
@@ -192,30 +207,64 @@ function extractSeries(metadata: any): Series | null {
   return null;
 }
 
-// CLAUDE-ADDED: Readium's manifest for M4B audiobooks never has a belongsTo.series -- confirmed
-// against the bundled Go server (v0.15.1), its M4B parser only surfaces title/author/description/
-// duration/chapters, not the series info audiobook tools embed. That series info does exist in the
-// file itself though, in the MP4 "grouping" (©grp) atom -- Audiobookshelf/Plex/etc. convention is
-// "Series Name #N" or "Series Name, Book N", so this reads the tag directly off disk instead of
-// going through Readium at all. Falls back to the file's own track number for position when the
-// grouping text has no embedded number (still labeled a series, just unordered within it).
-async function extractAudiobookSeries(filePath: string): Promise<Series | null> {
+// CLAUDE-ADDED: Everything below is read directly off the M4B file's own MP4 tags via music-metadata,
+// rather than through Readium's manifest -- confirmed against the bundled Go server (v0.15.1), its
+// M4B parser only surfaces title/author/description/duration/chapters, none of the calibre-style
+// fields (series, narrators, subtitle, ASIN, genre, publisher, language, year) audiobook tools embed
+// in the file itself. One parseFile call covers all of them instead of one per field.
+type AudiobookFileMetadata = {
+  series: Series | null;
+  narrators: string[];
+  subtitle: string | null;
+  asin: string | null;
+  tags: string[];
+  publisher: string | null;
+  language: string | null;
+  published: string | null;
+};
+
+const EMPTY_AUDIOBOOK_METADATA: AudiobookFileMetadata = {
+  series: null, narrators: [], subtitle: null, asin: null, tags: [], publisher: null, language: null, published: null
+};
+
+async function extractAudiobookMetadata(filePath: string): Promise<AudiobookFileMetadata> {
   try {
     const { common } = await parseFile(filePath, { duration: false, skipCovers: true });
-    const grouping = common.grouping?.trim();
-    if (!grouping) return null;
 
-    const match = grouping.match(/^(.*?),?\s*(?:#|Book\s+)(\d+(?:\.\d+)?)\s*$/i);
-    if (match) {
-      const name = match[1].trim();
-      if (name) return { name, position: Number(match[2]) };
+    // CLAUDE-ADDED: MP4/M4B has no dedicated series atom -- Audiobookshelf/Plex/etc. convention is to
+    // stash "Series Name #N" or "Series Name, Book N" in the "grouping" (©grp) tag. Falls back to the
+    // file's own track number for position when the grouping text has no embedded number (still
+    // labeled a series, just unordered within it).
+    let series: Series | null = null;
+    const grouping = common.grouping?.trim();
+    if (grouping) {
+      const match = grouping.match(/^(.*?),?\s*(?:#|Book\s+)(\d+(?:\.\d+)?)\s*$/i);
+      if (match && match[1].trim()) {
+        series = { name: match[1].trim(), position: Number(match[2]) };
+      } else {
+        const trackNo = common.track?.no;
+        series = { name: grouping, position: typeof trackNo === "number" ? trackNo : undefined };
+      }
     }
 
-    const trackNo = common.track?.no;
-    return { name: grouping, position: typeof trackNo === "number" ? trackNo : undefined };
+    // CLAUDE-ADDED: MP4 also has no dedicated narrator atom -- the established audiobook-tagging
+    // convention (m4b-tool, Audiobookshelf, AAXtoMP3, and Apple/iTunes' own audiobook handling, which
+    // labels this field "Narrated by" in its UI) is to store narrator names in the Composer tag.
+    const narrators = common.composer ?? [];
+
+    return {
+      series,
+      narrators,
+      subtitle: common.subtitle?.[0] ?? null,
+      asin: common.asin ?? null,
+      tags: common.genre ?? [],
+      publisher: common.label?.[0] ?? null,
+      language: common.language ?? null,
+      published: common.year ? String(common.year) : common.date ?? null
+    };
   } catch (err) {
     console.error(`Could not read audiobook tags for ${filePath}:`, err);
-    return null;
+    return EMPTY_AUDIOBOOK_METADATA;
   }
 }
 
@@ -250,8 +299,8 @@ function extractLanguage(language: unknown): string | null {
 // this is calibre's own convention. Only ISBN is surfaced as a chip for now (the identifiers calibre
 // shows as clickable badges, like "Hardcover", are external lookup links we have no destination for
 // here without also carrying calibre's own URL templates).
-function extractAltIdentifiers(altIdentifier: unknown): { isbn: string | null; calibreId: string | null; uuid: string | null } {
-  const result = { isbn: null as string | null, calibreId: null as string | null, uuid: null as string | null };
+function extractAltIdentifiers(altIdentifier: unknown): { isbn: string | null; asin: string | null; calibreId: string | null; uuid: string | null } {
+  const result = { isbn: null as string | null, asin: null as string | null, calibreId: null as string | null, uuid: null as string | null };
   if (!Array.isArray(altIdentifier)) return result;
 
   for (const entry of altIdentifier) {
@@ -262,6 +311,7 @@ function extractAltIdentifiers(altIdentifier: unknown): { isbn: string | null; c
     const scheme = entry.slice(0, separatorIndex);
     const value = entry.slice(separatorIndex + 1);
     if (scheme === "isbn") result.isbn = value;
+    else if (scheme === "asin") result.asin = value;
     else if (scheme === "calibre") result.calibreId = value;
     else if (scheme === "uuid") result.uuid = value;
   }
@@ -376,7 +426,9 @@ export async function GET() {
         const isAudiobook = path.extname(file).toLowerCase() === ".m4b";
 
         let title = fallbackTitle;
+        let subtitle: string | null = null;
         let author = "";
+        let narrators: string[] = [];
         let cover = "/images/genericCover.png";
         let series: Series | null = null;
         let description: string | null = null;
@@ -386,12 +438,17 @@ export async function GET() {
         let language: string | null = null;
         let tags: string[] = [];
         let isbn: string | null = null;
+        let asin: string | null = null;
         let calibreId: string | null = null;
         let uuid: string | null = null;
         // CLAUDE-ADDED: Not manifest data (no filesystem info makes it into a Readium manifest) --
         // this is the one field here that comes from stat() instead, to match calibre's own
         // "File sizes" field on the book detail page this is otherwise mirroring.
         let fileSize: string | null = null;
+        // CLAUDE-ADDED: RWPM's metadata.duration (seconds) -- the one M4B field the Go server does
+        // surface (see extractAudiobookMetadata's comment), so this comes straight off the manifest
+        // rather than needing a file-tag fallback.
+        let duration: number | null = null;
 
         // CLAUDE-ADDED: Check the manifest cache before hitting the Readium server. Keyed by filename +
         // content fingerprint, so a cache hit only happens if the file's actual content (not just its
@@ -403,7 +460,9 @@ export async function GET() {
         const cached = manifestCache.get(file);
         if (cached && cached.fingerprint === fingerprint) {
           title = cached.data.title;
+          subtitle = cached.data.subtitle;
           author = cached.data.author;
+          narrators = cached.data.narrators;
           cover = cached.data.cover;
           series = cached.data.series;
           description = cached.data.description;
@@ -413,8 +472,10 @@ export async function GET() {
           language = cached.data.language;
           tags = cached.data.tags;
           isbn = cached.data.isbn;
+          asin = cached.data.asin;
           calibreId = cached.data.calibreId;
           uuid = cached.data.uuid;
+          duration = cached.data.duration;
           // fileSize is recomputed above from the current stat rather than read from cache -- it's
           // the one field that isn't gated by the manifest's own fingerprint-keyed cache validity.
         } else {
@@ -429,15 +490,14 @@ export async function GET() {
               if (manifest.metadata?.title) {
                 title = manifest.metadata.title;
               }
+              subtitle = typeof manifest.metadata?.subtitle === "string" ? manifest.metadata.subtitle : null;
 
               if (manifest.metadata?.author) {
                 author = extractAuthor(manifest.metadata.author);
               }
+              narrators = manifest.metadata?.narrator ? extractNarrators(manifest.metadata.narrator) : [];
 
               series = extractSeries(manifest.metadata);
-              if (isAudiobook) {
-                series = await extractAudiobookSeries(path.join(publicationsDir, file));
-              }
               description = extractDescription(manifest.metadata?.description);
               // publisher is Contributor-shaped per the RWPM spec, same as author -- reuse that
               // extraction rather than assuming it's always a plain string.
@@ -446,7 +506,24 @@ export async function GET() {
               modified = typeof manifest.metadata?.modified === "string" ? manifest.metadata.modified : null;
               language = extractLanguage(manifest.metadata?.language);
               tags = extractSubjects(manifest.metadata?.subject);
-              ({ isbn, calibreId, uuid } = extractAltIdentifiers(manifest.metadata?.altIdentifier));
+              ({ isbn, asin, calibreId, uuid } = extractAltIdentifiers(manifest.metadata?.altIdentifier));
+              duration = typeof manifest.metadata?.duration === "number" ? manifest.metadata.duration : null;
+
+              // CLAUDE-ADDED: The Go server's M4B support doesn't surface any of series/narrators/
+              // subtitle/ASIN/genre/publisher/language/year onto the manifest (see
+              // extractAudiobookMetadata's comment) -- read them straight off the file's own MP4 tags
+              // instead, filling in only what the manifest left empty above.
+              if (isAudiobook) {
+                const fileMeta = await extractAudiobookMetadata(path.join(publicationsDir, file));
+                series = fileMeta.series;
+                if (narrators.length === 0) narrators = fileMeta.narrators;
+                if (subtitle === null) subtitle = fileMeta.subtitle;
+                if (asin === null) asin = fileMeta.asin;
+                if (tags.length === 0) tags = fileMeta.tags;
+                if (publisher === null) publisher = fileMeta.publisher;
+                if (language === null) language = fileMeta.language;
+                if (published === null) published = fileMeta.published;
+              }
 
               const coverHref = findCoverHref(manifest);
               if (coverHref) {
@@ -457,7 +534,7 @@ export async function GET() {
               // CLAUDE-ADDED: Populate the cache so the next request for this file (same content fingerprint) skips the Readium server round-trip entirely.
               manifestCache.set(file, {
                 fingerprint,
-                data: { title, author, cover, series, description, publisher, published, modified, language, tags, isbn, calibreId, uuid, fileSize }
+                data: { title, subtitle, author, narrators, cover, series, description, publisher, published, modified, language, tags, isbn, asin, calibreId, uuid, fileSize, duration }
               });
             }
           } catch (err) {
@@ -469,7 +546,9 @@ export async function GET() {
 
         return {
           title,
+          subtitle,
           author,
+          narrators,
           cover,
           url: `/read/manifest/${encodedManifestUrl}`,
           rendition: isAudiobook ? "Audiobook" : undefined,
@@ -486,9 +565,11 @@ export async function GET() {
           language,
           tags,
           isbn,
+          asin,
           calibreId,
           uuid,
-          fileSize
+          fileSize,
+          duration
         };
       }
     );
@@ -518,7 +599,9 @@ export async function GET() {
 
       return {
         title: path.parse(file).name,
+        subtitle: null,
         author: "",
+        narrators: [],
         cover: "/images/genericCover.png",
         url: `/read/manifest/${encodeURIComponent(`${readiumServerUrl}/webpub/${base64UrlEncode(file)}/manifest.json`)}`,
         rendition: isAudiobook ? "Audiobook" : "Reflowable EPUB",
@@ -533,9 +616,11 @@ export async function GET() {
         language: null,
         tags: [],
         isbn: null,
+        asin: null,
         calibreId: null,
         uuid: null,
-        fileSize: null
+        fileSize: null,
+        duration: null
       };
     });
 

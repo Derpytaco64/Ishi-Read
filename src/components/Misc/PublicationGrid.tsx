@@ -123,6 +123,8 @@ export interface Publication {
   // CLAUDE-ADDED: Extra manifest.metadata fields surfaced for the book-detail sheet's calibre-style
   // metadata panel (see StatefulBookSheet) -- optional since only the dynamic /api/books-sourced
   // shelves populate them, not the (currently unused) hardcoded book lists.
+  subtitle?: string | null;
+  narrators?: string[];
   description?: string | null;
   publisher?: string | null;
   published?: string | null;
@@ -130,9 +132,13 @@ export interface Publication {
   language?: string | null;
   tags?: string[];
   isbn?: string | null;
+  asin?: string | null;
   calibreId?: string | null;
   uuid?: string | null;
   fileSize?: string | null;
+  // CLAUDE-ADDED: RWPM metadata.duration (seconds) -- only ever populated for audiobooks, since
+  // that's the one field the bundled Readium server's M4B support actually surfaces.
+  duration?: number | null;
 }
 
 export interface PublicationGridProps {

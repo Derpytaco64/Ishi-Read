@@ -331,6 +331,16 @@
   overflow: hidden;
 }
 
+.subtitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--th-color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .author {
   margin: 0;
   font-size: 1.3rem;

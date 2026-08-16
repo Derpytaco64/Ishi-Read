@@ -175,9 +175,24 @@ export interface StatefulBookSheetProps {
 // rolls it back to the previous day.
 const formatDate = (value: string | number | null | undefined): string | null => {
   if (value === null || value === undefined) return null;
+  // CLAUDE-ADDED: Audiobook M4B tags only ever carry a bare release year (see extractAudiobookMetadata
+  // in api/books/route.ts), not a full date -- shown as-is rather than through Date/toLocaleDateString,
+  // which would otherwise coerce "2007" into "Jan 1, 2007".
+  if (typeof value === "string" && /^\d{4}$/.test(value)) return value;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
+};
+
+// CLAUDE-ADDED: HH:MM:SS(-style, zero-padded, no unit spacing) rendering for total audiobook length --
+// deliberately not reusing formatFullReadingTime/formatEstimatedTime from the Reading Timer helpers,
+// which use a spaced "1h 20m 5s" style meant for elapsed/estimated *reading* time, not a fixed total.
+const formatDuration = (totalSeconds: number): string => {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  return `${ pad(hours) }h${ pad(minutes) }m${ pad(seconds) }s`;
 };
 
 export const StatefulBookSheet = ({
@@ -650,6 +665,9 @@ export const StatefulBookSheet = ({
           <div className={ styles.heroRow }>
             <div className={ styles.meta }>
               <h2 className={ styles.title }>{ displayed.title }</h2>
+              { displayed.subtitle && (
+                <p className={ styles.subtitle }>{ displayed.subtitle }</p>
+              ) }
               <p className={ styles.author }>{ displayed.author }</p>
               { displayed.series?.name && (
                 <p className={ styles.series }>
@@ -669,7 +687,7 @@ export const StatefulBookSheet = ({
           <div className={ styles.details }>
             <div className={ styles.detailsTop }>
               <div className={ styles.detailsChips }>
-                { (displayed.calibreId || displayed.uuid || displayed.addedAt || displayed.modified || displayed.fileSize || pageCount) && (
+                { (displayed.calibreId || displayed.uuid || displayed.addedAt || displayed.modified || displayed.fileSize || pageCount || displayed.duration) && (
                   <div className={ styles.chipRow }>
                     { displayed.calibreId && (
                       <span className={ styles.chip }><strong>ID:</strong> { displayed.calibreId }</span>
@@ -698,16 +716,22 @@ export const StatefulBookSheet = ({
                     { !!pageCount && (
                       <span className={ styles.chip }><strong># of pages:</strong> { pageCount }</span>
                     ) }
+                    { !!displayed.duration && (
+                      <span className={ styles.chip }><strong>Length:</strong> { formatDuration(displayed.duration) }</span>
+                    ) }
                   </div>
                 ) }
 
-                { (displayed.language || displayed.isbn) && (
+                { (displayed.language || displayed.isbn || displayed.asin) && (
                   <div className={ styles.chipRow }>
                     { displayed.language && (
                       <span className={ styles.chip }><strong>Language:</strong> { displayed.language }</span>
                     ) }
                     { displayed.isbn && (
                       <span className={ styles.chip }><strong>ISBN:</strong> { displayed.isbn }</span>
+                    ) }
+                    { displayed.asin && (
+                      <span className={ styles.chip }><strong>ASIN:</strong> { displayed.asin }</span>
                     ) }
                   </div>
                 ) }
@@ -720,13 +744,16 @@ export const StatefulBookSheet = ({
                   </div>
                 ) }
 
-                { (displayed.publisher || displayed.published) && (
+                { (displayed.publisher || displayed.published || (displayed.narrators && displayed.narrators.length > 0)) && (
                   <div className={ styles.chipRow }>
                     { displayed.publisher && (
                       <span className={ styles.chip }><strong>Publisher:</strong> { displayed.publisher }</span>
                     ) }
                     { formatDate(displayed.published) && (
                       <span className={ styles.chip }><strong>Published:</strong> { formatDate(displayed.published) }</span>
+                    ) }
+                    { displayed.narrators && displayed.narrators.length > 0 && (
+                      <span className={ styles.chip }><strong>Narrated by:</strong> { displayed.narrators.join(", ") }</span>
                     ) }
                   </div>
                 ) }
@@ -763,7 +790,7 @@ export const StatefulBookSheet = ({
                       <strong>Time read:</strong> { formatFullReadingTime(readingStats.totalSeconds, READING_TIME_UNITS) }
                     </span>
                   ) }
-                  { readingStats.wpm !== null && (
+                  { readingStats.wpm !== null && !displayed.isAudiobook && (
                     <span className={ styles.chip }><strong>Pace:</strong> { Math.round(readingStats.wpm) } wpm</span>
                   ) }
                   { readingStats.secondsLeft !== null && (
