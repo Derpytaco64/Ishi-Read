@@ -37,8 +37,33 @@ interface UseShortImageSpreadProps {
   positionsList?: Locator[];
 }
 
-// CLAUDE-ADDED: goForward/goBackward require a callback (no optional-callback overload exists on useEpubNavigator's version), so silent auto-advance steps pass this rather than a real navigation callback.
-const noop = () => {};
+// CLAUDE-ADDED: @readium/navigator's EpubNavigator.goForward/goBackward (see its dist source) both
+// start with `if (this._isNavigating) { callback(false); return; }` -- a still-settling transition
+// (the user's own real page turn that triggered this auto-advance in the first place) makes the
+// *silent* step below fail with ok=false, not throw or hang. Passing `noop` as the callback (as this
+// used to) discards that signal entirely, so the failure was invisible -- the real navigator's
+// position stayed stuck one resource behind lastPairRef/lastIndexRef's idea of where it is, and every
+// later evaluate() call kept comparing against that now-wrong state, permanently breaking pairing (and
+// therefore position/progression updates) for the rest of the book. This is exactly why it surfaced
+// specifically for image-only PDF-Reflow-style books: every resource is a short-image pairing
+// candidate there, so the auto-advance path -- and this exact race, since large image resources take
+// measurably longer to settle than text -- fires on nearly every page turn instead of rarely.
+// RETRY_DELAY_MS/MAX_RETRIES are deliberately short/small: a genuine "still settling" failure clears
+// within a frame or two, and retrying doesn't risk masking a real "can't go further" (start/end of
+// book) failure for long -- that one also reports ok=false but stops mattering once the user can't
+// navigate past it anyway.
+const RETRY_DELAY_MS = 30;
+const MAX_RETRIES = 5;
+
+const advanceWithRetry = (
+  step: (animated: boolean, callback: (ok: boolean) => void) => void,
+  attempt = 0
+): void => {
+  step(false, (ok) => {
+    if (ok || attempt >= MAX_RETRIES) return;
+    setTimeout(() => advanceWithRetry(step, attempt + 1), RETRY_DELAY_MS);
+  });
+};
 
 export const useShortImageSpread = ({
   publication,
@@ -141,11 +166,11 @@ export const useShortImageSpread = ({
     // CLAUDE-ADDED: If we just single-stepped from one half of the pair we already showed to the other half, the user paged past a spread that visually hasn't changed (both halves were already on screen) -- silently take one more real step so the pair behaves as one page. Deferred with setTimeout: calling goForward/goBackward synchronously from inside this same positionChanged callback is a no-op (the navigator appears to still be settling the transition that triggered this callback and silently ignores a re-entrant call), so the extra step has to be issued on a later tick once that transition has actually finished.
     if (prevPair) {
       if (prevIndex === prevPair.leftIndex && index === prevPair.rightIndex) {
-        setTimeout(() => goForward(false, noop), 0);
+        setTimeout(() => advanceWithRetry(goForward), 0);
         return;
       }
       if (prevIndex === prevPair.rightIndex && index === prevPair.leftIndex) {
-        setTimeout(() => goBackward(false, noop), 0);
+        setTimeout(() => advanceWithRetry(goBackward), 0);
         return;
       }
     }
