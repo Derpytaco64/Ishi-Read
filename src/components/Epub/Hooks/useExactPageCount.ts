@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Locator, Publication } from "@readium/shared";
 import { ShortImageInfo, detectShortImage } from "./detectShortImage";
+import { ShortImageMap } from "./useShortImageMap";
 import { applyLandscapeSpreadLayoutSync } from "./landscapeSpreadScript";
 import { ExactPageResourceEntry } from "@/helpers/exactPageLocator";
 
@@ -52,6 +53,12 @@ interface UseExactPageCountProps {
   currentLocator: () => Locator | undefined;
   // CLAUDE-ADDED: Any value that changes when a layout-affecting setting (font, columns, margins, theme...) changes, to trigger a recompute. Caller builds this (see StatefulReader.tsx).
   layoutSignature: string;
+  // CLAUDE-ADDED: Book-wide short-image classification, shared with useShortImageSpread instead of
+  // this hook detecting the same thing independently -- see useShortImageMap's own doc comment.
+  // Not a scan dependency (see shortImageMapRef below): short-image classification never changes
+  // with layout, so a rescan should reuse whatever the map already knows without itself being
+  // retriggered every time the map's own progressive sweep updates.
+  shortImageMap: ShortImageMap;
 }
 
 const RESOURCE_TIMEOUT_MS = 8000;
@@ -200,7 +207,15 @@ export const useExactPageCount = ({
   getCframes,
   currentLocator,
   layoutSignature,
+  shortImageMap,
 }: UseExactPageCountProps): ExactPageCountApi => {
+  // CLAUDE-ADDED: Latest-value ref, same idiom as useShortImageSpread's own shortImageMapRef --
+  // read from inside the scan loop below without being one of that effect's dependencies, so the
+  // map's own progressive updates never retrigger this hook's much more expensive full-book layout
+  // pass.
+  const shortImageMapRef = useRef(shortImageMap);
+  shortImageMapRef.current = shortImageMap;
+
   const [state, setState] = useState<ExactPageCountState>({
     totalPages: null,
     currentPageRange: null,
@@ -352,13 +367,23 @@ export const useExactPageCount = ({
         const items = publication.readingOrder.items;
         const currentHref = currentLocator()?.href;
 
-        // CLAUDE-ADDED: Local dedupe for this scan only -- a resource gets probed at most twice (once as the lookahead "is my neighbor short too" check, once when the loop actually reaches it), and this avoids repeating the fetch+parse+landscape-probe for the second one.
-        const shortImageCache = new Map<string, ShortImageInfo | null>();
-        const getShortImageInfo = async (link: Link): Promise<ShortImageInfo | null> => {
-          const cached = shortImageCache.get(link.href);
+        // CLAUDE-ADDED: Checks useShortImageMap's book-wide classification first -- if it's already
+        // classified this index (short-image or not), reuse that for free instead of re-fetching.
+        // Falls back to a direct detectShortImage call, with its own local dedupe cache, only for
+        // an index the map's sweep hasn't reached yet (e.g. this rescan started before the map
+        // finished, or the map is still working through an earlier part of the book) -- once the
+        // map itself is isComplete, an index absent from it is definitively not a short image, no
+        // fetch needed at all.
+        const localCache = new Map<string, ShortImageInfo | null>();
+        const getShortImageInfo = async (index: number, link: Link): Promise<ShortImageInfo | null> => {
+          const known = shortImageMapRef.current.entries.get(index);
+          if (known) return { imageUrl: known.imageUrl };
+          if (shortImageMapRef.current.isComplete) return null;
+
+          const cached = localCache.get(link.href);
           if (cached !== undefined) return cached;
           const info = await detectShortImage(publication, link);
-          shortImageCache.set(link.href, info);
+          localCache.set(link.href, info);
           return info;
         };
 
@@ -383,12 +408,12 @@ export const useExactPageCount = ({
           }
 
           // CLAUDE-ADDED: Index 0 (the cover) is never treated as a short image / paired -- mirrors useShortImageSpread's own "index === 0" exclusion (it's pinned to the right-hand column via coverSpreadScript instead). Falls through to the generic measured path below.
-          const shortInfo = (isTwoColumn && i > 0) ? await getShortImageInfo(link) : null;
+          const shortInfo = (isTwoColumn && i > 0) ? await getShortImageInfo(i, link) : null;
 
           if (shortInfo) {
             // CLAUDE-ADDED: A bare full-page illustration always occupies exactly one physical page -- whether it ends up paired with a neighbor (two resources sharing one on-screen spread, e.g. the earlier "9-10 of N" fix) or shown solo (forced to single-column by useShortImageSpread so it isn't squeezed into half the width). Either way there's no layout measurement needed here (always exactly one on-screen position), so (unlike the generic branch) this skips the iframe layout pass entirely -- also a nice speed win, since insert images are exactly the resources that would otherwise need image-decode waits.
             const nextLink = i + 1 < items.length ? items[i + 1]! : null;
-            const nextShortInfo = nextLink ? await getShortImageInfo(nextLink) : null;
+            const nextShortInfo = nextLink ? await getShortImageInfo(i + 1, nextLink) : null;
 
             if (nextShortInfo) {
               // Paired: two resources, one on-screen spread, two physical pages. Both sides report

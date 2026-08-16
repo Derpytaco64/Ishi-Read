@@ -1,9 +1,15 @@
 "use client";
 
 // CLAUDE-ADDED: Pairs consecutive "insert" pages (a spine resource that's just one full-page illustration, no real text -- common front/back matter in illustrated light novels/manga EPUBs) so they render side by side in two-column mode instead of one image alone next to a blank column. @readium/navigator loads one resource per iframe and only ever shows one at a time (confirmed by reading its source -- there is no cross-resource spread mechanism for reflowable content, unlike its FXL code path), so this can't be done by patching the navigator without touching its minified dist bundle. Instead this hook keeps the real navigator moving one resource at a time (so locators/progress/bookmarks stay simple and correct) and layers a same-looking overlay on top that shows the current resource's image next to its paired neighbor's, silently stepping the real navigator an extra resource when the user pages past an already-shown pair so the pair acts like one navigable unit.
+//
+// CLAUDE-ADDED: Which resources are short images and how they pair up is resolved once, book-wide,
+// by useShortImageMap -- passed in as shortImageMap rather than detected here. This hook's own job
+// is just the live, per-navigation part: looking up the current locator's index in that map,
+// deciding whether the navigator is actually rendering two columns right now, and reading the live
+// frame's theme colors for the overlay.
 import { useCallback, useRef, useState } from "react";
-import { Link, Locator, Publication } from "@readium/shared";
-import { ShortImageInfo, detectShortImage } from "./detectShortImage";
+import { Locator, Publication } from "@readium/shared";
+import { ShortImageMap } from "./useShortImageMap";
 
 export interface SpreadPair {
   leftIndex: number;
@@ -22,6 +28,7 @@ interface UseShortImageSpreadProps {
   publication: Publication | null;
   isFXL: boolean;
   isScroll: boolean;
+  shortImageMap: ShortImageMap;
   // CLAUDE-ADDED: Loosely typed to match whatever useEpubNavigator's getCframes returns (an array of internal frame-manager objects, each exposing a `.window`) without importing its private/unstable frame-manager types.
   getCframes: () => (({ window: Window }) | undefined)[] | undefined;
   goForward: (animated: boolean, callback: (ok: boolean) => void) => void;
@@ -37,27 +44,25 @@ export const useShortImageSpread = ({
   publication,
   isFXL,
   isScroll,
+  shortImageMap,
   getCframes,
   goForward,
   goBackward,
   positionsList,
 }: UseShortImageSpreadProps) => {
-  const cacheRef = useRef(new Map<string, Promise<ShortImageInfo | null>>());
   const lastPairRef = useRef<{ leftIndex: number; rightIndex: number } | null>(null);
   const lastIndexRef = useRef<number | null>(null);
   const [pair, setPair] = useState<SpreadPair | null>(null);
 
-  // CLAUDE-ADDED: Caches the in-flight Promise itself, not just its resolved value. This is what makes it safe to call checkResource speculatively/concurrently for the same href from multiple places below (the walk-back loop, the partner lookup, and prefetching) -- every caller shares the one underlying fetch instead of each kicking off its own duplicate network request.
-  const checkResource = useCallback((link: Link | undefined): Promise<ShortImageInfo | null> => {
-    if (!link || !publication) return Promise.resolve(null);
-
-    const cached = cacheRef.current.get(link.href);
-    if (cached) return cached;
-
-    const promise = detectShortImage(publication, link);
-    cacheRef.current.set(link.href, promise);
-    return promise;
-  }, [publication]);
+  // CLAUDE-ADDED: Always holds the latest shortImageMap without evaluate()'s own useCallback
+  // depending on it -- shortImageMap's identity changes on every progressive sweep update (see
+  // useShortImageMap), and evaluate is captured once into the navigator's positionChanged listener
+  // at mount (see useEpubReaderInit's one-time load effect), so a raw dependency here would mean
+  // this hook keeps recreating evaluate as the sweep fills in while the navigator goes on calling
+  // whichever (likely still-empty) version it captured first. Direct assignment during render, same
+  // "latest value" ref idiom StatefulReader already uses for notifyReadingSpeedRef.
+  const shortImageMapRef = useRef(shortImageMap);
+  shortImageMapRef.current = shortImageMap;
 
   // CLAUDE-ADDED: readium-css's column-count lives on the current frame's :root, independent of the columnCount *preference* -- "auto" never resolves to a concrete number through the preferences API (see StatefulColumns.tsx's own effectiveValue tracking), so the only reliable way to know we're actually rendering two columns right now is to read the live computed style, same technique used to verify the landscape-image column-span fix.
   const isEffectivelyTwoColumn = useCallback((): boolean => {
@@ -106,11 +111,6 @@ export const useShortImageSpread = ({
     return positionsList?.find((p) => p.href === href)?.locations.position;
   }, [positionsList]);
 
-  // CLAUDE-ADDED: Fire-and-forget warmup for a reading-order index -- safe to call speculatively since checkResource dedupes by href via its promise cache, so this never causes a duplicate fetch for an index also being awaited elsewhere.
-  const prefetch = useCallback((items: readonly Link[], idx: number) => {
-    if (idx >= 0 && idx < items.length) void checkResource(items[idx]);
-  }, [checkResource]);
-
   // CLAUDE-ADDED: An image-only resource with no image neighbor to pair with (e.g. a single illustration sandwiched between two real chapters) still gets readium-css's normal column-count:2 layout, so it renders squeezed into one column with a wasted blank column beside it -- the same problem pairing solves, just for a resource that has nothing to pair with. Forcing that one frame to a single column lets the image use the full width instead. Scoped to the live frame instance (destroyed/recreated as the reader's sliding window of pooled resources moves on), so this doesn't need to be undone explicitly.
   const forceSingleColumnForCurrentFrame = useCallback(() => {
     const win = getCframes()?.[0]?.window;
@@ -122,7 +122,7 @@ export const useShortImageSpread = ({
     }
   }, [getCframes]);
 
-  const evaluate = useCallback(async (locator: Locator) => {
+  const evaluate = useCallback((locator: Locator) => {
     if (!publication || isFXL || isScroll) {
       clearPair();
       return;
@@ -156,59 +156,32 @@ export const useShortImageSpread = ({
       return;
     }
 
-    const items = publication.readingOrder.items;
+    const map = shortImageMapRef.current;
+    const mapPair = map.pairs.get(index);
 
-    // CLAUDE-ADDED: Kick off both neighbors' checks in parallel with (rather than strictly after) the current resource's -- the walk-back loop and partner lookup below almost always end up wanting one of these, and starting them now lets their network fetch + landscape probe overlap with the current resource's instead of queueing behind it, which is what made a first-time visit to a new pair feel slow (up to 4 fully sequential round trips otherwise).
-    prefetch(items, index - 1);
-    prefetch(items, index + 1);
-
-    const current = await checkResource(items[index]);
-    if (!current) {
+    if (!mapPair) {
       clearPair();
+      // CLAUDE-ADDED: Only force single-column once the sweep has actually classified this
+      // resource as a solo -- while the sweep hasn't reached it yet (!isComplete and no entry),
+      // leave native layout alone rather than guessing, matching the map's own graceful-degradation
+      // contract (see ShortImageMap.isComplete's doc comment).
+      if (map.solos.has(index)) forceSingleColumnForCurrentFrame();
       return;
     }
 
-    // CLAUDE-ADDED: Walk back to the start of this run of consecutive short-image resources (never below index 1, which would fold the cover into the run) so pairing is anchored consistently regardless of which half of a pair -- or which pair in a longer run -- the reader lands on first.
-    let runStart = index;
-    while (runStart > 1) {
-      const info = await checkResource(items[runStart - 1]);
-      if (!info) break;
-      runStart--;
-    }
-
-    const isLeft = (index - runStart) % 2 === 0;
-    const partnerIndex = isLeft ? index + 1 : index - 1;
-    const partner = await checkResource(items[partnerIndex]);
-
-    if (!partner) {
-      // CLAUDE-ADDED: An odd one out (e.g. a trailing single insert, or one sandwiched between real chapters, with no image neighbor to pair with) doesn't get the overlay, but still gets bumped to single-column so it isn't squeezed into half the width for nothing.
-      clearPair();
-      forceSingleColumnForCurrentFrame();
-      return;
-    }
-
-    const leftIndex = isLeft ? index : partnerIndex;
-    const rightIndex = isLeft ? partnerIndex : index;
-    const leftInfo = isLeft ? current : partner;
-    const rightInfo = isLeft ? partner : current;
-
-    // CLAUDE-ADDED: Warm the cache for the next pair in either direction now, while this one is still being displayed, so the page turn that actually reaches it hits an already-resolved (or already in-flight) promise instead of starting cold -- same dedup guarantee as the neighbor prefetch above.
-    prefetch(items, rightIndex + 1);
-    prefetch(items, rightIndex + 2);
-    prefetch(items, leftIndex - 1);
-    prefetch(items, leftIndex - 2);
+    const { leftIndex, rightIndex, leftHref, rightHref, leftImageUrl, rightImageUrl } = mapPair;
 
     lastPairRef.current = { leftIndex, rightIndex };
     setPair({
       leftIndex,
       rightIndex,
-      leftImageUrl: leftInfo.imageUrl,
-      rightImageUrl: rightInfo.imageUrl,
-      leftPosition: getPosition(items[leftIndex]!.href),
-      rightPosition: getPosition(items[rightIndex]!.href),
+      leftImageUrl,
+      rightImageUrl,
+      leftPosition: getPosition(leftHref),
+      rightPosition: getPosition(rightHref),
       ...readFrameStyle(),
     });
-  }, [publication, isFXL, isScroll, isEffectivelyTwoColumn, readFrameStyle, checkResource, goForward, goBackward, clearPair, forceSingleColumnForCurrentFrame, prefetch, getPosition]);
+  }, [publication, isFXL, isScroll, isEffectivelyTwoColumn, readFrameStyle, clearPair, forceSingleColumnForCurrentFrame, getPosition, goForward, goBackward]);
 
   return { pair, evaluate };
 };

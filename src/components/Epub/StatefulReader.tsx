@@ -52,6 +52,7 @@ import { useSettingsComponentStatus } from "@/components/Settings/hooks/useSetti
 import { useEpubStatelessCache } from "./Hooks/useEpubStatelessCache";
 import { useEpubReaderInit } from "./Hooks/useReaderInit";
 import { useMarginSync, applyMargin } from "./Hooks/useMarginSync";
+import { useShortImageMap } from "./Hooks/useShortImageMap";
 import { useShortImageSpread } from "./Hooks/useShortImageSpread";
 import { useExactPageCount, ExactPageResult } from "./Hooks/useExactPageCount";
 import { useReadingTimer } from "@/components/Actions/ReadingTimer/hooks/useReadingTimer";
@@ -289,11 +290,17 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
     unregisterDecorationObserver
   } = epubNavigator;
 
+  // CLAUDE-ADDED: Book-wide short-image classification, computed once and shared between
+  // useShortImageSpread (pairing) and useExactPageCount (page counting) below instead of each
+  // redetecting it independently -- see useShortImageMap's own doc comment.
+  const shortImageMap = useShortImageMap(publication);
+
   // CLAUDE-ADDED: See useShortImageSpread.ts -- pairs consecutive image-only "insert" resources into one visible spread in two-column mode.
   const { pair: spreadPair, evaluate: evaluateSpread } = useShortImageSpread({
     publication,
     isFXL,
     isScroll,
+    shortImageMap,
     getCframes,
     goForward,
     goBackward,
@@ -950,7 +957,8 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
     enabled: true,
     getCframes,
     currentLocator,
-    layoutSignature: exactPageCountLayoutSignature
+    layoutSignature: exactPageCountLayoutSignature,
+    shortImageMap,
   });
 
   notifyExactPageCountRef.current = exactPageCount.notifyLocatorChanged;
