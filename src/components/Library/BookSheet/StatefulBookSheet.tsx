@@ -736,6 +736,12 @@ export const StatefulBookSheet = ({
                   </div>
                 ) }
 
+                { displayed.narrators && displayed.narrators.length > 0 && (
+                  <div className={ styles.chipRow }>
+                    <span className={ classNames(styles.chip, styles.chipWrap) }><strong>Narrated by:</strong> { displayed.narrators.join(", ") }</span>
+                  </div>
+                ) }
+
                 { displayed.tags && displayed.tags.length > 0 && (
                   <div className={ styles.tagsRow }>
                     { displayed.tags.map((tag) => (
@@ -744,16 +750,13 @@ export const StatefulBookSheet = ({
                   </div>
                 ) }
 
-                { (displayed.publisher || displayed.published || (displayed.narrators && displayed.narrators.length > 0)) && (
+                { (displayed.publisher || displayed.published) && (
                   <div className={ styles.chipRow }>
                     { displayed.publisher && (
                       <span className={ styles.chip }><strong>Publisher:</strong> { displayed.publisher }</span>
                     ) }
                     { formatDate(displayed.published) && (
                       <span className={ styles.chip }><strong>Published:</strong> { formatDate(displayed.published) }</span>
-                    ) }
-                    { displayed.narrators && displayed.narrators.length > 0 && (
-                      <span className={ classNames(styles.chip, styles.chipWrap) }><strong>Narrated by:</strong> { displayed.narrators.join(", ") }</span>
                     ) }
                   </div>
                 ) }

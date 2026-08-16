@@ -464,6 +464,7 @@
 
 .chip strong {
   font-weight: 700;
+  white-space: nowrap;
 }
 
 /* CLAUDE-ADDED: Narrators can be a long comma-joined list (multi-cast audiobooks easily list 8+
@@ -475,12 +476,13 @@
    max-width alone (100%) still wasn't enough: 100% resolves against .chipRow's *layout* width, which
    already excludes .progressDial's box -- but position: relative only shifts the dial's paint, not
    its layout box, so the dial's -50px `left` offset (see .progressDial) visually overlaps 50px
-   *into* that already-excluded space. Subtracting that same 50px here keeps wrapped text clear of
-   where the dial actually paints, not just where its unshifted layout box would be. */
+   *into* that already-excluded space. Subtracting 90px (the 50px shift plus some breathing room)
+   here keeps wrapped text clear of where the dial actually paints, not just where its unshifted
+   layout box would be. */
 .chipWrap {
   white-space: normal;
   align-items: flex-start;
-  max-width: calc(100% - 50px);
+  max-width: calc(100% - 90px);
 }
 
 .chipButton {
