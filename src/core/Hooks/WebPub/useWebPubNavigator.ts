@@ -58,11 +58,29 @@ export const useWebPubNavigator = () => {
 
       publication.current = config.publication;
 
+      // CLAUDE-ADDED-DIAG: Temporary -- mirrors the same wrapper added to Epub's useEpubNavigator.ts.
+      // Books that don't get tagged with the EPUB profile by the manifest server fall through to this
+      // WebPub reader instead (see usePublication.ts's detectProfile) -- confirming here whether
+      // ExperimentalWebPubNavigator ever calls back into WebPub/StatefulReader.tsx's listeners at all
+      // while paging through the two books that never update position/percentage.
+      const diagListeners = Object.fromEntries(
+        Object.entries(config.listeners).map(([key, fn]) => [
+          key,
+          typeof fn === "function"
+            ? (...args: unknown[]) => {
+                // eslint-disable-next-line no-console
+                console.log("[ISHI-DIAG][webpub] listener fired:", key, args[0]);
+                return (fn as (...a: unknown[]) => unknown)(...args);
+              }
+            : fn,
+        ])
+      ) as unknown as WebPubNavigatorListeners;
+
       navigatorInstance = new ExperimentalWebPubNavigator(
-        config.container, 
-        config.publication, 
-        config.listeners, 
-        config.initialPosition, 
+        config.container,
+        config.publication,
+        diagListeners,
+        config.initialPosition,
         {
           preferences: config.preferences || {},
           defaults: config.defaults || {},
