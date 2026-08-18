@@ -53,6 +53,43 @@ export interface UsePublicationReturn {
   hasDisplayTransformability: boolean;
 }
 
+// CLAUDE-ADDED: The bundled Go readium server's CBZ/Divina parser never emits a `toc` -- every page
+// image ends up as one flat, untitled readingOrder entry, so the reader's TOC panel shows a bare list
+// of however many pages the book has instead of chapters. The one place chapter structure actually
+// survives is the CBZ's own folder layout (e.g. "Vol.01 Ch.0001 - The Still House.../03.png"), which
+// the Go server's readingOrder hrefs already preserve faithfully -- group consecutive pages sharing a
+// parent folder into one chapter entry, using the folder name as its title. A flat archive (everything
+// at the zip root, one "folder") has nothing to group, so this returns empty and the pre-existing
+// flat-list fallback in useTimeline/buildTocTree takes over unchanged.
+function buildDivinaToc(readingOrder: unknown): { href: string; title: string }[] {
+  if (!Array.isArray(readingOrder)) return [];
+
+  const groups: { folder: string; href: string }[] = [];
+  let lastFolder: string | null = null;
+
+  for (const item of readingOrder) {
+    const href = (item as { href?: unknown })?.href;
+    if (typeof href !== "string") continue;
+
+    let decoded = href;
+    try {
+      decoded = decodeURIComponent(href);
+    } catch {
+      // Malformed percent-encoding -- fall back to the raw href for grouping/titling.
+    }
+    const slashIndex = decoded.lastIndexOf("/");
+    const folder = slashIndex >= 0 ? decoded.slice(0, slashIndex) : "";
+
+    if (folder !== lastFolder) {
+      groups.push({ folder, href });
+      lastFolder = folder;
+    }
+  }
+
+  if (groups.length <= 1) return [];
+  return groups.map((g) => ({ href: g.href, title: g.folder || "…" }));
+}
+
 const detectProfile = (manifest: Manifest): ReaderProfile => {
   // Check conformsTo in manifest metadata to determine profile
   const metadata = manifest.metadata;
@@ -148,6 +185,8 @@ export const usePublication = ({
             const manifestFetched = manifestFetcher.get(manifestLink);
             const manifestData = await manifestFetched.readAsJSON() as {
               metadata?: { conformsTo?: string | string[]; readingProgression?: string };
+              readingOrder?: unknown;
+              toc?: unknown;
             };
 
             // CLAUDE-ADDED: The bundled Go readium server's CBZ/Divina parser never reads
@@ -173,6 +212,11 @@ export const usePublication = ({
                 }
               } catch (err) {
                 console.error("Could not fetch CBZ reading progression:", err);
+              }
+
+              if (!Array.isArray(manifestData.toc) || manifestData.toc.length === 0) {
+                const synthesizedToc = buildDivinaToc(manifestData.readingOrder);
+                if (synthesizedToc.length > 0) manifestData.toc = synthesizedToc;
               }
             }
 

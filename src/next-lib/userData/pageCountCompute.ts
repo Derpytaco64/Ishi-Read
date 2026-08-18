@@ -42,7 +42,16 @@ export async function computePageCountForManifest(manifestUrl: string): Promise<
   if (!manifestRes.ok) return 0;
 
   const manifest = await manifestRes.json();
-  const readingOrder: { href?: string }[] = Array.isArray(manifest.readingOrder) ? manifest.readingOrder : [];
+  const readingOrder: { href?: string; type?: string }[] = Array.isArray(manifest.readingOrder) ? manifest.readingOrder : [];
+
+  // CLAUDE-ADDED: A CBZ/Divina readingOrder is all page images, not prose -- running them through the
+  // text-extraction heuristic below would fetch every full-resolution page over HTTP and count raw
+  // (mostly-binary, decoded-as-UTF-8) bytes as "characters", producing a wildly inflated page count
+  // (confirmed: a 184-page/138MB manga volume came back as ~61,500 "pages"). One page per image is
+  // both correct for a comic and far cheaper than fetching the whole archive's worth of images.
+  if (readingOrder.length > 0 && readingOrder.every((link) => link.type?.startsWith("image/"))) {
+    return readingOrder.length;
+  }
 
   const counts = await Promise.all(
     readingOrder.map(async (link) => {
