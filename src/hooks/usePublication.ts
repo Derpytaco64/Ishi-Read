@@ -184,7 +184,7 @@ export const usePublication = ({
             // Fetch manifest with proper fetcher
             const manifestFetched = manifestFetcher.get(manifestLink);
             const manifestData = await manifestFetched.readAsJSON() as {
-              metadata?: { conformsTo?: string | string[]; readingProgression?: string };
+              metadata?: { conformsTo?: string | string[]; readingProgression?: string; layout?: string };
               readingOrder?: unknown;
               toc?: unknown;
             };
@@ -200,6 +200,18 @@ export const usePublication = ({
             const conformsTo = manifestData.metadata?.conformsTo;
             const profiles = Array.isArray(conformsTo) ? conformsTo : conformsTo ? [conformsTo] : [];
             if (profiles.includes(Profile.DIVINA)) {
+              // CLAUDE-ADDED: @readium/navigator picks its per-page frame builder off the publication's
+              // *layout* (fixed vs reflowable), not directly off the Divina profile -- and the fixed
+              // path is the only one that knows how to build an image frame at all (the reflowable one
+              // throws "Unsupported media type for WebPub: image/png", confirmed against a live crash).
+              // effectiveLayout is already supposed to default Divina to fixed on its own when this
+              // field is absent (which the Go server's manifest always leaves it), so stamping it here
+              // shouldn't change anything for a spec-compliant reader -- it just removes any dependence
+              // on that inference running correctly before the navigator reads it.
+              if (manifestData.metadata && !manifestData.metadata.layout) {
+                manifestData.metadata.layout = "fixed";
+              }
+
               try {
                 const progressionRes = await fetch(
                   `/api/books/reading-progression?manifestUrl=${encodeURIComponent(decodedUrl)}`
