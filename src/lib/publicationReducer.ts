@@ -17,6 +17,7 @@ export interface AdjacentTimelineItem {
 export interface PublicationReducerState {
   fontLanguage: string;
   isFXL: boolean;
+  isComic: boolean;
   isRTL: boolean;
   scriptMode: ScriptMode;
   hasDisplayTransformability: boolean;
@@ -35,6 +36,7 @@ export interface PublicationReducerState {
 const initialState: PublicationReducerState = {
   fontLanguage: "default",
   isFXL: false,
+  isComic: false,
   isRTL: false,
   scriptMode: "ltr",
   hasDisplayTransformability: false,
@@ -56,6 +58,13 @@ export const publicationSlice = createSlice({
     },
     setFXL: (state, action) => {
       state.isFXL = action.payload
+    },
+    // CLAUDE-ADDED: Divina/CBZ has no words, so wpm/pace derived from wordCount is meaningless for it
+    // -- this flag lets the reading-speed sampler and its UI (ReadingTimer panel, book-detail sheet)
+    // skip the wpm pipeline entirely instead of showing a 0-wpm pace or polluting the global wpm
+    // sample buffer other books' estimates share (see useReadingSpeedSampler.ts).
+    setComic: (state, action) => {
+      state.isComic = action.payload
     },
     setRTL: (state, action) => {
       state.isRTL = action.payload
@@ -120,6 +129,7 @@ export const publicationSlice = createSlice({
 export const {
   setFontLanguage,
   setFXL,
+  setComic,
   setRTL,
   setScriptMode,
   setHasDisplayTransformability,

@@ -61,6 +61,7 @@ export const useReadingSpeedSampler = () => {
   const dispatch = useAppDispatch();
   const manifestUrl = useAppSelector(state => state.readingTime.manifestUrl);
   const wordCount = useAppSelector(state => state.readingTime.wordCount);
+  const isComic = useAppSelector(state => state.publication.isComic);
   const accumulatedSeconds = useAppSelector(state => state.readingTime.accumulatedSeconds);
   const speedSamples = useAppSelector(state => state.readingTime.speedSamples);
   const dailyReadingHistory = useAppSelector(state => state.readingTime.dailyReadingHistory);
@@ -70,12 +71,14 @@ export const useReadingSpeedSampler = () => {
   // React, so it needs a way to read current values without going stale in a closure.
   const manifestUrlRef = useRef(manifestUrl);
   const wordCountRef = useRef(wordCount);
+  const isComicRef = useRef(isComic);
   const accumulatedSecondsRef = useRef(accumulatedSeconds);
   const samplesRef = useRef(speedSamples);
   const dailyHistoryRef = useRef(dailyReadingHistory);
   useEffect(() => {
     manifestUrlRef.current = manifestUrl;
     wordCountRef.current = wordCount;
+    isComicRef.current = isComic;
     accumulatedSecondsRef.current = accumulatedSeconds;
     samplesRef.current = speedSamples;
     dailyHistoryRef.current = dailyReadingHistory;
@@ -175,7 +178,13 @@ export const useReadingSpeedSampler = () => {
     let deltaWords = 0;
     let acceptedSample = false;
 
-    if (wordCount !== null && deltaProgression > 0 && deltaProgression <= JUMP_DISCARD_THRESHOLD) {
+    // CLAUDE-ADDED: A comic's readingOrder is all images -- wordCount comes back 0 (not null, see
+    // useBookWordCount's try/catch), which would otherwise satisfy `wordCount !== null` below and add
+    // a genuine-looking-but-meaningless 0-wpm sample to the *global* cross-book buffer every comic
+    // page turn, dragging every other book's pace estimate toward zero. isComic is the deliberate,
+    // semantic gate for that; `wordCount > 0` is a cheap extra safety net for any other reachable
+    // zero-word case.
+    if (!isComicRef.current && wordCount !== null && wordCount > 0 && deltaProgression > 0 && deltaProgression <= JUMP_DISCARD_THRESHOLD) {
       const candidateWords = deltaProgression * wordCount;
       // CLAUDE-ADDED: Rapid-page-turn discard -- see RAPID_TURN_WPM_CEILING above. Anchors were
       // already re-seeded above, so a burst of fast turns just collapses into however much real time

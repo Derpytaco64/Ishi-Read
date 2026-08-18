@@ -16,6 +16,7 @@ import { useAppDispatch } from "@/lib/hooks";
 import {
   setRTL,
   setFXL,
+  setComic,
   setScriptMode,
   setPositionsList,
   setHasDisplayTransformability,
@@ -302,6 +303,13 @@ export const usePublication = ({
       setIsFXL(fxl);
       dispatch(setFXL(fxl));
     }
+
+    // CLAUDE-ADDED: Divina/CBZ is routed through the "epub" profile too (see detectProfile above), so
+    // isFXL alone can't distinguish a comic from a real fixed-layout EPUB -- this flag is what the
+    // reading-speed sampler/UI actually key off to skip wordCount-based wpm for comics.
+    const conformsTo = publication.metadata.conformsTo;
+    const isComic = Array.isArray(conformsTo) && conformsTo.includes(Profile.DIVINA);
+    dispatch(setComic(isComic));
 
     // Display transformability
     const displayTransformability = publication.metadata.accessibility?.feature?.some(

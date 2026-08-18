@@ -302,8 +302,12 @@ export const StatefulBookSheet = ({
       const percent = typeof totalProgression === "number"
         ? Math.round(Math.min(1, Math.max(0, totalProgression)) * 1000) / 10
         : null;
-      const wpm = computeCurrentWpm(speedSamples);
-      const secondsLeft = wordCount !== null && typeof totalProgression === "number"
+      // CLAUDE-ADDED: A comic has no words -- wordCount comes back 0 for it (see useBookWordCount),
+      // which would otherwise produce a meaningless "0 wpm"/"0s left" instead of just having no pace
+      // stat at all. isComic below computes its own page-rate-based time-left instead.
+      const isComic = displayed.rendition === "Comic";
+      const wpm = isComic ? null : computeCurrentWpm(speedSamples);
+      const secondsLeft = !isComic && wordCount !== null && typeof totalProgression === "number"
         ? estimateSecondsLeft(wordCount, totalProgression, wpm)
         : null;
       // CLAUDE-ADDED: Same most-recent-first ordering as StatefulReadingTimerContainer's own
@@ -382,6 +386,25 @@ export const StatefulBookSheet = ({
       cancelled = true;
     };
   }, [displayed]);
+
+  // CLAUDE-ADDED: Page-rate "time left" for comics, mirroring the reader's own
+  // StatefulReadingTimerContainer.comicSecondsLeft -- a comic has no words (wordCount is 0, not a
+  // pace to divide by), so readingStats.secondsLeft above is deliberately left null for it.
+  // pagesRead/totalSeconds is a plain per-book ratio, not the rolling wpm sample buffer real books
+  // use, since it isn't shared across books the way wpm is.
+  const isComic = displayed?.rendition === "Comic";
+  const comicSecondsLeft = (() => {
+    if (!isComic || pageCount === null || pageCount <= 0) return null;
+    if (readingStats?.percent == null || readingStats.totalSeconds === null || readingStats.totalSeconds <= 0) return null;
+
+    const pagesRead = (readingStats.percent / 100) * pageCount;
+    if (pagesRead <= 0) return null;
+
+    const pagesRemaining = pageCount - pagesRead;
+    if (pagesRemaining <= 0) return 0;
+
+    return (pagesRemaining / pagesRead) * readingStats.totalSeconds;
+  })();
 
   // CLAUDE-ADDED: sheetRef exposes react-modal-sheet's underlying `y` motion value (its vertical
   // offset -- 0 is fully open, sheetHeight is fully closed) and `height` (the measured sheet
@@ -796,9 +819,12 @@ export const StatefulBookSheet = ({
                   { readingStats.wpm !== null && !displayed.isAudiobook && (
                     <span className={ styles.chip }><strong>Pace:</strong> { Math.round(readingStats.wpm) } wpm</span>
                   ) }
-                  { readingStats.secondsLeft !== null && (
+                  { /* CLAUDE-ADDED: isComic uses comicSecondsLeft (page-rate based, see above) --
+                       readingStats.secondsLeft is always null for a comic (wordCount has no pace to
+                       derive it from). */ }
+                  { (isComic ? comicSecondsLeft : readingStats.secondsLeft) !== null && (
                     <span className={ styles.chip }>
-                      <strong>Time left:</strong> { formatEstimatedTime(readingStats.secondsLeft, READING_TIME_UNITS) }
+                      <strong>Time left:</strong> { formatEstimatedTime((isComic ? comicSecondsLeft : readingStats.secondsLeft)!, READING_TIME_UNITS) }
                     </span>
                   ) }
                 </div>
