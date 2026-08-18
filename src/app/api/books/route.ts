@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { parseFile } from "music-metadata";
+import { extractCBZMetadata } from "@/next-lib/comicInfo";
 import { getPublicationsDir, getReadiumServerUrl } from "@/next-lib/userData/publicationsConfig";
 import { resolveBookIdentity } from "@/next-lib/userData/bookIdentity";
 import { recordBookTitles } from "@/next-lib/userData/bookTitles";
@@ -453,6 +454,10 @@ export async function GET() {
         // doesn't carry a stable "is this an audiobook" flag callers can filter on, but the file
         // extension already does (only .m4b is audio among supportedExtensions).
         const isAudiobook = path.extname(file).toLowerCase() === ".m4b";
+        // CLAUDE-ADDED: Same rationale as isAudiobook -- drives the ComicInfo.xml fallback below and
+        // the "Comic" rendition badge, since the manifest alone can't tell CBZ apart from any other
+        // webpub.
+        const isCBZ = path.extname(file).toLowerCase() === ".cbz";
 
         let title = fallbackTitle;
         let subtitle: string | null = null;
@@ -554,6 +559,20 @@ export async function GET() {
                 if (published === null) published = fileMeta.published;
               }
 
+              // CLAUDE-ADDED: Mirrors the M4B fallback above -- the bundled Go server's CBZ/Divina
+              // parser doesn't read ComicInfo.xml at all, so series/author/genre/publisher/language/
+              // description come straight off the file's embedded ComicInfo.xml instead, filling in
+              // only what the manifest left empty.
+              if (isCBZ) {
+                const fileMeta = extractCBZMetadata(filePath);
+                if (series === null) series = fileMeta.series;
+                if (!author) author = fileMeta.author;
+                if (tags.length === 0) tags = fileMeta.tags;
+                if (publisher === null) publisher = fileMeta.publisher;
+                if (language === null) language = fileMeta.language;
+                if (description === null) description = fileMeta.description;
+              }
+
               const coverHref = findCoverHref(manifest);
               if (coverHref) {
                 // Resolve relative hrefs against the manifest's own URL
@@ -580,7 +599,7 @@ export async function GET() {
           narrators,
           cover,
           url: `/read/manifest/${encodedManifestUrl}`,
-          rendition: isAudiobook ? "Audiobook" : undefined,
+          rendition: isAudiobook ? "Audiobook" : isCBZ ? "Comic" : undefined,
           isAudiobook,
           // CLAUDE-ADDED: birthtime isn't supported on every filesystem (some report 0 or fall back to
           // ctime); mtime is always populated, so it's the safety net for "date added".

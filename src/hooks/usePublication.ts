@@ -146,8 +146,36 @@ export const usePublication = ({
             
             // Fetch manifest with proper fetcher
             const manifestFetched = manifestFetcher.get(manifestLink);
-            const manifestData = await manifestFetched.readAsJSON();
-            
+            const manifestData = await manifestFetched.readAsJSON() as {
+              metadata?: { conformsTo?: string | string[]; readingProgression?: string };
+            };
+
+            // CLAUDE-ADDED: The bundled Go readium server's CBZ/Divina parser never reads
+            // ComicInfo.xml's <Manga> tag, so a manga CBZ's manifest always comes back without
+            // readingProgression (defaulting to ltr). Since the browser fetches this manifest
+            // directly from the Go server -- no Next.js route sits in between to patch it server-side
+            // -- ask a small Next.js API route (which can read the file's ComicInfo.xml) and patch
+            // the manifest here, before Manifest.deserialize/Publication ever see it. Everything
+            // downstream (effectiveReadingProgression, the isRTL Redux state, arrow-button flipping)
+            // already reacts to this field once it's set correctly.
+            const conformsTo = manifestData.metadata?.conformsTo;
+            const profiles = Array.isArray(conformsTo) ? conformsTo : conformsTo ? [conformsTo] : [];
+            if (profiles.includes(Profile.DIVINA)) {
+              try {
+                const progressionRes = await fetch(
+                  `/api/books/reading-progression?manifestUrl=${encodeURIComponent(decodedUrl)}`
+                );
+                if (progressionRes.ok) {
+                  const { readingProgression } = await progressionRes.json();
+                  if (readingProgression === "rtl" && manifestData.metadata) {
+                    manifestData.metadata.readingProgression = "rtl";
+                  }
+                }
+              } catch (err) {
+                console.error("Could not fetch CBZ reading progression:", err);
+              }
+            }
+
             setManifest(manifestData as object);
             
             // Create publication
