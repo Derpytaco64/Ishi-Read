@@ -6,6 +6,14 @@
 // with a regex tag-stripper, the same approach api/books/route.ts's extractDescription already uses
 // for calibre's HTML descriptions -- no XML/HTML parser dependency needed just to count characters.
 
+// CLAUDE-ADDED: The API route caches computed page counts to disk keyed by book hash + this version
+// number, not by book hash alone -- bump this whenever computePageCountForManifest's algorithm
+// changes so every previously-cached value (computed under the old, possibly-wrong logic) is treated
+// as a miss and recomputed, instead of serving a stale result forever. (Bumped for the CBZ/Divina
+// image-count fix below -- a cache entry from before that fix would otherwise keep serving the
+// character-count-of-binary-image-bytes result even after the code itself was corrected.)
+export const PAGE_COUNT_ALGORITHM_VERSION = 2;
+
 const RESOURCE_FETCH_TIMEOUT_MS = 5000;
 
 // CLAUDE-ADDED: One page is the original Thorium Reader's own estimate -- see readium-desktop's

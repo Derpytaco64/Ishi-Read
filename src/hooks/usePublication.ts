@@ -109,12 +109,23 @@ const detectProfile = (manifest: Manifest): ReaderProfile => {
   }
   
   // Check for epub profile
-  if (profiles.some((profile: Profile) => 
+  if (profiles.some((profile: Profile) =>
     profile === Profile.EPUB
   )) {
     return "epub";
   }
-  
+
+  // CLAUDE-ADDED: @readium/navigator's WebPubNavigator (the "webPub" profile's reader, used below for
+  // anything that isn't audio/epub) only ever builds HTML frames -- it throws "Unsupported media type
+  // for WebPub: image/png" for any bitmap resource (confirmed via a live crash trace). EpubNavigator is
+  // the one that actually supports bitmap pages: its own layout detection explicitly special-cases the
+  // Divina profile to fixed-layout, which is the same pipeline FXL comic/manga EPUBs already use. So a
+  // Divina/CBZ publication needs to be routed to the epub reader, despite not being an EPUB file --
+  // "epub" here means "this navigator," not "this container format."
+  if (profiles.some((profile: Profile) => profile === Profile.DIVINA)) {
+    return "epub";
+  }
+
   // Default to webPub for any other profile or no specific profile
   return "webPub";
 };
