@@ -145,6 +145,53 @@ function dedupeCaseInsensitive(names: string[]): string[] {
   return unique;
 }
 
+function getAttr(tag: string, attr: string): string | null {
+  const match = tag.match(new RegExp(`${ attr }="([^"]*)"`, "i"));
+  return match ? unescapeXml(match[1]) : null;
+}
+
+export type CBZPageBookmark = { pageIndex: number; title: string };
+
+// CLAUDE-ADDED: The real per-chapter TOC data for a scanlated CBZ isn't the folder layout (which is
+// just however the scanlation group happened to name its release folders, e.g. "Vol.01 Ch.0001 - The
+// Still House (en) [Helvetica Scans]") -- it's ComicInfo.xml's own <Pages> list, the ComicRack/Kavita/
+// Komga-standard place for chapter markers: a `Bookmark` attribute on the <Page> where a chapter
+// starts, already authored in the "Chapter # - Title" form readers expect (confirmed against this
+// file's own ComicInfo.xml). `Image` is 0-indexed and lines up exactly with readingOrder's own order
+// once that's sorted alphabetically by path (confirmed by cross-referencing this CBZ's own bookmarked
+// indices against its alphabetically-sorted entry list) -- which is what the Go server's readingOrder
+// already is, so no re-sorting is needed on this side, just a direct index lookup.
+export function extractCBZPageBookmarks(filePath: string): CBZPageBookmark[] {
+  try {
+    const xmlBuffer = extractZipEntry(filePath, "ComicInfo.xml");
+    if (!xmlBuffer) return [];
+    const xml = xmlBuffer.toString("utf-8");
+
+    const pagesMatch = xml.match(/<Pages>([\s\S]*?)<\/Pages>/i);
+    if (!pagesMatch) return [];
+
+    const bookmarks: CBZPageBookmark[] = [];
+    const pageTagRegex = /<Page\b[^>]*\/>/gi;
+    let match: RegExpExecArray | null;
+    while ((match = pageTagRegex.exec(pagesMatch[1])) !== null) {
+      const tag = match[0];
+      const title = getAttr(tag, "Bookmark");
+      if (!title) continue;
+
+      const imageAttr = getAttr(tag, "Image");
+      const pageIndex = imageAttr !== null ? Number(imageAttr) : NaN;
+      if (!Number.isFinite(pageIndex)) continue;
+
+      bookmarks.push({ pageIndex, title });
+    }
+
+    return bookmarks.sort((a, b) => a.pageIndex - b.pageIndex);
+  } catch (err) {
+    console.error(`Could not read ComicInfo.xml page bookmarks for ${ filePath }:`, err);
+    return [];
+  }
+}
+
 // CLAUDE-ADDED: The bundled Go readium server's CBZ/Divina parser doesn't read ComicInfo.xml at all
 // (confirmed against the binary -- no ComicInfo/Series/Volume/Manga struct tags anywhere in it), so
 // everything here comes straight off the file's own embedded ComicInfo.xml (the de facto ComicRack/

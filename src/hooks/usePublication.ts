@@ -91,6 +91,28 @@ function buildDivinaToc(readingOrder: unknown): { href: string; title: string }[
   return groups.map((g) => ({ href: g.href, title: g.folder || "…" }));
 }
 
+// CLAUDE-ADDED: The real chapter markers for a CBZ live in ComicInfo.xml's <Pages> list (a `Bookmark`
+// attribute on the page where a chapter starts, e.g. "Chapter 1 - The Still House") -- the de facto
+// ComicRack/Kavita/Komga standard, and already authored in exactly the title format readers expect.
+// This supersedes buildDivinaToc's folder-name guess whenever it's present (see the call site): a
+// scanlation group's folder names are an accident of how they packaged the release, not real chapter
+// titles. `pageIndex` is 0-indexed and lines up directly with readingOrder's own order (both are the
+// archive's entries sorted alphabetically by path -- confirmed by cross-referencing a real file's
+// bookmarked indices against its sorted entry list), so this is a direct array lookup, no grouping.
+function buildDivinaTocFromBookmarks(
+  readingOrder: unknown,
+  bookmarks: { pageIndex: number; title: string }[]
+): { href: string; title: string }[] {
+  if (!Array.isArray(readingOrder) || bookmarks.length === 0) return [];
+
+  const toc: { href: string; title: string }[] = [];
+  for (const bookmark of bookmarks) {
+    const href = (readingOrder[bookmark.pageIndex] as { href?: unknown } | undefined)?.href;
+    if (typeof href === "string") toc.push({ href, title: bookmark.title });
+  }
+  return toc;
+}
+
 const detectProfile = (manifest: Manifest): ReaderProfile => {
   // Check conformsTo in manifest metadata to determine profile
   const metadata = manifest.metadata;
@@ -224,22 +246,30 @@ export const usePublication = ({
                 manifestData.metadata.layout = "fixed";
               }
 
+              let bookmarks: { pageIndex: number; title: string }[] = [];
               try {
                 const progressionRes = await fetch(
                   `/api/books/reading-progression?manifestUrl=${encodeURIComponent(decodedUrl)}`
                 );
                 if (progressionRes.ok) {
-                  const { readingProgression } = await progressionRes.json();
+                  const { readingProgression, bookmarks: fetchedBookmarks } = await progressionRes.json();
                   if (readingProgression === "rtl" && manifestData.metadata) {
                     manifestData.metadata.readingProgression = "rtl";
                   }
+                  if (Array.isArray(fetchedBookmarks)) bookmarks = fetchedBookmarks;
                 }
               } catch (err) {
                 console.error("Could not fetch CBZ reading progression:", err);
               }
 
               if (!Array.isArray(manifestData.toc) || manifestData.toc.length === 0) {
-                const synthesizedToc = buildDivinaToc(manifestData.readingOrder);
+                // CLAUDE-ADDED: ComicInfo.xml's own chapter markers (see buildDivinaTocFromBookmarks)
+                // take priority over the folder-name guess -- they're the file's real chapter titles
+                // ("Chapter 1 - The Still House"), not just however the scanlation group named its
+                // release folders. Falls back to the folder grouping for CBZs with no <Pages>
+                // bookmarks at all.
+                const bookmarkToc = buildDivinaTocFromBookmarks(manifestData.readingOrder, bookmarks);
+                const synthesizedToc = bookmarkToc.length > 0 ? bookmarkToc : buildDivinaToc(manifestData.readingOrder);
                 if (synthesizedToc.length > 0) manifestData.toc = synthesizedToc;
               }
             }
