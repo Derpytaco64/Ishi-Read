@@ -565,6 +565,12 @@ export async function GET() {
               // only what the manifest left empty.
               if (isCBZ) {
                 const fileMeta = extractCBZMetadata(filePath);
+                // CLAUDE-ADDED: The Go server's CBZ/Divina parser sets manifest.metadata.title to the
+                // raw filename, extension included (confirmed against the bundled binary directly) --
+                // prefer ComicInfo.xml's own <Title> when present, and otherwise strip a stray ".cbz"
+                // off whatever title we ended up with so it never leaks into the UI.
+                if (fileMeta.title) title = fileMeta.title;
+                else if (title.toLowerCase().endsWith(".cbz")) title = title.slice(0, -4);
                 if (series === null) series = fileMeta.series;
                 if (!author) author = fileMeta.author;
                 if (tags.length === 0) tags = fileMeta.tags;

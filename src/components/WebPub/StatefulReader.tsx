@@ -30,6 +30,7 @@ import {
 import { WebPubNavigatorListeners } from "@readium/navigator";
 import {
   Locator,
+  Profile,
   Publication
 } from "@readium/shared";
 
@@ -121,6 +122,14 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
   });
 
   const container = useRef<HTMLDivElement>(null);
+
+  // CLAUDE-ADDED: Comic (CBZ/Divina) pages render as a bare <img> in an otherwise unstyled iframe
+  // document -- there's no readium-css theming for that content, and @readium/navigator's own
+  // per-frame placeholder background is hardcoded white while a page is loading/off-frame. Detecting
+  // Divina here (rather than adding a new global ReaderProfile value, which other code switches on)
+  // lets the CSS below default the comic reader to a dark surround without touching PDF, the other
+  // publication type this same webPub reader handles.
+  const isComic = publication.metadata.conformsTo?.includes(Profile.DIVINA) ?? false;
 
   const textAlign = useAppSelector(state => state.webPubSettings.textAlign);
   const fontFamily = useAppSelector(state => state.webPubSettings.fontFamily);
@@ -376,7 +385,8 @@ const StatefulReaderInner = ({ publication, localDataKey, positionStorage, conta
                   layoutUI,
                   breakpoint,
                   containerBreakpoint
-                })
+                }),
+                isComic && readerStyles.comicReader
               )
             }
           >

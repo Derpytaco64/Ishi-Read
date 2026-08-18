@@ -210,6 +210,15 @@
   }
 }
 
+/* CLAUDE-ADDED: Comic (CBZ/Divina) pages render as a bare <img> in an otherwise unstyled iframe
+   document -- there's no readium-css background to theme there, and @readium/navigator's own
+   per-frame placeholder is hardcoded white (inline style) while a page is loading/off-frame. The
+   !important is required to beat that inline style. */
+.comicReader .iframeContainer,
+.comicReader :global(.readium-navigator-iframe) {
+  background-color: #121212 !important;
+}
+
 .iframeContainer :global(div:has(> .readium-navigator-iframe.blank))::after {
   content: "";
   position: absolute;

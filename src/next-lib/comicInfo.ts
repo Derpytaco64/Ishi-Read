@@ -4,6 +4,7 @@ import zlib from "zlib";
 type Series = { name: string; position?: number };
 
 export type CBZFileMetadata = {
+  title: string | null;
   series: Series | null;
   author: string;
   tags: string[];
@@ -14,7 +15,7 @@ export type CBZFileMetadata = {
 };
 
 const EMPTY_CBZ_METADATA: CBZFileMetadata = {
-  series: null, author: "", tags: [], publisher: null, language: null, description: null, readingProgression: null
+  title: null, series: null, author: "", tags: [], publisher: null, language: null, description: null, readingProgression: null
 };
 
 const EOCD_SIGNATURE = 0x06054b50;
@@ -178,6 +179,10 @@ export function extractCBZMetadata(filePath: string): CBZFileMetadata {
     const readingProgression = manga?.toLowerCase() === "yesandrighttoleft" ? "rtl" : null;
 
     return {
+      // CLAUDE-ADDED: The bundled Go server sets manifest.metadata.title to the CBZ's raw filename
+      // (extension included) since its image parser doesn't read ComicInfo.xml -- prefer the file's
+      // own <Title> tag when present so a book named "... - Author.cbz" doesn't show ".cbz" in the UI.
+      title: getTag(xml, "Title"),
       series,
       author,
       tags,
