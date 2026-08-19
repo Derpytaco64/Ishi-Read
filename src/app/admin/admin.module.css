@@ -331,6 +331,21 @@
   color: #fff;
 }
 
+/* CLAUDE-ADDED: hides the shared avatar-upload file input (triggered programmatically via ref from
+   each row's own "Avatar" button, so it's also excluded from focus/AT via aria-hidden+tabIndex on
+   the element itself) -- same technique as thorium-web.userMenu.module.css's own version. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .userList {
   list-style: none;
   margin: 0;

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { CSSProperties, FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent, CSSProperties, FormEvent } from "react";
 import Link from "next/link";
 
 import { Button, Disclosure, DisclosurePanel, Heading } from "react-aria-components";
@@ -364,6 +364,19 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
   const [resetPasswordId, setResetPasswordId] = useState<string | null>(null);
   const [resetPasswordValue, setResetPasswordValue] = useState("");
 
+  // CLAUDE-ADDED: one shared hidden file input reused across every row (avatarTargetId tracks which
+  // user it's currently for), same one-input-many-triggers approach as StatefulUserMenu's own
+  // avatar upload, just parameterized by user id instead of always being "me".
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarTargetId, setAvatarTargetId] = useState<string | null>(null);
+  const [uploadingAvatarId, setUploadingAvatarId] = useState<string | null>(null);
+  // CLAUDE-ADDED: avatarUrlFor derives the src from avatarExt alone, which often doesn't change on
+  // re-upload (same file type) -- so right after a successful upload the derived URL can be byte-
+  // identical to what's already cached in the browser. This holds the admin route's own already
+  // cache-busted `?v=` URL per user id so a freshly uploaded picture shows immediately, without
+  // waiting on (or needing) a version query param baked into avatarUrlFor itself.
+  const [avatarUrlOverrides, setAvatarUrlOverrides] = useState<Record<string, string>>({});
+
   // CLAUDE-ADDED: silent skips the isLoadingUsers toggle -- used by the periodic status-dot refresh
   // below so it swaps the list's data in place instead of flashing "Loading…" over it every 30s.
   const loadUsers = async (silent = false) => {
@@ -573,6 +586,55 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
     } catch (err) {
       console.error("Failed to delete user:", err);
       setActionError("Failed to delete user");
+    }
+  };
+
+  // CLAUDE-ADDED: mirrors StatefulUserMenu's handleAvatarChange but posts to the admin-scoped
+  // route (/api/admin/users/[id]/avatar) so it can set *another* user's picture.
+  const startAvatarUpload = (user: AdminUser) => {
+    setAvatarTargetId(user.id);
+    avatarFileInputRef.current?.click();
+  };
+
+  const handleAvatarFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    const targetId = avatarTargetId;
+    if (!file || !targetId) return;
+
+    setActionError(null);
+    setUploadingAvatarId(targetId);
+
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+
+      const res = await fetch(`/api/admin/users/${ targetId }/avatar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: dataUrl })
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setActionError(data?.error || "Failed to upload picture");
+        return;
+      }
+
+      if (typeof data?.avatarUrl === "string") {
+        setAvatarUrlOverrides((prev) => ({ ...prev, [targetId]: data.avatarUrl }));
+      }
+      await loadUsers();
+    } catch (err) {
+      console.error("Failed to upload avatar:", err);
+      setActionError("Failed to upload picture");
+    } finally {
+      setUploadingAvatarId(null);
+      setAvatarTargetId(null);
     }
   };
 
@@ -1015,13 +1077,23 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
             { actionError && <p className={ styles.textSettingStatusError }>{ actionError }</p> }
             { listError && <p className={ styles.textSettingStatusError }>{ listError }</p> }
 
+            <input
+              ref={ avatarFileInputRef }
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className={ styles.visuallyHidden }
+              aria-hidden="true"
+              tabIndex={ -1 }
+              onChange={ handleAvatarFileChange }
+            />
+
             { isLoadingUsers ? (
               <p className={ styles.textSettingStatus }>Loading…</p>
             ) : (
               <ul className={ styles.userList }>
                 { users.map((user) => {
                   const isLocked = !!user.lockedUntil && user.lockedUntil > Date.now();
-                  const avatarUrl = avatarUrlFor(user);
+                  const avatarUrl = avatarUrlOverrides[user.id] ?? avatarUrlFor(user);
 
                   return (
                     <li key={ user.id } className={ styles.userRow }>
@@ -1086,6 +1158,14 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
                       { editingId !== user.id && (
                         <div className={ styles.rowActions }>
                           <button type="button" className={ styles.confirmButton } onClick={ () => startEditing(user) }>Edit</button>
+                          <button
+                            type="button"
+                            className={ styles.confirmButton }
+                            onClick={ () => startAvatarUpload(user) }
+                            disabled={ uploadingAvatarId === user.id }
+                          >
+                            { uploadingAvatarId === user.id ? "Uploading…" : "Avatar" }
+                          </button>
                           <button
                             type="button"
                             className={ styles.confirmButton }
