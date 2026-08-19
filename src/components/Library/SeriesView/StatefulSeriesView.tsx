@@ -237,15 +237,23 @@ export const StatefulSeriesView = ({
           >
             <span className={ styles.fan }>
               { slot.left && (
-                <img src={ slot.left.cover } alt="" className={ classNames(styles.fanCoverSide, styles.fanCoverLeft) } />
+                <img
+                  src={ slot.left.cover }
+                  alt=""
+                  className={ classNames(styles.fanCoverSide, styles.fanCoverLeft, slot.isAudiobook && styles.fanCoverAudiobook) }
+                />
               ) }
               { slot.right && (
-                <img src={ slot.right.cover } alt="" className={ classNames(styles.fanCoverSide, styles.fanCoverRight) } />
+                <img
+                  src={ slot.right.cover }
+                  alt=""
+                  className={ classNames(styles.fanCoverSide, styles.fanCoverRight, slot.isAudiobook && styles.fanCoverAudiobook) }
+                />
               ) }
               { /* CLAUDE-ADDED: Same sliding-title-over-the-cover behavior as PublicationGrid's own
                    cards (.card/.cover/.info there) -- the series name is hidden below the frame
                    (translateY(100%)) until this cover is hovered/focused, then it slides up over it. */ }
-              <span className={ styles.fanCoverCenterWrap }>
+              <span className={ classNames(styles.fanCoverCenterWrap, slot.isAudiobook && styles.fanCoverAudiobook) }>
                 <img src={ slot.center.cover } alt="" className={ styles.fanCoverCenterImage } />
                 <span className={ styles.fanTitle }>{ slot.name }{ slot.isAudiobook && " (Audiobook)" }</span>
               </span>

@@ -87,6 +87,14 @@
   display: block;
 }
 
+/* CLAUDE-ADDED: Same square-vs-portrait switch as PublicationGrid's .cardAudiobook (see
+   thorium-web.publicationGrid.module.css) -- every cover in one fan (center + up to two side
+   covers) belongs to the same series and shares slot.isAudiobook, so they switch together. Must
+   stay below .fanCoverSide/.fanCoverCenterWrap in this file to win on equal class specificity. */
+.fanCoverAudiobook {
+  aspect-ratio: 1 / 1;
+}
+
 /* CLAUDE-ADDED: Same slide-up-on-hover title treatment as PublicationGrid's .info/.title -- hidden
    below the cover's own clipped frame by default, sliding up over it on hover/focus. */
 .fanTitle {
