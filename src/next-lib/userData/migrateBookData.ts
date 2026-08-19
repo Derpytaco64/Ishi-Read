@@ -10,7 +10,8 @@ import {
   getPageCountFilePath,
   getDailyReadingHistoryFilePath,
   getListeningTimeFilePath,
-  getCompletedListensFilePath
+  getCompletedListensFilePath,
+  getDailyListeningHistoryFilePath
 } from "./paths";
 
 // CLAUDE-ADDED: Every per-book UserData file getter from paths.ts except
@@ -27,7 +28,8 @@ const PER_BOOK_FILE_GETTERS = [
   getPageCountFilePath,
   getDailyReadingHistoryFilePath,
   getListeningTimeFilePath,
-  getCompletedListensFilePath
+  getCompletedListensFilePath,
+  getDailyListeningHistoryFilePath
 ];
 
 // CLAUDE-ADDED: Copies every per-book UserData file (position, annotations, reading/listening time,

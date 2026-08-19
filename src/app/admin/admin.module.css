@@ -353,6 +353,79 @@
   background-color: var(--th-color-primary);
 }
 
+/* CLAUDE-ADDED: Inline "Migrate to a live book" trigger sitting inside an orphaned book's own
+   status line -- a plain underlined text link rather than a full button so it doesn't visually
+   compete with the row's own Delete action below. */
+.linkButton {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-left: 0.5rem;
+  color: var(--th-color-accent, #6ba4ff);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.linkButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* CLAUDE-ADDED: The destination book-picker opened by .linkButton above, expanded inline right
+   below the orphaned entry it's migrating rather than a separate modal -- keeps the source book
+   this panel is acting on always visible while picking a destination. */
+.orphanMigratePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.4rem 0 0.6rem;
+  padding: 0.65rem;
+  border: 1px solid var(--th-color-primary);
+  border-radius: 8px;
+}
+
+.orphanMigrateList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.orphanMigrateRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--th-color-text);
+  font-family: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.orphanMigrateRow:hover,
+.orphanMigrateRow:focus-visible {
+  background: var(--th-color-primary);
+  outline: none;
+}
+
+.orphanMigrateRow:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* CLAUDE-ADDED: position:relative anchors .statusDot below -- deliberately NOT the element that
    clips to a circle (see .avatarInner) or the dot, sitting right at its top-left corner, would get
    half-clipped away by that same overflow:hidden. */

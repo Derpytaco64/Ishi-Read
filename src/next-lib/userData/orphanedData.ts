@@ -5,12 +5,12 @@ import { listUsers } from "./auth";
 import { getUserDir } from "./paths";
 import { scanLibrary } from "./bookIdentity";
 import { getBookTitles, removeBookTitles } from "./bookTitles";
+import { migrateBookUserData } from "./migrateBookData";
 
 // CLAUDE-ADDED: Every per-book UserData subdirectory (see paths.ts's getXFilePath functions) --
-// each holds one `${bookHash}.json` file per book that's ever had that kind of data. Deliberately
-// broader than migrateBookData.ts's PER_BOOK_FILE_GETTERS (which is missing dailyListeningHistory):
-// this is a cleanup sweep, not a migration, so it needs to find every file a deleted book could have
-// left behind, not just the ones a single-book migration bothers to carry forward.
+// each holds one `${bookHash}.json` file per book that's ever had that kind of data. Kept in sync
+// with migrateBookData.ts's PER_BOOK_FILE_GETTERS (every getter here has a matching subdir) so this
+// cleanup sweep and a single-book migration always agree on what's orphaned.
 export const PER_BOOK_DATA_SUBDIRS = [
   "positions",
   "highlights",
@@ -128,4 +128,41 @@ export function deleteOrphanedData(): OrphanedDataReport {
   if (deletedHashes.size > 0) removeBookTitles(deletedHashes);
 
   return report;
+}
+
+export type MigrateOrphanedResult = { ok: true } | { ok: false; error: string };
+
+// CLAUDE-ADDED: The "recover instead of delete" counterpart to deleteOrphanedData -- carries one
+// orphaned book's UserData (for one user) onto a live library entry via migrateBookUserData, then
+// removes the now-redundant orphaned files so a re-scan doesn't keep reporting them. Re-validates
+// both hashes against a fresh scanLibrary() rather than trusting the caller's last preview, same
+// reasoning as deleteOrphanedData re-deriving its own report: a book could have been re-added to the
+// library (sourceHash no longer orphaned) or removed (destHash no longer resolvable) in between the
+// admin's last scan and clicking migrate. Doesn't touch the bookTitles registry entry for sourceHash
+// -- unlike a bulk delete, another user could still have their own orphaned data under the same
+// hash (the library is shared, per-user data isn't), so only deleteOrphanedData's full-report sweep
+// is safe to prune it.
+export function migrateOrphanedBookData(userId: string, sourceHash: string, destHash: string): MigrateOrphanedResult {
+  if (sourceHash === destHash) return { ok: false, error: "Source and destination are the same book" };
+
+  const { libraryHashes } = scanLibrary();
+  if (libraryHashes.has(sourceHash)) {
+    return { ok: false, error: "That data is no longer orphaned -- its book is back in the library. Use Migrate Book Data instead." };
+  }
+  if (!libraryHashes.has(destHash)) {
+    return { ok: false, error: "Destination book isn't in the library" };
+  }
+
+  migrateBookUserData(userId, sourceHash, destHash);
+
+  for (const subdir of PER_BOOK_DATA_SUBDIRS) {
+    const filePath = path.join(getUserDir(userId), subdir, `${ sourceHash }.json`);
+    try {
+      fs.unlinkSync(filePath);
+    } catch {
+      // Never had this kind of data -- nothing to remove.
+    }
+  }
+
+  return { ok: true };
 }

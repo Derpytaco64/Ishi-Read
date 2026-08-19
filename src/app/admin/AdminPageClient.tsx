@@ -14,6 +14,8 @@ import { useReadiumUrl } from "@/app/useReadiumUrl";
 import { useReadiumPort } from "@/app/useReadiumPort";
 import { useUserDataFolder } from "@/app/useUserDataFolder";
 import { isLightColor } from "@/preferences/helpers/themeGeneration";
+import type { Publication } from "@/components/Misc/PublicationGrid";
+import { getManifestUrlFromBookUrl } from "@/helpers/getBookProgress";
 
 import ChevronDown from "./assets/icons/chevron_down.svg";
 import AddIcon from "./assets/icons/add.svg";
@@ -219,6 +221,75 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
       setOrphanedError("Failed to scan for orphaned data");
     } finally {
       setIsScanningOrphaned(false);
+    }
+  };
+
+  // CLAUDE-ADDED: "Migrate to a live book" -- the recover-instead-of-delete counterpart to the
+  // orphaned-data cleanup above. libraryBooksForMigrate is loaded lazily (only once a migrate picker
+  // is actually opened) and shared across every orphan row for the rest of this page's lifetime,
+  // same book list every row would otherwise fetch independently. migrateTarget identifies which
+  // row's picker is open; only one can be open at a time.
+  const [libraryBooksForMigrate, setLibraryBooksForMigrate] = useState<Publication[] | null>(null);
+  const [migrateTarget, setMigrateTarget] = useState<{ userId: string; hash: string; title: string | null } | null>(null);
+  const [migrateQuery, setMigrateQuery] = useState("");
+  const [isMigratingOrphan, setIsMigratingOrphan] = useState(false);
+  const [migrateOrphanError, setMigrateOrphanError] = useState<string | null>(null);
+
+  const openMigrateOrphan = (userId: string, hash: string, title: string | null) => {
+    setMigrateTarget({ userId, hash, title });
+    setMigrateQuery("");
+    setMigrateOrphanError(null);
+    if (libraryBooksForMigrate === null) {
+      fetch("/api/books")
+        .then((res) => res.json())
+        .then((data) => setLibraryBooksForMigrate(data.books || []))
+        .catch((err) => {
+          console.error("Failed to load library for orphaned-data migration:", err);
+          setLibraryBooksForMigrate([]);
+        });
+    }
+  };
+
+  const closeMigrateOrphan = () => {
+    setMigrateTarget(null);
+    setMigrateOrphanError(null);
+  };
+
+  const confirmMigrateOrphan = async (destBook: Publication) => {
+    if (!migrateTarget) return;
+
+    const destManifestUrl = getManifestUrlFromBookUrl(destBook.url);
+    if (!destManifestUrl) {
+      setMigrateOrphanError("Could not resolve that book -- try again");
+      return;
+    }
+    if (!window.confirm(
+      `Migrate "${ migrateTarget.title ?? "this orphaned data" }" onto "${ destBook.title }"? ` +
+      `This overwrites "${ destBook.title }"'s existing progress, reading time, and annotations. This can't be undone.`
+    )) {
+      return;
+    }
+
+    setIsMigratingOrphan(true);
+    setMigrateOrphanError(null);
+    try {
+      const res = await fetch("/api/admin/orphaned-data/migrate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: migrateTarget.userId, sourceHash: migrateTarget.hash, destManifestUrl })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setMigrateOrphanError(data?.error || "Failed to migrate orphaned data");
+        return;
+      }
+      setMigrateTarget(null);
+      await scanOrphanedData();
+    } catch (err) {
+      console.error("Failed to migrate orphaned data:", err);
+      setMigrateOrphanError("Failed to migrate orphaned data");
+    } finally {
+      setIsMigratingOrphan(false);
     }
   };
 
@@ -748,13 +819,69 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
                         <div className={ styles.userInfo }>
                           <span className={ styles.userName }>{ user.name } <span className={ styles.userUsername }>@{ user.username }</span></span>
                           { user.books.map((book) => (
-                            <span key={ book.hash } className={ styles.textSettingStatus }>
-                              { book.title ? (
-                                <>&quot;{ book.title }&quot; <code>({ book.hash.slice(0, 12) }…)</code></>
-                              ) : (
-                                <code>{ book.hash.slice(0, 12) }…</code>
-                              ) } — { book.subdirs.join(", ") }
-                            </span>
+                            <div key={ book.hash }>
+                              <span className={ styles.textSettingStatus }>
+                                { book.title ? (
+                                  <>&quot;{ book.title }&quot; <code>({ book.hash.slice(0, 12) }…)</code></>
+                                ) : (
+                                  <code>{ book.hash.slice(0, 12) }…</code>
+                                ) } — { book.subdirs.join(", ") }
+                                <button
+                                  type="button"
+                                  className={ styles.linkButton }
+                                  onClick={ () => openMigrateOrphan(user.userId, book.hash, book.title) }
+                                >
+                                  Migrate to a live book
+                                </button>
+                              </span>
+                              { migrateTarget?.userId === user.userId && migrateTarget?.hash === book.hash && (
+                                <div className={ styles.orphanMigratePanel }>
+                                  <input
+                                    type="text"
+                                    className={ styles.textSettingInput }
+                                    placeholder="Search your library…"
+                                    value={ migrateQuery }
+                                    onChange={ (e) => setMigrateQuery(e.target.value) }
+                                    disabled={ isMigratingOrphan }
+                                  />
+                                  { migrateOrphanError && <p className={ styles.textSettingStatusError }>{ migrateOrphanError }</p> }
+                                  { libraryBooksForMigrate === null && <p className={ styles.textSettingStatus }>Loading library…</p> }
+                                  { libraryBooksForMigrate !== null && (
+                                    <ul className={ styles.orphanMigrateList }>
+                                      { libraryBooksForMigrate
+                                        .filter((b) => {
+                                          const q = migrateQuery.trim().toLowerCase();
+                                          return !q || b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q);
+                                        })
+                                        .map((b) => (
+                                          <li key={ b.url }>
+                                            <button
+                                              type="button"
+                                              className={ styles.orphanMigrateRow }
+                                              disabled={ isMigratingOrphan }
+                                              onClick={ () => confirmMigrateOrphan(b) }
+                                            >
+                                              <span>{ b.title }</span>
+                                              <span className={ styles.textSettingStatus }>{ b.author }</span>
+                                            </button>
+                                          </li>
+                                        )) }
+                                      { libraryBooksForMigrate.length === 0 && (
+                                        <p className={ styles.textSettingStatus }>No books found</p>
+                                      ) }
+                                    </ul>
+                                  ) }
+                                  <button
+                                    type="button"
+                                    className={ styles.confirmButton }
+                                    onClick={ closeMigrateOrphan }
+                                    disabled={ isMigratingOrphan }
+                                  >
+                                    { isMigratingOrphan ? "Migrating…" : "Cancel" }
+                                  </button>
+                                </div>
+                              ) }
+                            </div>
                           )) }
                         </div>
                       </li>
