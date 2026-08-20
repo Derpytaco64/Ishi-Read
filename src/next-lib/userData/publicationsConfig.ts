@@ -24,7 +24,9 @@ export const DEFAULT_LOGIN_ACCENT_COLOR = "#2f6fed";
 // remembers what the folder is).
 // ISHI_CONFIG_DIR lets a container deployment mount this at a clean, dedicated path (e.g. /config)
 // instead of the bare-metal default of ~/.config/ishi-read -- unset, behavior is unchanged.
-const CONFIG_DIR = process.env.ISHI_CONFIG_DIR || path.join(os.homedir(), ".config", "ishi-read");
+// CLAUDE-ADDED: Exported so secretBox.ts can persist its generated encryption key alongside this
+// same config, without duplicating the ISHI_CONFIG_DIR env var lookup in a second place.
+export const CONFIG_DIR = process.env.ISHI_CONFIG_DIR || path.join(os.homedir(), ".config", "ishi-read");
 const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 
 function readConfigFileUncached(): Record<string, unknown> {
@@ -48,7 +50,12 @@ function readConfigFileUncached(): Record<string, unknown> {
 let cachedConfig: Record<string, unknown> | null = null;
 let cachedConfigMtimeMs: number | null = null;
 
-function readConfigFile(): Record<string, unknown> {
+// CLAUDE-ADDED: Exported for anilistConfig.ts -- the AniList instance settings (client id/secret)
+// are just more keys in this same shallow-merged file, following setPublicationsDir etc.'s
+// pattern, but they live in their own module to keep secretBox.ts's encrypt/decrypt out of this
+// file's import graph (secretBox.ts itself imports CONFIG_DIR from here, so this file importing
+// back from secretBox.ts would be circular).
+export function readConfigFile(): Record<string, unknown> {
   let currentMtimeMs: number | null;
   try {
     currentMtimeMs = fs.statSync(CONFIG_FILE).mtimeMs;
@@ -67,7 +74,7 @@ function readConfigFile(): Record<string, unknown> {
 // CLAUDE-ADDED: Merges into the existing file rather than overwriting it -- config.json holds
 // several independent keys, so a plain overwrite by whichever setter runs second would silently
 // wipe out every other setting.
-function writeConfigFile(patch: Record<string, unknown>): void {
+export function writeConfigFile(patch: Record<string, unknown>): void {
   fs.mkdirSync(CONFIG_DIR, { recursive: true });
   const merged = { ...readConfigFileUncached(), ...patch };
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2));

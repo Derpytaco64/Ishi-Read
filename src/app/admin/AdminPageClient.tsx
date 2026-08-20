@@ -11,6 +11,7 @@ import { ThSwitch } from "@/core/Components/Settings/ThSwitch";
 import { useCurrentUser } from "@/app/useCurrentUser";
 import { useBookFolder } from "@/app/useBookFolder";
 import { useReadiumUrl } from "@/app/useReadiumUrl";
+import { useAniListSettings } from "@/app/useAniListSettings";
 import { useReadiumPort } from "@/app/useReadiumPort";
 import { useUserDataFolder } from "@/app/useUserDataFolder";
 import { isLightColor } from "@/preferences/helpers/themeGeneration";
@@ -158,6 +159,34 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
     if (readiumUrlDraft === readiumUrl) return;
     setReadiumUrlSaved(false);
     if (await saveReadiumUrl(readiumUrlDraft)) setReadiumUrlSaved(true);
+  };
+
+  // CLAUDE-ADDED: clientSecretDraft is deliberately NOT initialized from any server value (the
+  // server never returns the stored secret, see useAniListSettings' comment) -- it starts blank and
+  // stays blank unless the admin types a new one, in which case saveAniListSettings only sends it
+  // if non-empty so re-saving just the client ID doesn't clobber an already-stored secret.
+  const {
+    clientId: anilistClientId,
+    clientSecretSet: anilistClientSecretSet,
+    saveAniListSettings,
+    isSaving: isSavingAniList,
+    error: anilistError
+  } = useAniListSettings();
+  const [anilistClientIdDraft, setAnilistClientIdDraft] = useState(anilistClientId);
+  const [anilistClientSecretDraft, setAnilistClientSecretDraft] = useState("");
+  const [anilistSaved, setAnilistSaved] = useState(false);
+
+  useEffect(() => {
+    setAnilistClientIdDraft(anilistClientId);
+  }, [anilistClientId]);
+
+  const commitAniListSettings = async () => {
+    if (anilistClientIdDraft === anilistClientId && anilistClientSecretDraft === "") return;
+    setAnilistSaved(false);
+    if (await saveAniListSettings(anilistClientIdDraft, anilistClientSecretDraft)) {
+      setAnilistClientSecretDraft("");
+      setAnilistSaved(true);
+    }
   };
 
   // CLAUDE-ADDED: Same draft/commit/blur dance as bookFolder/readiumUrl above -- the value round-trips
@@ -757,6 +786,67 @@ export default function AdminPageClient({ initialLoginAccentColor, initialThemeM
               <p className={ styles.textSettingStatusError }>{ readiumUrlError }</p>
             ) }
             { !isSavingReadiumUrl && !readiumUrlError && readiumUrlSaved && (
+              <p className={ styles.textSettingStatus }>Saved</p>
+            ) }
+          </DisclosurePanel>
+        </Disclosure>
+
+        <Disclosure className={ styles.disclosure }>
+          <Heading className={ styles.disclosureHeading }>
+            <Button slot="trigger" className={ styles.disclosureTrigger }>
+              <span className={ styles.disclosureLabel }>AniList Integration</span>
+              <ChevronDown aria-hidden="true" focusable="false" className={ styles.disclosureChevron } />
+            </Button>
+          </Heading>
+
+          <DisclosurePanel className={ styles.disclosurePanel }>
+            <p className={ styles.textSettingStatus }>
+              Register an app at anilist.co/settings/developer with the redirect URL set to{ " " }
+              <code>https://anilist.co/api/v2/oauth/pin</code>, then paste its client ID/secret here.
+              This is shared by every user on this instance -- each user still connects their own
+              AniList account individually from their account menu.
+            </p>
+            <label className={ styles.textSettingRow }>
+              <span>Client ID</span>
+              <input
+                type="text"
+                className={ styles.textSettingInput }
+                value={ anilistClientIdDraft }
+                onChange={ (e) => {
+                  setAnilistClientIdDraft(e.target.value);
+                  setAnilistSaved(false);
+                } }
+                onBlur={ commitAniListSettings }
+                onKeyDown={ (e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                } }
+                aria-label="AniList client ID"
+                spellCheck={ false }
+              />
+            </label>
+            <label className={ styles.textSettingRow }>
+              <span>Client Secret{ anilistClientSecretSet ? " (already set -- leave blank to keep it)" : "" }</span>
+              <input
+                type="password"
+                className={ styles.textSettingInput }
+                value={ anilistClientSecretDraft }
+                onChange={ (e) => {
+                  setAnilistClientSecretDraft(e.target.value);
+                  setAnilistSaved(false);
+                } }
+                onBlur={ commitAniListSettings }
+                onKeyDown={ (e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                } }
+                aria-label="AniList client secret"
+                spellCheck={ false }
+              />
+            </label>
+            { isSavingAniList && <p className={ styles.textSettingStatus }>Saving…</p> }
+            { !isSavingAniList && anilistError && (
+              <p className={ styles.textSettingStatusError }>{ anilistError }</p>
+            ) }
+            { !isSavingAniList && !anilistError && anilistSaved && (
               <p className={ styles.textSettingStatus }>Saved</p>
             ) }
           </DisclosurePanel>

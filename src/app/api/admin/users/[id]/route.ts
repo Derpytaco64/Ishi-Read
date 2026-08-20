@@ -7,9 +7,9 @@ export const runtime = "nodejs";
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9_.-]{3,32}$/;
 
-function stripSecrets<T extends { passwordHash: unknown; passwordSalt: unknown }>(user: T) {
-  const { passwordHash: _passwordHash, passwordSalt: _passwordSalt, ...rest } = user;
-  return rest;
+function stripSecrets<T extends { passwordHash: unknown; passwordSalt: unknown; anilistAccessToken: unknown }>(user: T) {
+  const { passwordHash: _passwordHash, passwordSalt: _passwordSalt, anilistAccessToken: _anilistAccessToken, ...rest } = user;
+  return { ...rest, anilistConnected: user.anilistAccessToken !== null };
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {

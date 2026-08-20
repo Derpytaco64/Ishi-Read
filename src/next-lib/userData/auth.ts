@@ -6,6 +6,7 @@ import { getUserDataDir } from "./publicationsConfig";
 import { getUserDir } from "./paths";
 import { readJsonFile, writeJsonFileAtomic } from "./jsonStore";
 import { getAvatarPath } from "./avatarStorage";
+import { encryptSecret, decryptSecret } from "./secretBox";
 
 // CLAUDE-ADDED: Bootstrap admin keeps the same id the app used back when there was only ever one
 // hardcoded user ("DT") -- every existing on-disk positions/highlights/settings file for that user
@@ -40,11 +41,20 @@ export interface UserRecord {
   lockedUntil: number | null;
   createdAt: number;
   disabled: boolean;
+  // CLAUDE-ADDED: AniList sync -- accessToken is encrypted at rest (secretBox.ts), never sent to
+  // the client (see toPublicUser below, which exposes only the derived anilistConnected boolean).
+  // scoreFormat mirrors the AniList user's own List Options (POINT_100/10_DECIMAL/10/5/3), fetched
+  // once at connect time, so the tracking UI can render the right score input without an extra
+  // round-trip per open.
+  anilistAccessToken: string | null;
+  anilistUserId: number | null;
+  anilistScoreFormat: string | null;
 }
 
-export type PublicUser = Pick<UserRecord, "id" | "username" | "name" | "isAdmin"> & {
+export type PublicUser = Pick<UserRecord, "id" | "username" | "name" | "isAdmin" | "anilistScoreFormat"> & {
   avatarUrl: string | null;
   needsPasswordSetup: boolean;
+  anilistConnected: boolean;
 };
 
 export interface LoginResult {
@@ -137,7 +147,10 @@ export function ensureUsersRegistry(): void {
       failedAttempts: 0,
       lockedUntil: null,
       createdAt: Date.now(),
-      disabled: false
+      disabled: false,
+      anilistAccessToken: null,
+      anilistUserId: null,
+      anilistScoreFormat: null
     }]);
     return;
   }
@@ -149,7 +162,8 @@ export function ensureUsersRegistry(): void {
       typeof u.isAdmin === "boolean" &&
       "avatarExt" in u &&
       "passwordHash" in u &&
-      "disabled" in u
+      "disabled" in u &&
+      "anilistAccessToken" in u
     ) {
       return u as UserRecord;
     }
@@ -166,7 +180,10 @@ export function ensureUsersRegistry(): void {
       failedAttempts: u.failedAttempts ?? 0,
       lockedUntil: u.lockedUntil ?? null,
       createdAt: u.createdAt ?? Date.now(),
-      disabled: u.disabled ?? false
+      disabled: u.disabled ?? false,
+      anilistAccessToken: u.anilistAccessToken ?? null,
+      anilistUserId: u.anilistUserId ?? null,
+      anilistScoreFormat: u.anilistScoreFormat ?? null
     };
   });
 
@@ -217,8 +234,43 @@ export function toPublicUser(user: UserRecord): PublicUser {
     name: user.name,
     isAdmin: user.isAdmin,
     avatarUrl: user.avatarExt ? `/api/users/${ user.id }/avatar?v=${ getAvatarVersion(user.id, user.avatarExt) }` : null,
-    needsPasswordSetup: !user.passwordHash
+    needsPasswordSetup: !user.passwordHash,
+    anilistConnected: user.anilistAccessToken !== null,
+    anilistScoreFormat: user.anilistScoreFormat
   };
+}
+
+// CLAUDE-ADDED: AniList link lifecycle -- all three functions require the caller to already know
+// the target userId, and every route that calls them derives it from getCurrentUserId() (the
+// session cookie), never from a client-supplied field, so a request can only ever connect/read/
+// disconnect the AniList link on the account it's actually authenticated as.
+export function setAniListLink(userId: string, data: { accessToken: string; anilistUserId: number; scoreFormat: string }): void {
+  const users = readUsers();
+  const user = users.find((u) => u.id === userId);
+  if (!user) throw new Error("User not found");
+  user.anilistAccessToken = encryptSecret(data.accessToken);
+  user.anilistUserId = data.anilistUserId;
+  user.anilistScoreFormat = data.scoreFormat;
+  writeUsers(users);
+}
+
+export function clearAniListLink(userId: string): void {
+  const users = readUsers();
+  const user = users.find((u) => u.id === userId);
+  if (!user) throw new Error("User not found");
+  user.anilistAccessToken = null;
+  user.anilistUserId = null;
+  user.anilistScoreFormat = null;
+  writeUsers(users);
+}
+
+// CLAUDE-ADDED: The only place the decrypted token is ever materialized -- callers (the AniList
+// proxy routes) use it for exactly one outbound request and let it fall out of scope, never log it
+// or echo it back in a response.
+export function getAniListAccessToken(userId: string): string | null {
+  const user = getUserById(userId);
+  if (!user?.anilistAccessToken) return null;
+  return decryptSecret(user.anilistAccessToken);
 }
 
 export function listUsers(): UserRecord[] {
@@ -372,7 +424,10 @@ export function createUser(input: { username: string; name: string; password?: s
     failedAttempts: 0,
     lockedUntil: null,
     createdAt: Date.now(),
-    disabled: false
+    disabled: false,
+    anilistAccessToken: null,
+    anilistUserId: null,
+    anilistScoreFormat: null
   };
 
   users.push(user);

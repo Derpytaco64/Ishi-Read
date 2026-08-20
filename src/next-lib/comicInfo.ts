@@ -150,7 +150,23 @@ function getAttr(tag: string, attr: string): string | null {
   return match ? unescapeXml(match[1]) : null;
 }
 
-export type CBZPageBookmark = { pageIndex: number; title: string };
+export type CBZPageBookmark = { pageIndex: number; title: string; chapterNumber: number | null };
+
+// CLAUDE-ADDED: Added for AniList sync -- there was no numeric-chapter extraction anywhere in this
+// codebase before this (bookmarks were only ever used as display titles). Scanlation groups
+// overwhelmingly author bookmarks as "Chapter 42 - Title" (per this module's own doc comment on
+// extractCBZPageBookmarks), so an explicit "ch(apter)" match is tried first (also catches "Ch. 42",
+// "Ch 42.5"); a bare leading number is the fallback for terser bookmark styles. Returns null rather
+// than guessing when neither pattern matches, so callers can tell "no number found" apart from "0".
+export function parseChapterNumber(title: string): number | null {
+  const chapterMatch = title.match(/\bch(?:apter)?\.?\s*#?\s*(\d+(?:\.\d+)?)/i);
+  if (chapterMatch) return Number(chapterMatch[1]);
+
+  const leadingNumber = title.match(/^\s*#?\s*(\d+(?:\.\d+)?)/);
+  if (leadingNumber) return Number(leadingNumber[1]);
+
+  return null;
+}
 
 // CLAUDE-ADDED: The real per-chapter TOC data for a scanlated CBZ isn't the folder layout (which is
 // just however the scanlation group happened to name its release folders, e.g. "Vol.01 Ch.0001 - The
@@ -182,7 +198,7 @@ export function extractCBZPageBookmarks(filePath: string): CBZPageBookmark[] {
       const pageIndex = imageAttr !== null ? Number(imageAttr) : NaN;
       if (!Number.isFinite(pageIndex)) continue;
 
-      bookmarks.push({ pageIndex, title });
+      bookmarks.push({ pageIndex, title, chapterNumber: parseChapterNumber(title) });
     }
 
     return bookmarks.sort((a, b) => a.pageIndex - b.pageIndex);

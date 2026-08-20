@@ -12,8 +12,8 @@ const USERNAME_PATTERN = /^[a-zA-Z0-9_.-]{3,32}$/;
 // routes -- getCurrentUser() + isAdmin check, since middleware only guarantees "logged in", not
 // "logged in as an admin".
 function stripSecrets(user: ReturnType<typeof listUsers>[number]) {
-  const { passwordHash: _passwordHash, passwordSalt: _passwordSalt, ...rest } = user;
-  return rest;
+  const { passwordHash: _passwordHash, passwordSalt: _passwordSalt, anilistAccessToken: _anilistAccessToken, ...rest } = user;
+  return { ...rest, anilistConnected: user.anilistAccessToken !== null };
 }
 
 export async function GET() {
