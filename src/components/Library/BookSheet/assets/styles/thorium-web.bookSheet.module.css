@@ -894,3 +894,122 @@
 .confirmButtonPrimary:hover {
   background-color: rgba(214, 69, 69, 0.12);
 }
+
+/* CLAUDE-ADDED: AniList Tracking section (AniListTrackingSection.tsx) -- link picker (search) and,
+   once linked, the Tachiyomi-style tracking fields. Reuses .chip/.chipButton/.confirmButton/
+   .annotationsEmpty from above wherever the shape already matches; these are only what's genuinely
+   new here (text/number/date inputs, a select, the search result list). */
+.anilistRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.anilistSearchRow {
+  flex: 1;
+}
+
+.anilistTextInput,
+.anilistSelect {
+  box-sizing: border-box;
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid var(--th-color-primary);
+  background-color: var(--th-color-background);
+  color: var(--th-color-text);
+  font-size: 0.9rem;
+  width: 100%;
+}
+
+.anilistTextInput:focus-visible,
+.anilistSelect:focus-visible {
+  outline: 2px solid #6ba4ff;
+  outline-offset: 1px;
+}
+
+.anilistResultsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.anilistResultRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem;
+  border-radius: 8px;
+}
+
+.anilistResultRow:hover {
+  background-color: var(--th-color-secondary);
+}
+
+.anilistResultCover {
+  width: 36px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background-color: var(--th-color-secondary);
+}
+
+.anilistResultText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.anilistResultTitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anilistFieldGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.7rem;
+  margin-top: 0.7rem;
+}
+
+.anilistField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  color: var(--th-color-text-secondary);
+}
+
+.anilistToggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+
+.anilistUnlinkButton {
+  margin-top: 0.85rem;
+}
+
+.anilistStatusText {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--th-color-text-secondary);
+}
+
+.anilistStatusError {
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
+  color: #e05252;
+}

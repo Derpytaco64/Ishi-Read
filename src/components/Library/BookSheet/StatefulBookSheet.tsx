@@ -15,6 +15,7 @@ import { ThContainerBody } from "@/core/Components/Containers/ThContainerBody";
 import { ThCloseButton } from "@/core/Components/Buttons/ThCloseButton";
 import { ThModal } from "@/core/Components/Containers/ThModal";
 import { StatefulImageOverlay } from "@/components/Epub/ImageOverlay/StatefulImageOverlay";
+import { AniListTrackingSection } from "./AniListTrackingSection";
 
 import { Publication } from "@/components/Misc/PublicationGrid";
 
@@ -393,6 +394,10 @@ export const StatefulBookSheet = ({
   // pagesRead/totalSeconds is a plain per-book ratio, not the rolling wpm sample buffer real books
   // use, since it isn't shared across books the way wpm is.
   const isComic = displayed?.rendition === "Comic";
+  // CLAUDE-ADDED: Computed once here (rather than re-deriving it inline like the effects above,
+  // which each have their own reason to recompute per-run) purely for AniListTrackingSection's own
+  // manifestUrl prop below -- it needs the same value, just synchronously at render time.
+  const manifestUrl = displayed ? getManifestUrlFromBookUrl(displayed.url) : null;
   const comicSecondsLeft = (() => {
     if (!isComic || pageCount === null || pageCount <= 0) return null;
     if (readingStats?.percent == null || readingStats.totalSeconds === null || readingStats.totalSeconds <= 0) return null;
@@ -829,6 +834,19 @@ export const StatefulBookSheet = ({
                   ) }
                 </div>
               </div>
+            ) }
+
+            { /* CLAUDE-ADDED: Manga-only AniList tracking -- see AniListTrackingSection's own doc
+                 comment. Same isComic gate as the reading-timer/comicSecondsLeft split above (light
+                 novels/prose EPUBs aren't in scope for AniList sync), and the same snap-to-full
+                 onExpandedChange treatment as the Annotations disclosure right below it. */ }
+            { isComic && manifestUrl && (
+              <AniListTrackingSection
+                manifestUrl={ manifestUrl }
+                title={ displayed.title }
+                seriesName={ displayed.series?.name ?? null }
+                onExpandedChange={ (isExpanded) => { if (isExpanded) sheetRef.current?.snapTo(FULL_SNAP); } }
+              />
             ) }
 
             { /* CLAUDE-ADDED: Read-only view of the book's highlights/bookmarks/notes -- the reader's
