@@ -56,6 +56,27 @@ const SERIES_SORT_OPTIONS: { id: SeriesSortDirection; label: string }[] = [
   { id: "lastToFirst", label: "Series Order (Last → First)" }
 ];
 
+// CLAUDE-ADDED: Mirrors the Library tab split (Books/Audiobooks/Manga) plus an "all" option, since
+// unlike the Library grid a mixed-format series overview is still meaningful. Filters which books
+// feed the seriesSlots grouping below, not the slots themselves, so it composes for free with the
+// existing seriesKey grouping.
+type SeriesFormatFilter = "all" | "book" | "audiobook" | "manga";
+
+const DEFAULT_SERIES_FORMAT_FILTER: SeriesFormatFilter = "all";
+
+const SERIES_FORMAT_FILTER_OPTIONS: { id: SeriesFormatFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "book", label: "Books" },
+  { id: "audiobook", label: "Audiobooks" },
+  { id: "manga", label: "Manga" }
+];
+
+function getBookFormat(book: Publication): Exclude<SeriesFormatFilter, "all"> {
+  if (book.isAudiobook) return "audiobook";
+  if (book.rendition === "Comic") return "manga";
+  return "book";
+}
+
 // CLAUDE-ADDED: The fan's dimensions were originally hand-tuned at a 110px center-cover width --
 // these ratios let the whole stack (cover width, stage height, left/right offset, grid column)
 // scale together with the cover-size slider (coverSize) instead of staying fixed regardless of it,
@@ -96,17 +117,24 @@ export const StatefulSeriesView = ({
 }: StatefulSeriesViewProps) => {
   const [selectedSeries, setSelectedSeries] = useState<string | null>(initialSelectedSeriesKey ?? null);
   const [sortDirection, setSortDirection] = useState<SeriesSortDirection>(DEFAULT_SERIES_SORT_DIRECTION);
+  const [formatFilter, setFormatFilter] = useState<SeriesFormatFilter>(DEFAULT_SERIES_FORMAT_FILTER);
+
+  const filteredBooks = useMemo(
+    () => formatFilter === "all" ? books : books.filter((book) => getBookFormat(book) === formatFilter),
+    [books, formatFilter]
+  );
 
   // CLAUDE-ADDED: One slot per (series name, format) pair, sorted alphabetically by series name --
   // grouped by seriesKey() rather than name alone so an audiobook series never merges with an
   // ebook series of the same name. Each slot's "center" cover is that series' own first book by
   // series.position (same ordering as the drill-down list below), falling back to title when
   // position is missing or tied.
-  // Recomputed only when the book list itself changes, so the two random flanking covers don't
-  // reshuffle on every unrelated re-render (e.g. reading progress ticking in elsewhere).
+  // Recomputed only when the (format-filtered) book list changes, so the two random flanking
+  // covers don't reshuffle on every unrelated re-render (e.g. reading progress ticking in
+  // elsewhere) but do reshuffle when the filter itself changes the candidate pool.
   const seriesSlots = useMemo<SeriesSlot[]>(() => {
     const groups = new Map<string, Publication[]>();
-    for (const book of books) {
+    for (const book of filteredBooks) {
       if (!book.series?.name) continue;
       const key = seriesKey(book.series.name, !!book.isAudiobook);
       const group = groups.get(key);
@@ -128,7 +156,7 @@ export const StatefulSeriesView = ({
         return { key, name: center.series!.name, isAudiobook: !!center.isAudiobook, books: seriesBooks, center, left, right };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [books]);
+  }, [filteredBooks]);
 
   // CLAUDE-ADDED: Falls back out of a selection whose series disappeared (e.g. its last book was
   // removed) rather than leaving the drill-down section showing stale/empty content.
@@ -152,10 +180,31 @@ export const StatefulSeriesView = ({
 
   if (seriesSlots.length === 0) {
     return (
-      <header className="header">
-        <h1>Series</h1>
-        <p className="subtitle">None of your books have series information yet.</p>
-      </header>
+      <>
+        <header className="header">
+          <h1>Series</h1>
+          <p className="subtitle">
+            { formatFilter === "all"
+              ? "None of your books have series information yet."
+              : `None of your ${ SERIES_FORMAT_FILTER_OPTIONS.find((o) => o.id === formatFilter)!.label.toLowerCase() } have series information yet.` }
+          </p>
+        </header>
+
+        <div className={ styles.sortPicker }>
+          <ThDropdown
+            aria-label="Filter series by format"
+            items={ SERIES_FORMAT_FILTER_OPTIONS.map((option) => ({ id: option.id, label: option.label, value: option.label })) }
+            selectedKey={ formatFilter }
+            onSelectionChange={ (key) => setFormatFilter(key as SeriesFormatFilter) }
+            compounds={{
+              button: { className: styles.sortPickerButton },
+              popover: { className: styles.sortPickerPopover },
+              listbox: { className: styles.sortPickerListbox },
+              listboxItem: { className: styles.sortPickerListboxItem }
+            }}
+          />
+        </div>
+      </>
     );
   }
 
@@ -218,6 +267,21 @@ export const StatefulSeriesView = ({
       <header className="header">
         <h1>Series</h1>
       </header>
+
+      <div className={ styles.sortPicker }>
+        <ThDropdown
+          aria-label="Filter series by format"
+          items={ SERIES_FORMAT_FILTER_OPTIONS.map((option) => ({ id: option.id, label: option.label, value: option.label })) }
+          selectedKey={ formatFilter }
+          onSelectionChange={ (key) => setFormatFilter(key as SeriesFormatFilter) }
+          compounds={{
+            button: { className: styles.sortPickerButton },
+            popover: { className: styles.sortPickerPopover },
+            listbox: { className: styles.sortPickerListbox },
+            listboxItem: { className: styles.sortPickerListboxItem }
+          }}
+        />
+      </div>
 
       <ThGrid
         className={ styles.wrapper }

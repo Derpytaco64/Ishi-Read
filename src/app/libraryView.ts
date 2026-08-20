@@ -4,7 +4,7 @@
 // into this type, since the set of shelf ids is dynamic (user-created).
 // "library" is the Books tab (label only says "Books" now -- kept the original value so existing
 // persisted activeView prefs from before the Books/Audiobooks split still resolve correctly).
-export type LibraryView = "home" | "library" | "audiobooks" | "series" | "shelf";
+export type LibraryView = "home" | "library" | "audiobooks" | "manga" | "series" | "shelf";
 
 export const LIBRARY_VIEW_STORAGE_KEY = "th-library-active-view";
 

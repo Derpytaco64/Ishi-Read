@@ -41,6 +41,7 @@ import DragIndicator from "./assets/icons/drag_indicator.svg";
 import HomeIcon from "./assets/icons/home.svg";
 import BookIcon from "./assets/icons/book.svg";
 import HeadphonesIcon from "./assets/icons/headphones.svg";
+import MangaIcon from "./assets/icons/manga.svg";
 import LibraryBooksIcon from "./assets/icons/library_books.svg";
 import FolderIcon from "./assets/icons/folder.svg";
 import AddIcon from "./assets/icons/add.svg";
@@ -299,6 +300,18 @@ export const StatefulLibraryMenu = ({
           >
             <HeadphonesIcon aria-hidden="true" focusable="false" className={ styles.navIcon } />
             <span className={ styles.navLabel }>Audiobooks</span>
+          </Button>
+
+          <Button
+            className={ classNames(styles.navButton, activeView === "manga" && styles.navButtonActive) }
+            aria-current={ activeView === "manga" ? "page" : undefined }
+            onPress={ () => {
+              onNavigate("manga");
+              setIsOpen(false);
+            } }
+          >
+            <MangaIcon aria-hidden="true" focusable="false" className={ styles.navIcon } />
+            <span className={ styles.navLabel }>Manga</span>
           </Button>
 
           <Button

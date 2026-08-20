@@ -454,10 +454,13 @@ export default function Home() {
     myLibrary: alphabetical
   };
 
-  // CLAUDE-ADDED: Backs the Books/Audiobooks tab split -- same full fetched list, split by the
-  // isAudiobook flag route.ts derives from file extension (only .m4b today).
-  const ebookBooks = myLibraryBooks.filter((book) => !book.isAudiobook);
+  // CLAUDE-ADDED: Backs the Books/Audiobooks/Manga tab split -- same full fetched list, split by
+  // the isAudiobook flag route.ts derives from file extension (only .m4b today) and rendition
+  // === "Comic" (set for CBZ, see route.ts's isCBZ branch). Manga is carved out of Books the same
+  // way Audiobooks already is, so a CBZ never shows up in both tabs at once.
+  const ebookBooks = myLibraryBooks.filter((book) => !book.isAudiobook && book.rendition !== "Comic");
   const audiobookBooks = myLibraryBooks.filter((book) => book.isAudiobook);
+  const mangaBooks = myLibraryBooks.filter((book) => book.rendition === "Comic");
 
   // CLAUDE-ADDED: StatefulLibrarySearch's query, matched against title/author/tags(genre)/series
   // across the whole library (both ebooks and audiobooks) rather than just whichever tab is active
@@ -539,6 +542,21 @@ export default function Home() {
           onContextMenu={ openContextMenu }
           title="Audiobooks"
           emptyMessage="Your library has no audiobooks yet."
+        />
+      ) }
+
+      { !trimmedSearchQuery && activeView === "manga" && (
+        <StatefulMyLibraryView
+          books={ mangaBooks }
+          coverSize={ coverSize }
+          progressByUrl={ progressByUrl }
+          onSelectBook={ (publication) => {
+            setSelectedBook(publication);
+            setIsBookSheetOpen(true);
+          } }
+          onContextMenu={ openContextMenu }
+          title="Manga"
+          emptyMessage="Your library has no manga yet."
         />
       ) }
 
