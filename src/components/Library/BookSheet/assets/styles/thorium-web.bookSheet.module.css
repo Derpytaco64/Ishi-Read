@@ -1013,3 +1013,19 @@
   font-size: 0.85rem;
   color: #e05252;
 }
+
+/* CLAUDE-ADDED: Collapsed-header summary (status/chapter/score, then start/finish dates) -- see
+   AniListTrackingSection.tsx's own comment on why these sit outside .disclosurePanel. */
+.anilistSummaryRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: -0.3rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--th-color-text-secondary);
+}
+
+.anilistSummaryDates {
+  font-size: 0.8rem;
+  margin-top: -0.2rem;
+}

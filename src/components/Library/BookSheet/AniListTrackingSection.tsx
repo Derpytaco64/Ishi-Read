@@ -48,6 +48,22 @@ function inputValueToFuzzyDate(value: string): AniListFuzzyDate | null {
   return { year, month: month || null, day: day || null };
 }
 
+// CLAUDE-ADDED: Same "yyyy-mm-dd, ?? for an unknown month/day, Not set for no year at all" wording
+// as Android's TrackingSheet.kt AniListFuzzyDate?.label(), so the two platforms never disagree on
+// how a fuzzy date reads.
+function formatFuzzyDate(date: AniListFuzzyDate | null | undefined): string {
+  if (!date?.year) return "Not set";
+  const month = date.month ? String(date.month).padStart(2, "0") : "??";
+  const day = date.day ? String(date.day).padStart(2, "0") : "??";
+  return `${ date.year }-${ month }-${ day }`;
+}
+
+// CLAUDE-ADDED: Drops a trailing ".0" for AniList's whole-number score formats (POINT_100/POINT_10/
+// POINT_5/POINT_3) but keeps one decimal for POINT_10_DECIMAL -- same as Android's Double.formatScore().
+function formatScore(score: number): string {
+  return Number.isInteger(score) ? String(score) : score.toFixed(1);
+}
+
 const EMPTY_ENTRY: AniListMediaListEntry = { id: 0, status: "PLANNING", score: 0, progress: 0, repeat: 0, startedAt: null, completedAt: null };
 
 export interface AniListTrackingSectionProps {
@@ -174,6 +190,29 @@ export const AniListTrackingSection = ({ manifestUrl, title, seriesName, onExpan
           <ChevronDown aria-hidden="true" focusable="false" className={ styles.disclosureChevron } />
         </Button>
       </Heading>
+
+      { /* CLAUDE-ADDED: Status/chapter/score + start/finish date summary -- a sibling of the
+           trigger/panel (not inside DisclosurePanel), so it's visible whether the section is
+           expanded or not, mirroring Android's BookDetailScreen summary row below its own
+           "Tracking on AniList" chip (see anilist_sync_design memory, round 4). Only rendered once
+           there's an actual list entry to summarize -- a linked-but-not-yet-added series (entry
+           null) shows nothing here rather than a row of placeholders. */ }
+      { isLinked && entry && (
+        <div className={ styles.anilistSummaryRow }>
+          <span>{ STATUS_LABELS[entry.status] ?? entry.status }</span>
+          <span>
+            { `Ch. ${ entry.progress }` }
+            { media?.chapters ? `/${ media.chapters }` : "" }
+          </span>
+          { entry.score > 0 && <span>{ `★ ${ formatScore(entry.score) }` }</span> }
+        </div>
+      ) }
+      { isLinked && entry && (entry.startedAt?.year || entry.completedAt?.year) && (
+        <div className={ `${ styles.anilistSummaryRow } ${ styles.anilistSummaryDates }` }>
+          <span>{ `Started: ${ formatFuzzyDate(entry.startedAt) }` }</span>
+          <span>{ `Finished: ${ formatFuzzyDate(entry.completedAt) }` }</span>
+        </div>
+      ) }
 
       <DisclosurePanel className={ styles.disclosurePanel }>
         { isLoading ? (
