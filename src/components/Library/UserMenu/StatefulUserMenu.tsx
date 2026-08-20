@@ -50,6 +50,19 @@ export const StatefulUserMenu = () => {
 
   const [isRefreshingCache, setIsRefreshingCache] = useState(false);
 
+  // CLAUDE-ADDED: AniList PIN-flow connect/disconnect, mirrors the Android app's own
+  // AniListAccountSheet/AniListAccountViewModel -- see api/auth/anilist/{authorize-url,exchange,
+  // disconnect}. authorizeUrl is fetched fresh each time the sheet opens since it depends on the
+  // instance's admin-configured client_id (never hardcoded here, see /api/settings/anilist).
+  const [isAniListOpen, setIsAniListOpen] = useState(false);
+  const [anilistAuthorizeUrl, setAnilistAuthorizeUrl] = useState<string | null>(null);
+  const [isLoadingAuthorizeUrl, setIsLoadingAuthorizeUrl] = useState(false);
+  const [anilistNotConfigured, setAnilistNotConfigured] = useState(false);
+  const [anilistPinCode, setAnilistPinCode] = useState("");
+  const [isConnectingAniList, setIsConnectingAniList] = useState(false);
+  const [anilistConnectError, setAnilistConnectError] = useState<string | null>(null);
+  const [isDisconnectingAniList, setIsDisconnectingAniList] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -200,6 +213,74 @@ export const StatefulUserMenu = () => {
     fetchStatsFromServer().then(setStats);
   };
 
+  const openAniList = () => {
+    setAnilistPinCode("");
+    setAnilistConnectError(null);
+    setIsAniListOpen(true);
+    setIsLoadingAuthorizeUrl(true);
+    fetch("/api/auth/anilist/authorize-url")
+      .then((res) => res.json())
+      .then((data) => {
+        setAnilistAuthorizeUrl(data?.url ?? null);
+        setAnilistNotConfigured(!data?.url);
+      })
+      .catch((err) => {
+        console.error("Failed to load AniList authorize URL:", err);
+        setAnilistConnectError("Couldn't reach the server");
+      })
+      .finally(() => setIsLoadingAuthorizeUrl(false));
+  };
+
+  const connectAniList = async () => {
+    const code = anilistPinCode.trim();
+    if (!code) return;
+
+    setIsConnectingAniList(true);
+    setAnilistConnectError(null);
+
+    try {
+      const res = await fetch("/api/auth/anilist/exchange", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code })
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setAnilistConnectError(data?.error || "Couldn't connect to AniList");
+        return;
+      }
+
+      setAnilistPinCode("");
+      await refresh();
+    } catch (err) {
+      console.error("Failed to connect AniList:", err);
+      setAnilistConnectError("Couldn't connect to AniList");
+    } finally {
+      setIsConnectingAniList(false);
+    }
+  };
+
+  const disconnectAniList = async () => {
+    setIsDisconnectingAniList(true);
+    setAnilistConnectError(null);
+
+    try {
+      const res = await fetch("/api/auth/anilist/disconnect", { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setAnilistConnectError(data?.error || "Couldn't disconnect AniList");
+        return;
+      }
+      await refresh();
+    } catch (err) {
+      console.error("Failed to disconnect AniList:", err);
+      setAnilistConnectError("Couldn't disconnect AniList");
+    } finally {
+      setIsDisconnectingAniList(false);
+    }
+  };
+
   // CLAUDE-ADDED: Clears the server-side manifest/cover cache (src/app/api/books/route.ts's
   // manifestCache) and reloads so the library grid re-resolves every book's title/author/cover
   // from scratch instead of whatever's currently in memory.
@@ -239,6 +320,9 @@ export const StatefulUserMenu = () => {
           </MenuItem>
           <MenuItem className={ styles.menuItem } onAction={ openStats }>
             Stats
+          </MenuItem>
+          <MenuItem className={ styles.menuItem } onAction={ openAniList }>
+            AniList
           </MenuItem>
           <MenuItem className={ styles.menuItem } onAction={ () => setIsMigrateOpen(true) }>
             Migrate Book Data
@@ -482,6 +566,83 @@ export const StatefulUserMenu = () => {
             </div>
           </>
         ) }
+      </ThContainerBody>
+    </ThModal>
+
+    <ThModal
+      isOpen={ isAniListOpen }
+      onOpenChange={ setIsAniListOpen }
+      isDismissable
+      className={ styles.underlay }
+      compounds={{
+        dialog: { className: styles.dialog }
+      }}
+    >
+      <ThContainerHeaderWithClose
+        label="AniList"
+        className={ styles.header }
+        compounds={{
+          heading: {},
+          button: {
+            className: styles.closeButton,
+            "aria-label": "Close",
+            onPress: () => setIsAniListOpen(false)
+          }
+        }}
+      />
+
+      <ThContainerBody className={ styles.body }>
+        { user.anilistConnected ? (
+          <>
+            <p className={ styles.status }>
+              Your AniList account is connected. Link a manga from its book page to start syncing progress, status, and score.
+            </p>
+            <button
+              type="button"
+              className={ styles.secondaryButton }
+              onClick={ disconnectAniList }
+              disabled={ isDisconnectingAniList }
+            >
+              { isDisconnectingAniList ? "Disconnecting…" : "Disconnect" }
+            </button>
+          </>
+        ) : isLoadingAuthorizeUrl ? (
+          <p className={ styles.status }>Loading…</p>
+        ) : anilistNotConfigured ? (
+          <p className={ styles.status }>
+            This server hasn&apos;t been set up for AniList sync yet -- ask your admin to add an AniList client ID/secret in Admin Settings.
+          </p>
+        ) : (
+          <>
+            <p className={ styles.status }>Connect your AniList account to sync manga progress, status, and score as you read.</p>
+            <button
+              type="button"
+              className={ styles.secondaryButton }
+              onClick={ () => anilistAuthorizeUrl && window.open(anilistAuthorizeUrl, "_blank", "noopener,noreferrer") }
+            >
+              Open AniList to Connect
+            </button>
+            <p className={ styles.status }>After approving, AniList shows you a code on its own page -- paste it below.</p>
+            <label className={ styles.fieldRow }>
+              <span>Code from AniList</span>
+              <input
+                type="text"
+                className={ styles.textInput }
+                value={ anilistPinCode }
+                onChange={ (e) => setAnilistPinCode(e.target.value) }
+              />
+            </label>
+            <button
+              type="button"
+              className={ styles.primaryButton }
+              onClick={ connectAniList }
+              disabled={ isConnectingAniList || !anilistPinCode.trim() }
+            >
+              { isConnectingAniList ? "Connecting…" : "Connect" }
+            </button>
+          </>
+        ) }
+        { anilistConnectError && <p className={ styles.statusError }>{ anilistConnectError }</p> }
       </ThContainerBody>
     </ThModal>
 

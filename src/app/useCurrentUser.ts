@@ -8,6 +8,8 @@ export interface CurrentUser {
   name: string;
   isAdmin: boolean;
   avatarUrl: string | null;
+  anilistConnected: boolean;
+  anilistScoreFormat: string | null;
 }
 
 // CLAUDE-ADDED: Shared by the profile icon/context menu, the edit-user modal, and the library
