@@ -210,16 +210,19 @@ function extractSeries(metadata: any): Series | null {
 
 // CLAUDE-ADDED: EPUB series positions come from Calibre's series_index, which Calibre itself
 // auto-increments -- always present, always distinct. CBZ/manga series positions come from
-// ComicInfo.xml's <Volume>/<Number> tags instead (see extractCBZMetadata), which scanlation/
-// tagging tools frequently leave missing, or set to the same value (e.g. Number=1) on every
-// volume. Android's Home screen sorts each series group by position and special-cases index 0/
-// lastIndex to stick the shelf to an edge instead of centering -- with duplicate/missing
-// positions, the stable sort falls back to arrival order (this directory's own unsorted
-// fs.readdirSync enumeration), so that special case doesn't land on the true first/last volume.
-// This repairs any series group whose positions aren't fully defined and distinct by
-// renumbering it 1..N in natural (numeric-aware) filename order, which matches true volume order
-// for the vast majority of consistently-named manga libraries. Groups that already have usable
-// positions (virtually all EPUB/Calibre series) are left untouched.
+// ComicInfo.xml's <Volume>/<Number> tags instead (see extractCBZMetadata) -- in a well-tagged
+// library (confirmed against a real example: Spirit Circle Vol. 1-6, <Volume>1</Volume> through
+// <Volume>6</Volume>, all present and distinct) these are exactly as reliable as Calibre's
+// series_index and should be trusted the same way; filenames are NOT a reliable fallback signal
+// in general (naming conventions vary too much across a real library) and must never override
+// tagged data that's already usable. Android's Home screen sorts each series group by position
+// and special-cases index 0/lastIndex to stick the shelf to an edge instead of centering -- with
+// duplicate/missing positions, the stable sort falls back to arrival order (this directory's own
+// unsorted fs.readdirSync enumeration), so that special case doesn't land on the true first/last
+// volume. This repairs any series group whose positions aren't fully defined and distinct by
+// renumbering it 1..N in natural (numeric-aware) filename order -- a last resort for missing/
+// duplicate tags only, identical treatment for CBZ and EPUB/audiobook alike. Groups that already
+// have usable positions are left untouched.
 function repairSeriesPositions(books: { series: Series | null; isAudiobook: boolean }[], files: string[]): void {
   const groups = new Map<string, number[]>();
   books.forEach((book, i) => {
@@ -233,25 +236,11 @@ function repairSeriesPositions(books: { series: Series | null; isAudiobook: bool
   for (const indices of groups.values()) {
     if (indices.length < 2) continue;
 
-    // Comic series positions come from ComicInfo.xml's <Volume>/<Number> tags -- whatever the
-    // scanlation/tagging tool that packaged the release happened to write. Unlike Calibre's
-    // series_index (always auto-incrementing and reliable for EPUB/audiobook), these are
-    // frequently not just missing or duplicated but plain wrong (off-by-one, chapter numbers
-    // used in a volume field, one volume tagged from a different group's numbering than the
-    // rest), so a group that passes the "distinct + finite" check below can still be in the
-    // wrong order. Natural-sort filename order is the one signal that's actually trustworthy for
-    // a comic series, so it's applied unconditionally here rather than only as a fallback for
-    // unusable data -- unlike the EPUB/audiobook branch below, which still trusts already-usable
-    // tagged data since Calibre's own numbering has never shown this problem.
-    const isComicGroup = indices.every((i) => path.extname(files[i]).toLowerCase() === ".cbz");
-
-    if (!isComicGroup) {
-      const positions = indices.map((i) => books[i].series!.position);
-      const usable =
-        positions.every((p) => typeof p === "number" && Number.isFinite(p)) &&
-        new Set(positions).size === positions.length;
-      if (usable) continue;
-    }
+    const positions = indices.map((i) => books[i].series!.position);
+    const usable =
+      positions.every((p) => typeof p === "number" && Number.isFinite(p)) &&
+      new Set(positions).size === positions.length;
+    if (usable) continue;
 
     const sorted = [...indices].sort((a, b) =>
       files[a].localeCompare(files[b], undefined, { numeric: true, sensitivity: "base" })
