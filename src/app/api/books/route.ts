@@ -208,6 +208,45 @@ function extractSeries(metadata: any): Series | null {
   return null;
 }
 
+// CLAUDE-ADDED: EPUB series positions come from Calibre's series_index, which Calibre itself
+// auto-increments -- always present, always distinct. CBZ/manga series positions come from
+// ComicInfo.xml's <Volume>/<Number> tags instead (see extractCBZMetadata), which scanlation/
+// tagging tools frequently leave missing, or set to the same value (e.g. Number=1) on every
+// volume. Android's Home screen sorts each series group by position and special-cases index 0/
+// lastIndex to stick the shelf to an edge instead of centering -- with duplicate/missing
+// positions, the stable sort falls back to arrival order (this directory's own unsorted
+// fs.readdirSync enumeration), so that special case doesn't land on the true first/last volume.
+// This repairs any series group whose positions aren't fully defined and distinct by
+// renumbering it 1..N in natural (numeric-aware) filename order, which matches true volume order
+// for the vast majority of consistently-named manga libraries. Groups that already have usable
+// positions (virtually all EPUB/Calibre series) are left untouched.
+function repairSeriesPositions(books: { series: Series | null; isAudiobook: boolean }[], files: string[]): void {
+  const groups = new Map<string, number[]>();
+  books.forEach((book, i) => {
+    if (!book.series) return;
+    const key = `${book.series.name}|${book.isAudiobook}`;
+    const indices = groups.get(key) ?? [];
+    indices.push(i);
+    groups.set(key, indices);
+  });
+
+  for (const indices of groups.values()) {
+    if (indices.length < 2) continue;
+    const positions = indices.map((i) => books[i].series!.position);
+    const usable =
+      positions.every((p) => typeof p === "number" && Number.isFinite(p)) &&
+      new Set(positions).size === positions.length;
+    if (usable) continue;
+
+    const sorted = [...indices].sort((a, b) =>
+      files[a].localeCompare(files[b], undefined, { numeric: true, sensitivity: "base" })
+    );
+    sorted.forEach((i, order) => {
+      books[i] = { ...books[i], series: { name: books[i].series!.name, position: order + 1 } };
+    });
+  }
+}
+
 // CLAUDE-ADDED: Everything below is read directly off the M4B file's own MP4 tags via music-metadata,
 // rather than through Readium's manifest -- confirmed against the bundled Go server (v0.15.1), its
 // M4B parser only surfaces title/author/description/duration/chapters, none of the calibre-style
@@ -677,6 +716,8 @@ export async function GET() {
         duration: null
       };
     });
+
+    repairSeriesPositions(books, epubFiles);
 
     if (titleEntries.length > 0) recordBookTitles(titleEntries);
 
