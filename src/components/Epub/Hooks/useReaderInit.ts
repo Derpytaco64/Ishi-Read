@@ -112,6 +112,7 @@ export const useEpubReaderInit = ({
 
     // Initialize navigator for EPUB like WebPub
     const deserializedInitialPosition = initialPosition ? Locator.deserialize(initialPosition) : undefined;
+    const deserializedPositionsList = positionsList?.flatMap(loc => Locator.deserialize(loc) ?? []) || [];
     // CLAUDE-ADDED: FXLFramePoolManager.update()/FramePoolManager.update() both throw synchronously
     // if the locator's href isn't in the current readingOrder (see @readium/navigator's
     // apply()/framePool.update() -- a stale saved position, e.g. from a CBZ that got re-tagged/
@@ -119,23 +120,38 @@ export const useEpubReaderInit = ({
     // EpubNavigatorLoad's own load().then() has no .catch(), so that throw currently propagates into
     // an unhandled rejection: onNavigatorLoaded/cb() never fires, and the reader is left stuck on
     // whatever FXLFramePoolManager's constructor defaults to (slide 0, the cover) with no visible
-    // error -- exactly "opens to the cover instead of the saved position". Validating the href here
-    // avoids ever reaching that throw: an unresolvable href falls back to undefined (the navigator's
-    // own normal, error-free "no initial position" path), rather than a resolvable-looking Locator
-    // that blows up three layers down.
-    const validatedInitialPosition = deserializedInitialPosition && publication.readingOrder.findWithHref(deserializedInitialPosition.href)
-      ? deserializedInitialPosition
-      : (() => {
-          if (deserializedInitialPosition) {
-            console.warn("Saved reading position's href is not in this publication's reading order, starting from the beginning instead:", deserializedInitialPosition.href);
-          }
-          return undefined;
-        })();
+    // error -- exactly "opens to the cover instead of the saved position".
+    //
+    // A saved locator's href is *also* not a reliable cross-platform key on its own: the Android app
+    // opens a comic/EPUB from its own locally-downloaded copy of the raw file, parsed directly by the
+    // Kotlin Readium toolkit's own archive reader, while this website reads the manifest.json this
+    // site's Go readium server generates for that same file -- two independent parsers of the same
+    // bytes can (and for CBZ do) disagree on the literal href string for the same page, even though
+    // both agree on its numeric locations.position (both derive that from the same "one position per
+    // fixed-layout resource, in reading order" rule, which only depends on page order, not naming).
+    // So: try an exact href match first (cheapest, still correct same-platform/same-parser case), and
+    // if that fails, fall back to resolving by position against *this* publication instance's own
+    // positionsList -- that gives us a Locator whose href is guaranteed to be in this side's own
+    // href-space. Only if neither resolves do we fall back to undefined (the navigator's own normal,
+    // error-free "no initial position" path) rather than a Locator that would blow up three layers down.
+    const validatedInitialPosition = (() => {
+      if (!deserializedInitialPosition) return undefined;
+      if (publication.readingOrder.findWithHref(deserializedInitialPosition.href)) {
+        return deserializedInitialPosition;
+      }
+      const savedPosition = deserializedInitialPosition.locations.position;
+      const byPosition = savedPosition !== undefined
+        ? deserializedPositionsList.find(p => p.locations.position === savedPosition)
+        : undefined;
+      if (byPosition) return byPosition;
+      console.warn("Saved reading position's href is not in this publication's reading order and couldn't be resolved by position, starting from the beginning instead:", deserializedInitialPosition.href);
+      return undefined;
+    })();
     const config: EpubNavigatorLoadProps = {
       container: container.current,
       publication,
       listeners,
-      positionsList: positionsList?.flatMap(loc => Locator.deserialize(loc) ?? []) || [],
+      positionsList: deserializedPositionsList,
       initialPosition: validatedInitialPosition,
       preferences: epubPreferences,
       defaults: epubDefaults,
