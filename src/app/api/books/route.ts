@@ -232,11 +232,26 @@ function repairSeriesPositions(books: { series: Series | null; isAudiobook: bool
 
   for (const indices of groups.values()) {
     if (indices.length < 2) continue;
-    const positions = indices.map((i) => books[i].series!.position);
-    const usable =
-      positions.every((p) => typeof p === "number" && Number.isFinite(p)) &&
-      new Set(positions).size === positions.length;
-    if (usable) continue;
+
+    // Comic series positions come from ComicInfo.xml's <Volume>/<Number> tags -- whatever the
+    // scanlation/tagging tool that packaged the release happened to write. Unlike Calibre's
+    // series_index (always auto-incrementing and reliable for EPUB/audiobook), these are
+    // frequently not just missing or duplicated but plain wrong (off-by-one, chapter numbers
+    // used in a volume field, one volume tagged from a different group's numbering than the
+    // rest), so a group that passes the "distinct + finite" check below can still be in the
+    // wrong order. Natural-sort filename order is the one signal that's actually trustworthy for
+    // a comic series, so it's applied unconditionally here rather than only as a fallback for
+    // unusable data -- unlike the EPUB/audiobook branch below, which still trusts already-usable
+    // tagged data since Calibre's own numbering has never shown this problem.
+    const isComicGroup = indices.every((i) => path.extname(files[i]).toLowerCase() === ".cbz");
+
+    if (!isComicGroup) {
+      const positions = indices.map((i) => books[i].series!.position);
+      const usable =
+        positions.every((p) => typeof p === "number" && Number.isFinite(p)) &&
+        new Set(positions).size === positions.length;
+      if (usable) continue;
+    }
 
     const sorted = [...indices].sort((a, b) =>
       files[a].localeCompare(files[b], undefined, { numeric: true, sensitivity: "base" })
