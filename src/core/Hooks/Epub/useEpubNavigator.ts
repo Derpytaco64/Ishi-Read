@@ -322,6 +322,14 @@ export const useEpubNavigator = () => {
         } else {
           cb();
         }
+      }).catch((err) => {
+        // CLAUDE-ADDED: without this, a rejection anywhere in load()/apply() (e.g. framePool.update()
+        // throwing on an href it can't find) is an unhandled rejection that never calls cb() --
+        // navigatorReady stays false forever and the reader is stuck on whatever FXLFramePoolManager/
+        // FramePoolManager's constructor defaulted to (slide/position 0), with no visible error. Still
+        // call cb() so the UI unblocks instead of hanging indefinitely.
+        console.error("EpubNavigator failed to load:", err);
+        cb();
       });
     }
   }, []);

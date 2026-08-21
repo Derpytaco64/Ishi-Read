@@ -74,6 +74,12 @@ export const useWebPubNavigator = () => {
 
       navigatorInstance.load().then(() => {
         cb();
+      }).catch((err) => {
+        // CLAUDE-ADDED: see useEpubNavigator.ts's identical comment -- without a .catch() here, a
+        // rejection in load()/apply() (framePool.update() throwing on an unresolvable href) leaves
+        // navigatorReady stuck false forever with no visible error. Still call cb() to unblock the UI.
+        console.error("WebPubNavigator failed to load:", err);
+        cb();
       });
     }
   }, []);

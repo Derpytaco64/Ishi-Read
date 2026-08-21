@@ -111,12 +111,32 @@ export const useEpubReaderInit = ({
     }
 
     // Initialize navigator for EPUB like WebPub
+    const deserializedInitialPosition = initialPosition ? Locator.deserialize(initialPosition) : undefined;
+    // CLAUDE-ADDED: FXLFramePoolManager.update()/FramePoolManager.update() both throw synchronously
+    // if the locator's href isn't in the current readingOrder (see @readium/navigator's
+    // apply()/framePool.update() -- a stale saved position, e.g. from a CBZ that got re-tagged/
+    // re-saved since the position was recorded on another device, no longer has a matching entry).
+    // EpubNavigatorLoad's own load().then() has no .catch(), so that throw currently propagates into
+    // an unhandled rejection: onNavigatorLoaded/cb() never fires, and the reader is left stuck on
+    // whatever FXLFramePoolManager's constructor defaults to (slide 0, the cover) with no visible
+    // error -- exactly "opens to the cover instead of the saved position". Validating the href here
+    // avoids ever reaching that throw: an unresolvable href falls back to undefined (the navigator's
+    // own normal, error-free "no initial position" path), rather than a resolvable-looking Locator
+    // that blows up three layers down.
+    const validatedInitialPosition = deserializedInitialPosition && publication.readingOrder.findWithHref(deserializedInitialPosition.href)
+      ? deserializedInitialPosition
+      : (() => {
+          if (deserializedInitialPosition) {
+            console.warn("Saved reading position's href is not in this publication's reading order, starting from the beginning instead:", deserializedInitialPosition.href);
+          }
+          return undefined;
+        })();
     const config: EpubNavigatorLoadProps = {
       container: container.current,
       publication,
       listeners,
       positionsList: positionsList?.flatMap(loc => Locator.deserialize(loc) ?? []) || [],
-      initialPosition: initialPosition ? Locator.deserialize(initialPosition) : undefined,
+      initialPosition: validatedInitialPosition,
       preferences: epubPreferences,
       defaults: epubDefaults,
       injectables: injectables || undefined,

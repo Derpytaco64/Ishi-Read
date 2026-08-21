@@ -87,11 +87,23 @@ export const useWebPubReaderInit = ({
       return;
     }
 
+    // CLAUDE-ADDED: see Epub/Hooks/useReaderInit.ts's identical comment -- WebPubFramePoolManager.
+    // update() throws the same way on an href not present in the current readingOrder, and this
+    // load().then() has no .catch() either, so validate here rather than let it strand the reader.
+    const deserializedInitialPosition = initialPosition ? Locator.deserialize(initialPosition) : undefined;
+    const validatedInitialPosition = deserializedInitialPosition && publication.readingOrder.findWithHref(deserializedInitialPosition.href)
+      ? deserializedInitialPosition
+      : (() => {
+          if (deserializedInitialPosition) {
+            console.warn("Saved reading position's href is not in this publication's reading order, starting from the beginning instead:", deserializedInitialPosition.href);
+          }
+          return undefined;
+        })();
     const config: WebPubNavigatorLoadProps = {
       container: container.current,
       publication,
       listeners,
-      initialPosition: initialPosition ? Locator.deserialize(initialPosition) : undefined,
+      initialPosition: validatedInitialPosition,
       preferences: webPubPreferences,
       defaults: {
         experiments: preferences.experiments?.webPub || null
