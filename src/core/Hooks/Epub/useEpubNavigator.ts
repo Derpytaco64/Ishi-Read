@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import {
+  Layout,
   Link,
   Locator,
   LocatorLocations,
@@ -317,7 +318,17 @@ export const useEpubNavigator = () => {
         // cssSelector then progression exactly like every other correction in this codebase already does
         // -- so reopening a book always lands on the same text regardless of layout differences since it
         // was saved.
-        if (config.initialPosition?.text?.highlight) {
+        //
+        // Fixed-layout (comics/DiViNa) never has a text anchor, but needs the same reroute for a
+        // different reason: FXLFramePoolManager.update()'s slide-to-current step (called once,
+        // synchronously, from inside load()) computes its transform from the spine container's
+        // current geometry, which isn't reliably settled yet this early -- currentLocator/currentSlide
+        // end up correct (the page-number readout is right), but the visible frame stays parked on
+        // slide 0. A manual page turn always self-corrects because it calls the exact same
+        // apply()/update() path go() does here, just later, once the container has actually laid out.
+        // Routing the initial position through go() a tick after load() resolves gets that same
+        // self-correction on first open instead of waiting on the user to turn a page first.
+        if (config.initialPosition && (config.initialPosition.text?.highlight || navigatorInstance?.layout === Layout.fixed)) {
           navigatorInstance?.go(config.initialPosition, false, () => cb());
         } else {
           cb();
