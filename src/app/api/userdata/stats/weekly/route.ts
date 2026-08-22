@@ -36,19 +36,26 @@ function listJsonFilesInLibrary(dir: string, libraryHashes: Set<string>): string
   return listJsonFiles(dir).filter(file => libraryHashes.has(file.replace(/\.json$/, "")));
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const userDir = getUserDir(userId);
   const { audiobookHashes, comicHashes, libraryHashes } = scanLibrary();
 
-  // CLAUDE-ADDED: Oldest-first window of the last WINDOW_DAYS local calendar days, today inclusive --
-  // the fixed set of rows the response always returns, regardless of how much (if any) tracked data
-  // falls on a given day.
+  // CLAUDE-ADDED: offset=0 is the current window (last WINDOW_DAYS days, today inclusive); each step
+  // below 0 pages back a further WINDOW_DAYS days, letting the client's back/forward arrows jump a
+  // whole week at a time. Clamped to <= 0 -- there's no "next week" past the one that includes today.
+  const { searchParams } = new URL(request.url);
+  const rawOffset = parseInt(searchParams.get("offset") ?? "0", 10);
+  const offset = Number.isFinite(rawOffset) ? Math.min(0, rawOffset) : 0;
+
+  // CLAUDE-ADDED: Oldest-first window of WINDOW_DAYS local calendar days ending offset*WINDOW_DAYS
+  // days from today -- the fixed set of rows the response always returns, regardless of how much (if
+  // any) tracked data falls on a given day.
   const windowDates: string[] = [];
   const cursor = new Date();
-  cursor.setDate(cursor.getDate() - (WINDOW_DAYS - 1));
+  cursor.setDate(cursor.getDate() + offset * WINDOW_DAYS - (WINDOW_DAYS - 1));
   for (let i = 0; i < WINDOW_DAYS; i++) {
     windowDates.push(getLocalDateKey(cursor));
     cursor.setDate(cursor.getDate() + 1);

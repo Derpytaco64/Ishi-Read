@@ -1,0 +1,139 @@
+/* CLAUDE-ADDED: Relies on the ancestor .statsDialog's --th-color-* custom properties (see
+   thorium-web.userMenu.module.css's .dialog) for theme-aware text/gridline colors -- no dark-mode
+   override needed here, those vars already flip at the dialog level. */
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--th-color-primary);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.title {
+  flex: 1;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--th-color-text);
+}
+
+.navButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--th-color-text-secondary);
+  cursor: pointer;
+}
+
+.navButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.navButton:hover:not(:disabled) {
+  background-color: var(--th-color-primary);
+}
+
+.navButton:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.body {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+  height: 140px;
+}
+
+.axisLabels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex-shrink: 0;
+  width: 2.2rem;
+  text-align: right;
+  font-size: 0.65rem;
+  color: var(--th-color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.plotArea {
+  position: relative;
+  flex: 1;
+  height: 140px;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.gridline {
+  stroke: var(--th-color-text-secondary);
+  stroke-opacity: 0.2;
+  stroke-width: 1;
+}
+
+.emptyState {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.75rem;
+  color: var(--th-color-text-secondary);
+  white-space: nowrap;
+}
+
+.dayLabels {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.axisSpacer {
+  flex-shrink: 0;
+  width: calc(2.2rem + 0.35rem);
+}
+
+.dayLabel {
+  flex: 1;
+  text-align: center;
+  font-size: 0.65rem;
+  color: var(--th-color-text-secondary);
+}
+
+.legend {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  color: var(--th-color-text-secondary);
+}
+
+.legendSwatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}

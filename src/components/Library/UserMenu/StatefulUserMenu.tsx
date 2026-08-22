@@ -13,9 +13,12 @@ import { useCurrentUser } from "@/app/useCurrentUser";
 
 import { fetchStatsFromServer } from "@/lib/userData/statsApi";
 import { UserStats } from "@/lib/userData/statsTypes";
+import { fetchWeeklyStatsFromServer } from "@/lib/userData/weeklyStatsApi";
+import { WeeklyBookTypeStats } from "@/lib/userData/weeklyStatsTypes";
 import { formatFullReadingTime, ReadingTimeUnitLabels } from "@/components/Actions/ReadingTimer/helpers/formatReadingTime";
 
 import { MigrateBookDataDialog } from "./MigrateBookDataDialog";
+import { WeeklyReadingChart } from "./WeeklyReadingChart";
 
 import styles from "./assets/styles/thorium-web.userMenu.module.css";
 
@@ -45,6 +48,8 @@ export const StatefulUserMenu = () => {
   // same "null means not there yet" convention as StatefulBookSheet's per-book readingStats.
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [stats, setStats] = useState<UserStats | null>(null);
+  const [weeklyStats, setWeeklyStats] = useState<WeeklyBookTypeStats | null>(null);
+  const [weekOffset, setWeekOffset] = useState(0);
 
   const [isMigrateOpen, setIsMigrateOpen] = useState(false);
 
@@ -82,6 +87,16 @@ export const StatefulUserMenu = () => {
   useEffect(() => {
     if (user) setNameDraft(user.name);
   }, [user]);
+
+  // CLAUDE-ADDED: Separate from openStats -- keyed on weekOffset too, so tapping the chart's
+  // prev/next-week arrows (which only change weekOffset) re-fetches just the weekly graph without
+  // re-fetching the rest of the stats dialog. openStats resets weekOffset to 0 on open, which (via
+  // this effect's own dependency) re-fetches the current week even if it was already 0.
+  useEffect(() => {
+    if (!isStatsOpen) return;
+    setWeeklyStats(null);
+    fetchWeeklyStatsFromServer(weekOffset).then(setWeeklyStats);
+  }, [isStatsOpen, weekOffset]);
 
   if (!user) return null;
 
@@ -210,6 +225,7 @@ export const StatefulUserMenu = () => {
   const openStats = () => {
     setIsStatsOpen(true);
     setStats(null);
+    setWeekOffset(0);
     fetchStatsFromServer().then(setStats);
   };
 
@@ -474,6 +490,15 @@ export const StatefulUserMenu = () => {
       />
 
       <ThContainerBody className={ styles.body }>
+        { weeklyStats && (
+          <WeeklyReadingChart
+            days={ weeklyStats.days }
+            canGoToNextWeek={ weekOffset < 0 }
+            onPreviousWeek={ () => setWeekOffset((offset) => offset - 1) }
+            onNextWeek={ () => setWeekOffset((offset) => offset + 1) }
+          />
+        ) }
+
         { !stats ? (
           <p className={ styles.statsLoading }>Loading…</p>
         ) : (
