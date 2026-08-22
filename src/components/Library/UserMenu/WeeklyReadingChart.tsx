@@ -30,6 +30,10 @@ const AREA_FILL_OPACITY = 0.35;
 // rather than distorting every other week's scale. Mirrors Android's own MaxScaleSeconds.
 const MAX_SCALE_SECONDS = 5 * 3600;
 
+// CLAUDE-ADDED: One gridline/label per whole hour from 0 up to MAX_SCALE_SECONDS, per the user's own
+// request -- previously just three marks (max/half/zero). Mirrors Android's own HourMarks.
+const HOUR_MARKS = Array.from({ length: MAX_SCALE_SECONDS / 3600 + 1 }, (_, i) => i * 3600);
+
 interface WeeklyReadingChartProps {
   days: WeeklyBookTypeDay[];
   canGoToNextWeek: boolean;
@@ -129,9 +133,9 @@ export function WeeklyReadingChart({ days, canGoToNextWeek, onPreviousWeek, onNe
 
       <div className={ styles.body }>
         <div className={ styles.axisLabels }>
-          <span>{ formatAxisSeconds(MAX_SCALE_SECONDS) }</span>
-          <span>{ formatAxisSeconds(MAX_SCALE_SECONDS / 2) }</span>
-          <span>0</span>
+          { HOUR_MARKS.slice().reverse().map(seconds => (
+            <span key={ seconds }>{ seconds === 0 ? "0" : formatAxisSeconds(seconds) }</span>
+          )) }
         </div>
 
         <div className={ styles.plotArea }>
@@ -142,13 +146,13 @@ export function WeeklyReadingChart({ days, canGoToNextWeek, onPreviousWeek, onNe
             className={ styles.svg }
             aria-hidden="true"
           >
-            { [0, 0.5, 1].map(fraction => (
+            { HOUR_MARKS.map(seconds => (
               <line
-                key={ fraction }
+                key={ seconds }
                 x1={ 0 }
-                y1={ CHART_HEIGHT * fraction }
+                y1={ yAt(seconds) }
                 x2={ CHART_WIDTH }
-                y2={ CHART_HEIGHT * fraction }
+                y2={ yAt(seconds) }
                 className={ styles.gridline }
                 vectorEffect="non-scaling-stroke"
               />
