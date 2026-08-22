@@ -90,12 +90,20 @@ export const StatefulUserMenu = () => {
 
   // CLAUDE-ADDED: Separate from openStats -- keyed on weekOffset too, so tapping the chart's
   // prev/next-week arrows (which only change weekOffset) re-fetches just the weekly graph without
-  // re-fetching the rest of the stats dialog. openStats resets weekOffset to 0 on open, which (via
-  // this effect's own dependency) re-fetches the current week even if it was already 0.
+  // re-fetching the rest of the stats dialog. openStats resets weekOffset to 0 (and weeklyStats to
+  // null) on open, which -- via this effect's own dependency -- re-fetches the current week even if
+  // it was already 0.
+  //
+  // CLAUDE-ADDED: Deliberately does NOT clear weeklyStats before fetching -- the chart (including its
+  // own prev/next buttons) only renders while weeklyStats is truthy, so clearing it here made the
+  // whole chart disappear on every single week navigation, and stay gone forever on a failed fetch.
+  // Keeping the previous week's data mounted while the next one loads means a click always has a
+  // chart to land on, and a slow/failed fetch just leaves the last-good week showing.
   useEffect(() => {
     if (!isStatsOpen) return;
-    setWeeklyStats(null);
-    fetchWeeklyStatsFromServer(weekOffset).then(setWeeklyStats);
+    fetchWeeklyStatsFromServer(weekOffset).then((result) => {
+      if (result) setWeeklyStats(result);
+    });
   }, [isStatsOpen, weekOffset]);
 
   if (!user) return null;
@@ -225,6 +233,7 @@ export const StatefulUserMenu = () => {
   const openStats = () => {
     setIsStatsOpen(true);
     setStats(null);
+    setWeeklyStats(null);
     setWeekOffset(0);
     fetchStatsFromServer().then(setStats);
   };

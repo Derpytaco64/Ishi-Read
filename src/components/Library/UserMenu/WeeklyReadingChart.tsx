@@ -7,10 +7,11 @@ import ChevronRight from "@/components/Misc/assets/icons/chevron_right.svg";
 
 import styles from "./assets/styles/thorium-web.weeklyReadingChart.module.css";
 
-// CLAUDE-ADDED: Mirrors the Android app's WeeklyReadingChart.kt -- same literal RGB (Audiobook/Comic
-// swapped from the original red/green/blue stacking-order mnemonic per the user's own request, so the
-// color-to-category mapping no longer matches the top/middle/bottom stack order -- intentional), same
-// stack order (EPUB top, Audiobook middle, Manga/Comic bottom), same 0.35 fill opacity.
+// CLAUDE-ADDED: Mirrors the Android app's WeeklyReadingChart.kt -- same literal RGB and same stack
+// order (EPUB top, Manga/Comic middle, Audiobooks bottom). Both the colors and the stack order were
+// reassigned per explicit user requests (first Audiobook/Comic colors swapped, then Audiobook/Comic
+// stack *positions* swapped too), so neither mapping matches the original red/green/blue-by-position
+// mnemonic anymore -- that's intentional, not a bug.
 const EPUB_COLOR = "#E53935";
 const AUDIOBOOK_COLOR = "#1E88E5";
 const COMIC_COLOR = "#43A047";
@@ -79,9 +80,9 @@ export function WeeklyReadingChart({ days, canGoToNextWeek, onPreviousWeek, onNe
   const yAt = (seconds: number) => CHART_HEIGHT - (seconds / maxTotalSeconds) * CHART_HEIGHT;
 
   const zero = days.map(() => 0);
-  const comicTop = days.map(day => day.comicSeconds);
-  const audiobookTop = days.map((day, i) => comicTop[i] + day.audiobookSeconds);
-  const epubTop = days.map((day, i) => audiobookTop[i] + day.epubSeconds);
+  const audiobookTop = days.map(day => day.audiobookSeconds);
+  const comicTop = days.map((day, i) => audiobookTop[i] + day.comicSeconds);
+  const epubTop = days.map((day, i) => comicTop[i] + day.epubSeconds);
 
   const bandFillPath = (bottom: number[], top: number[]) => {
     const topPoints = top
@@ -143,12 +144,12 @@ export function WeeklyReadingChart({ days, canGoToNextWeek, onPreviousWeek, onNe
               />
             )) }
 
-            <path d={ bandFillPath(zero, comicTop) } fill={ COMIC_COLOR } fillOpacity={ AREA_FILL_OPACITY } />
-            <path d={ bandFillPath(comicTop, audiobookTop) } fill={ AUDIOBOOK_COLOR } fillOpacity={ AREA_FILL_OPACITY } />
-            <path d={ bandFillPath(audiobookTop, epubTop) } fill={ EPUB_COLOR } fillOpacity={ AREA_FILL_OPACITY } />
+            <path d={ bandFillPath(zero, audiobookTop) } fill={ AUDIOBOOK_COLOR } fillOpacity={ AREA_FILL_OPACITY } />
+            <path d={ bandFillPath(audiobookTop, comicTop) } fill={ COMIC_COLOR } fillOpacity={ AREA_FILL_OPACITY } />
+            <path d={ bandFillPath(comicTop, epubTop) } fill={ EPUB_COLOR } fillOpacity={ AREA_FILL_OPACITY } />
 
-            <path d={ topEdgePath(comicTop) } fill="none" stroke={ COMIC_COLOR } strokeWidth={ 2 } strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
             <path d={ topEdgePath(audiobookTop) } fill="none" stroke={ AUDIOBOOK_COLOR } strokeWidth={ 2 } strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            <path d={ topEdgePath(comicTop) } fill="none" stroke={ COMIC_COLOR } strokeWidth={ 2 } strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
             <path d={ topEdgePath(epubTop) } fill="none" stroke={ EPUB_COLOR } strokeWidth={ 2 } strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
           </svg>
         </div>
@@ -167,12 +168,12 @@ export function WeeklyReadingChart({ days, canGoToNextWeek, onPreviousWeek, onNe
           EPUB
         </span>
         <span className={ styles.legendItem }>
-          <span className={ styles.legendSwatch } style={{ backgroundColor: AUDIOBOOK_COLOR }} />
-          Audiobook
-        </span>
-        <span className={ styles.legendItem }>
           <span className={ styles.legendSwatch } style={{ backgroundColor: COMIC_COLOR }} />
           Manga/Comic
+        </span>
+        <span className={ styles.legendItem }>
+          <span className={ styles.legendSwatch } style={{ backgroundColor: AUDIOBOOK_COLOR }} />
+          Audiobook
         </span>
       </div>
     </div>
