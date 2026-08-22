@@ -24,6 +24,12 @@ const CHART_WIDTH = 300;
 const CHART_HEIGHT = 140;
 const AREA_FILL_OPACITY = 0.35;
 
+// CLAUDE-ADDED: Fixed (not data-driven) per the user's own request, so the scale reads consistently
+// from week to week instead of rescaling to whatever the busiest day happened to be -- a day that
+// genuinely exceeds this just gets visually capped at the top of the chart (see yAt's clamp below)
+// rather than distorting every other week's scale. Mirrors Android's own MaxScaleSeconds.
+const MAX_SCALE_SECONDS = 5 * 3600;
+
 interface WeeklyReadingChartProps {
   days: WeeklyBookTypeDay[];
   canGoToNextWeek: boolean;
@@ -39,7 +45,7 @@ function parseLocalDate(dateStr: string): Date {
 }
 
 function formatDateRangeTitle(days: WeeklyBookTypeDay[]): string {
-  const formatter = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+  const formatter = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" });
   const start = formatter.format(parseLocalDate(days[0].date));
   const end = formatter.format(parseLocalDate(days[days.length - 1].date));
   return `${ start } – ${ end }`;
@@ -49,12 +55,17 @@ function formatDayLabel(dateStr: string): string {
   return new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(parseLocalDate(dateStr));
 }
 
-/** Compact single-unit axis label ("2h"/"45m"/"30s") -- mirrors Android's own formatAxisSeconds; an
- *  axis tick doesn't need every unit down to the second, just enough to read the scale at a glance. */
+/** Compact axis label ("5h"/"2h 30m"/"45m"/"30s") -- mirrors Android's own formatAxisSeconds; an axis
+ *  tick doesn't need every unit down to the second, just enough to read the scale at a glance.
+ *  Combines hours+minutes (rather than truncating to a bare hour count) since MAX_SCALE_SECONDS / 2
+ *  lands on a half-hour, which a bare hour count would otherwise silently round down to "2h". */
 function formatAxisSeconds(seconds: number): string {
   const whole = Math.floor(seconds);
-  if (whole >= 3600) return `${ Math.floor(whole / 3600) }h`;
-  if (whole >= 60) return `${ Math.floor(whole / 60) }m`;
+  const hours = Math.floor(whole / 3600);
+  const minutes = Math.floor((whole % 3600) / 60);
+  if (hours > 0 && minutes > 0) return `${ hours }h ${ minutes }m`;
+  if (hours > 0) return `${ hours }h`;
+  if (minutes > 0) return `${ minutes }m`;
   return `${ whole }s`;
 }
 
@@ -69,15 +80,14 @@ export function WeeklyReadingChart({ days, canGoToNextWeek, onPreviousWeek, onNe
 
   const n = days.length;
   const hasActivity = days.some(day => day.epubSeconds + day.comicSeconds + day.audiobookSeconds > 0);
-  const maxTotalSeconds = Math.max(
-    60,
-    ...days.map(day => day.epubSeconds + day.comicSeconds + day.audiobookSeconds)
-  );
 
   // CLAUDE-ADDED: Points sit at the center of n equal-width columns, matching the flex/flex:1
   // day-label row below so the chart and its x-axis labels line up exactly.
   const xAt = (i: number) => (i + 0.5) / n * CHART_WIDTH;
-  const yAt = (seconds: number) => CHART_HEIGHT - (seconds / maxTotalSeconds) * CHART_HEIGHT;
+  const yAt = (seconds: number) => {
+    const fraction = Math.min(Math.max(seconds, 0), MAX_SCALE_SECONDS) / MAX_SCALE_SECONDS;
+    return CHART_HEIGHT - fraction * CHART_HEIGHT;
+  };
 
   const zero = days.map(() => 0);
   const audiobookTop = days.map(day => day.audiobookSeconds);
@@ -119,8 +129,8 @@ export function WeeklyReadingChart({ days, canGoToNextWeek, onPreviousWeek, onNe
 
       <div className={ styles.body }>
         <div className={ styles.axisLabels }>
-          <span>{ hasActivity ? formatAxisSeconds(maxTotalSeconds) : "" }</span>
-          <span>{ hasActivity ? formatAxisSeconds(maxTotalSeconds / 2) : "" }</span>
+          <span>{ formatAxisSeconds(MAX_SCALE_SECONDS) }</span>
+          <span>{ formatAxisSeconds(MAX_SCALE_SECONDS / 2) }</span>
           <span>0</span>
         </div>
 
