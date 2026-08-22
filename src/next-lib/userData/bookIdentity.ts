@@ -10,7 +10,9 @@ import { computePartialMD5 } from "./kosyncHash";
 type CachedIdentity = { mtimeMs: number; hash: string };
 const identityCache = new Map<string, CachedIdentity>();
 
-const EBOOK_EXTENSIONS = [".epub", ".pdf", ".cbz"];
+const TEXT_EBOOK_EXTENSIONS = [".epub", ".pdf"];
+const COMIC_EXTENSIONS = [".cbz"];
+const EBOOK_EXTENSIONS = [...TEXT_EBOOK_EXTENSIONS, ...COMIC_EXTENSIONS];
 const AUDIOBOOK_EXTENSIONS = [".m4b"];
 const LIBRARY_EXTENSIONS = [...EBOOK_EXTENSIONS, ...AUDIOBOOK_EXTENSIONS];
 
@@ -20,6 +22,10 @@ export interface LibraryScan {
   // CLAUDE-ADDED: hashes of every audiobook currently on disk, used to split per-user hash-keyed
   // data (which doesn't otherwise know ebook from audiobook) the same way stats/route.ts always has.
   audiobookHashes: Set<string>;
+  // CLAUDE-ADDED: hashes of every comic (.cbz) currently on disk -- same purpose as audiobookHashes,
+  // for splitting text-ebook reading time from manga/comic reading time (see the weekly stats route).
+  // Everything in libraryHashes that's neither here nor in audiobookHashes is a text ebook.
+  comicHashes: Set<string>;
   // CLAUDE-ADDED: hashes of every book (ebook or audiobook) currently on disk -- the membership test
   // for "is this per-user data file still attached to a real library entry, or orphaned by a
   // deleted/moved book." Same computePartialMD5 identity every positions/highlights/etc file is
@@ -34,6 +40,7 @@ export interface LibraryScan {
 // of this walk did -- is fine to do on every call rather than caching across requests.
 export function scanLibrary(): LibraryScan {
   const audiobookHashes = new Set<string>();
+  const comicHashes = new Set<string>();
   const libraryHashes = new Set<string>();
   let booksInLibrary = 0;
   let audiobooksInLibrary = 0;
@@ -50,6 +57,7 @@ export function scanLibrary(): LibraryScan {
       if (!fs.statSync(fullPath).isFile()) continue;
 
       const isAudiobook = AUDIOBOOK_EXTENSIONS.includes(ext);
+      const isComic = COMIC_EXTENSIONS.includes(ext);
       if (isAudiobook) audiobooksInLibrary++;
       else booksInLibrary++;
 
@@ -57,6 +65,7 @@ export function scanLibrary(): LibraryScan {
         const hash = computePartialMD5(fullPath);
         libraryHashes.add(hash);
         if (isAudiobook) audiobookHashes.add(hash);
+        else if (isComic) comicHashes.add(hash);
       } catch {
         // Unreadable file -- leave it out of the hash sets, its per-user data (if any) will just
         // fall through as orphaned rather than crashing the whole scan.
@@ -66,7 +75,7 @@ export function scanLibrary(): LibraryScan {
     // Publications dir missing/unreadable -- counts stay zero, hash sets stay empty.
   }
 
-  return { booksInLibrary, audiobooksInLibrary, audiobookHashes, libraryHashes };
+  return { booksInLibrary, audiobooksInLibrary, audiobookHashes, comicHashes, libraryHashes };
 }
 
 function base64UrlDecode(str: string): string {

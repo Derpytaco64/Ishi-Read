@@ -6,14 +6,16 @@ import {
   saveCompletedListenToServer,
   deleteCompletedListenFromServer
 } from "@/lib/userData/completedListensApi";
-import { StoredCompletedListen } from "@/lib/userData/listeningTimeTypes";
+import { fetchDailyListeningHistoryFromServer, saveDailyListeningHistoryToServer } from "@/lib/userData/dailyListeningHistoryApi";
+import { StoredCompletedListen, DailyListeningBucket } from "@/lib/userData/listeningTimeTypes";
 import type { AppDispatch, RootState } from "@/lib/store";
 
 // CLAUDE-ADDED: Audiobook counterpart to readingTimeReducer.ts -- deliberately simpler, no
-// wordCount/speedSamples/dailyHistory equivalents (see listeningTimeTypes.ts). The one structural
-// difference from the reading-time model: accumulatedSeconds here is a *lifetime* total for the book,
-// never reset on completion, so a Completed Listen archives only {startedAt, completedAt} (per the
-// user's own request) without losing "total time listened" for the stats page across repeat listens.
+// wordCount/speedSamples equivalents (see listeningTimeTypes.ts). The one structural difference from
+// the reading-time model: accumulatedSeconds here is a *lifetime* total for the book, never reset on
+// completion, so a Completed Listen archives {startedAt, completedAt, dailyHistory} (seconds itself
+// per the user's own request stays out of it) without losing "total time listened" for the stats page
+// across repeat listens.
 export interface ListeningTimeReducerState {
   manifestUrl: string | null;
   accumulatedSeconds: number;
@@ -23,6 +25,11 @@ export interface ListeningTimeReducerState {
   startedAt: number | null;
   isLoaded: boolean;
   completedListens: StoredCompletedListen[];
+  // CLAUDE-ADDED: The *currently open* listen-through's day-by-day buckets (see DailyListeningBucket)
+  // -- mirrors readingTimeReducer's dailyReadingHistory. Archived onto the new StoredCompletedListen
+  // and cleared in completeListen; left alone by discardListenStart since that only abandons the start
+  // marker, not any time already banked into today's bucket.
+  dailyListeningHistory: DailyListeningBucket[];
 }
 
 const initialState: ListeningTimeReducerState = {
@@ -30,7 +37,8 @@ const initialState: ListeningTimeReducerState = {
   accumulatedSeconds: 0,
   startedAt: null,
   isLoaded: false,
-  completedListens: []
+  completedListens: [],
+  dailyListeningHistory: []
 };
 
 export const listeningTimeSlice = createSlice({
@@ -44,15 +52,18 @@ export const listeningTimeSlice = createSlice({
       state.startedAt = null;
       state.isLoaded = false;
       state.completedListens = [];
+      state.dailyListeningHistory = [];
     },
     setListeningTimeLoaded: (state, action: PayloadAction<{
       accumulatedSeconds: number;
       startedAt: number | null;
       completedListens: StoredCompletedListen[];
+      dailyListeningHistory: DailyListeningBucket[];
     }>) => {
       state.accumulatedSeconds = action.payload.accumulatedSeconds;
       state.startedAt = action.payload.startedAt;
       state.completedListens = action.payload.completedListens;
+      state.dailyListeningHistory = action.payload.dailyListeningHistory;
       state.isLoaded = true;
     },
     incrementListeningSeconds: (state, action: PayloadAction<number>) => {
@@ -66,6 +77,9 @@ export const listeningTimeSlice = createSlice({
     },
     removeCompletedListenState: (state, action: PayloadAction<string>) => {
       state.completedListens = state.completedListens.filter(item => item.id !== action.payload);
+    },
+    setDailyListeningHistory: (state, action: PayloadAction<DailyListeningBucket[]>) => {
+      state.dailyListeningHistory = action.payload;
     }
   }
 });
@@ -76,7 +90,8 @@ export const {
   incrementListeningSeconds,
   setStartedAt,
   upsertCompletedListen,
-  removeCompletedListenState
+  removeCompletedListenState,
+  setDailyListeningHistory
 } = listeningTimeSlice.actions;
 
 // CLAUDE-ADDED: Same decode-and-load shape as readingTimeReducer's loadReadingTime -- dispatched
@@ -88,15 +103,17 @@ export const loadListeningTime = (rawManifestUrl: string) => async (dispatch: Ap
   const manifestUrl = decodeURIComponent(rawManifestUrl);
   dispatch(setManifestUrl(manifestUrl));
 
-  const [listeningTime, completedListens] = await Promise.all([
+  const [listeningTime, completedListens, dailyListeningHistory] = await Promise.all([
     fetchListeningTimeFromServer(manifestUrl),
-    fetchCompletedListensFromServer(manifestUrl)
+    fetchCompletedListensFromServer(manifestUrl),
+    fetchDailyListeningHistoryFromServer(manifestUrl)
   ]);
 
   dispatch(setListeningTimeLoaded({
     accumulatedSeconds: listeningTime?.accumulatedSeconds ?? 0,
     startedAt: listeningTime?.startedAt ?? null,
-    completedListens
+    completedListens,
+    dailyListeningHistory
   }));
 };
 
@@ -129,18 +146,22 @@ export const discardListenStart = (manifestUrl: string) => (dispatch: AppDispatc
 // comment) and manually (the Listening Timer panel's "Mark as Finished" button).
 export const completeListen = (manifestUrl: string) => (dispatch: AppDispatch, getState: () => RootState) => {
   const startedAt = getState().listeningTime.startedAt ?? Date.now();
+  const dailyHistory = getState().listeningTime.dailyListeningHistory;
 
   const item: StoredCompletedListen = {
     id: crypto.randomUUID(),
     startedAt,
-    completedAt: Date.now()
+    completedAt: Date.now(),
+    dailyHistory
   };
 
   dispatch(upsertCompletedListen(item));
   saveCompletedListenToServer(manifestUrl, item);
 
   dispatch(setStartedAt(null));
+  dispatch(setDailyListeningHistory([]));
   dispatch(persistListeningTime(manifestUrl));
+  saveDailyListeningHistoryToServer(manifestUrl, []);
 };
 
 export const deleteCompletedListen = (manifestUrl: string, id: string) => (dispatch: AppDispatch) => {
