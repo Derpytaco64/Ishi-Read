@@ -30,7 +30,7 @@ import { Locator } from "@readium/shared";
 import debounce from "debounce";
 
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
-import { addSpeedSample, setCurrentProgression, setDailyReadingHistory } from "@/lib/readingTimeReducer";
+import { addSpeedSample, incrementReadingSeconds, setCurrentProgression, setDailyReadingHistory } from "@/lib/readingTimeReducer";
 import { saveGlobalReadingSpeedSamplesToServer } from "@/lib/userData/readingSpeedApi";
 import { saveDailyReadingHistoryToServer } from "@/lib/userData/dailyReadingHistoryApi";
 import { ReadingSpeedSample, DailyReadingBucket } from "@/lib/userData/readingTimeTypes";
@@ -47,6 +47,13 @@ const PERSIST_DEBOUNCE_MS = 2000;
 // sample. It only needs to be low enough to catch the multiple-thousands-of-wpm rate flipping
 // several pages in a couple of seconds actually produces.
 const RAPID_TURN_WPM_CEILING = 2500;
+
+// CLAUDE-ADDED: Slower than any human reads implies the book was left open while away from it (AFK,
+// fell asleep) rather than genuinely slow reading. Unlike a rejected-but-plausible sample (still real
+// time with the book open, see the file-header comment), an interval below this rate has its elapsed
+// seconds backed out of both accumulatedSeconds and today's daily bucket instead of being credited to
+// either -- mirrors the Android app's MIN_PLAUSIBLE_WPM in ReadingTimerTracker.
+const MIN_PLAUSIBLE_WPM = 25;
 
 // CLAUDE-ADDED: Local (not UTC) calendar day, so "today" lines up with the day the user actually
 // experiences reading in, not whatever day UTC midnight happens to fall on for their timezone.
@@ -177,6 +184,7 @@ export const useReadingSpeedSampler = () => {
     // count scan still running) all disqualify it there without disqualifying the seconds credit below.
     let deltaWords = 0;
     let acceptedSample = false;
+    let afkGap = false;
 
     // CLAUDE-ADDED: A comic's readingOrder is all images -- wordCount comes back 0 (not null, see
     // useBookWordCount's try/catch), which would otherwise satisfy `wordCount !== null` below and add
@@ -191,7 +199,12 @@ export const useReadingSpeedSampler = () => {
       // and progression separates the *next* accepted sample from here, instead of poisoning the
       // buffer with one wildly-fast reading.
       const impliedWpm = candidateWords / (deltaSeconds / 60);
-      if (impliedWpm <= RAPID_TURN_WPM_CEILING) {
+      if (impliedWpm < MIN_PLAUSIBLE_WPM) {
+        // CLAUDE-ADDED: AFK/asleep gap -- see MIN_PLAUSIBLE_WPM above. Unlike the ceiling case, this
+        // interval's seconds get backed out below instead of credited, so it returns before the
+        // unconditional bucket-crediting code runs.
+        afkGap = true;
+      } else if (impliedWpm <= RAPID_TURN_WPM_CEILING) {
         deltaWords = candidateWords;
         acceptedSample = true;
       }
@@ -200,6 +213,11 @@ export const useReadingSpeedSampler = () => {
     if (acceptedSample) {
       const sample: ReadingSpeedSample = { deltaWords, deltaSeconds, timestamp: Date.now() };
       dispatch(addSpeedSample(sample));
+    }
+
+    if (afkGap) {
+      dispatch(incrementReadingSeconds(-deltaSeconds));
+      return;
     }
 
     // CLAUDE-ADDED: Roll deltaSeconds into today's bucket unconditionally (see file-header comment) --

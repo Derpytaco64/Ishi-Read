@@ -22,6 +22,13 @@ const MAD_THRESHOLD = 2.5;
 // before the trim runs, so it can't be out-voted by a cluster of bad data.
 const PLAUSIBLE_WPM_CEILING = 600;
 
+// CLAUDE-ADDED: Companion floor to the ceiling above -- mirrors useReadingSpeedSampler's
+// MIN_PLAUSIBLE_WPM. New samples this slow are already kept out of the buffer at the source (an
+// AFK/asleep gap, not real reading), but this also strains out any sample that predates that fix or
+// otherwise slipped in below human reading pace, so the estimate can't be dragged down by non-reading
+// time either. Mirrors the Android app's PLAUSIBLE_WPM_FLOOR in ReadingSpeed.kt.
+const PLAUSIBLE_WPM_FLOOR = 25;
+
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -42,7 +49,7 @@ export function computeCurrentWpm(samples: ReadingSpeedSample[]): number | null 
   if (samples.length === 0) return null;
 
   const rates = samples.map(s => s.deltaWords / (s.deltaSeconds / 60));
-  const plausible = samples.filter((_, i) => rates[i]! >= 0 && rates[i]! <= PLAUSIBLE_WPM_CEILING);
+  const plausible = samples.filter((_, i) => rates[i]! >= PLAUSIBLE_WPM_FLOOR && rates[i]! <= PLAUSIBLE_WPM_CEILING);
   // CLAUDE-ADDED: If literally every sample is above the ceiling (a consistently very fast reader),
   // fall back to the full buffer rather than returning nothing -- the ceiling is meant to stop a
   // minority of bad data from out-voting good data, not to cap a real reader's pace.
