@@ -355,7 +355,8 @@ export const defaultPreferences: ThPreferences<DefaultKeys> = createPreferences<
     ],
     fxlOrder: [
       ThSettingsKeys.theme,
-      ThSettingsKeys.columns
+      ThSettingsKeys.columns,
+      ThSettingsKeys.spreadOffset
     ],
     webPubOrder: [
       ThSettingsKeys.zoom,

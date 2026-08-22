@@ -14,6 +14,7 @@ export const SETTINGS_KEY_TO_PREFERENCE = {
   [ThSettingsKeys.publisherStyles]: "publisherStyles",
   [ThSettingsKeys.spacingGroup]: "spacingGroup",
   [ThSettingsKeys.spacingPresets]: "spacingPresets",
+  [ThSettingsKeys.spreadOffset]: "spreadOffset",
   [ThSettingsKeys.textAlign]: "textAlign",
   [ThSettingsKeys.textGroup]: "textGroup",
   [ThSettingsKeys.textNormalize]: "textNormalization",

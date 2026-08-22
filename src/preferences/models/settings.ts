@@ -44,6 +44,7 @@ export enum ThSettingsKeys {
   publisherStyles = "publisherStyles",
   spacingGroup = "spacingGroup",
   spacingPresets = "spacingPresets",
+  spreadOffset = "spreadOffset",
   textAlign = "textAlign",
   textGroup = "textGroup",
   textNormalize = "textNormalize",

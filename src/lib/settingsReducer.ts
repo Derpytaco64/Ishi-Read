@@ -82,6 +82,7 @@ export interface SettingsReducerState {
   publisherStyles: boolean;
   scroll: boolean;
   spacing: SpacingStateObject;
+  spreadOffset: boolean;
   textAlign: ThTextAlignOptions;
   textNormalization: boolean;
   wordSpacing: number | null;
@@ -108,6 +109,7 @@ const initialState: SettingsReducerState = {
     custom: {},
     baseline: {}
   },
+  spreadOffset: false,
   textAlign: ThTextAlignOptions.publisher,
   textNormalization: false,
   wordSpacing: null,
@@ -281,6 +283,9 @@ export const settingsSlice = createSlice({
         state.publisherStyles = false;
       }
     },
+    setSpreadOffset: (state, action) => {
+      state.spreadOffset = action.payload
+    },
     setTextAlign: (state, action) => {
       state.textAlign = action.payload
     },
@@ -315,6 +320,7 @@ export const {
   setPublisherStyles,
   setScroll,
   setSpacingPreset,
+  setSpreadOffset,
   setTextAlign,
   setTextNormalization,
   setNoRuby,

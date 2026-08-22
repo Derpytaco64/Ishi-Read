@@ -263,6 +263,10 @@
                 },
                 "title": "Spread"
             },
+            "spreadOffset": {
+                "label": "Turn on if two-page spreads are split across the wrong pages",
+                "title": "Shift page pairing by 1"
+            },
             "text": "Text",
             "textAlign": {
                 "default": "Default",

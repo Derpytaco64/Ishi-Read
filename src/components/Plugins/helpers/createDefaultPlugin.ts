@@ -26,6 +26,7 @@ import { StatefulParagraphSpacing } from "../../Settings/Spacing/StatefulParagra
 import { StatefulPublisherStyles } from "../../Settings/StatefulPublisherStyles";
 import { StatefulSpacingGroup } from "../../Settings/Spacing/StatefulSpacingGroup";
 import { StatefulSpacingPresets } from "../../Settings/Spacing/StatefulSpacingPresets";
+import { StatefulSpreadOffset } from "../../Epub/Settings/StatefulSpreadOffset";
 import { StatefulTextAlign } from "../../Settings/Text/StatefulTextAlign";
 import { StatefulTextGroup } from "../../Settings/Text/StatefulTextGroup";
 import { StatefulTextNormalize } from "../../Settings/Text/StatefulTextNormalize";
@@ -115,6 +116,9 @@ export const createDefaultPlugin = (): ThPlugin => {
         [ThSettingsKeys.spacingPresets]: {
           Comp: StatefulSpacingPresets,
           type: "spacing"
+        },
+        [ThSettingsKeys.spreadOffset]: {
+          Comp: StatefulSpreadOffset
         },
         [ThSettingsKeys.textAlign]: {
           Comp: StatefulTextAlign,

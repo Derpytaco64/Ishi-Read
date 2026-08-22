@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@readium/navigator-html-injectables@2.4.4': 6060265fa667b0528649e07d57992044d890c89b5c55743a08aa5f2db1265b40
-  '@readium/navigator@2.6.1': 5f7c2e34692c5a6b48ea69b748539783b92f61c93b586ca6ae3132230861b00f
+  '@readium/navigator@2.6.1': cee781d4d5610f3c3037fcaf01acebfd9e09a2a76be606d5cb4bf52430361fa8
 
 importers:
 
@@ -20,7 +20,7 @@ importers:
         version: 2.0.5
       '@readium/navigator':
         specifier: '>=2.6.1'
-        version: 2.6.1(patch_hash=5f7c2e34692c5a6b48ea69b748539783b92f61c93b586ca6ae3132230861b00f)
+        version: 2.6.1(patch_hash=cee781d4d5610f3c3037fcaf01acebfd9e09a2a76be606d5cb4bf52430361fa8)
       '@readium/navigator-html-injectables':
         specifier: '>=2.4.4'
         version: 2.4.4(patch_hash=6060265fa667b0528649e07d57992044d890c89b5c55743a08aa5f2db1265b40)
@@ -2400,6 +2400,7 @@ packages:
   eslint@9.39.2:
     resolution: {integrity: sha512-LEyamqS7W5HB3ujJyvi0HQK/dtVINZvd5mAAp9eT5S/ujByGjiZLCzPcHVzuXbpJDJF/cxwHlfceVUDZ2lnSTw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -5126,7 +5127,7 @@ snapshots:
 
   '@readium/navigator-html-injectables@2.4.4(patch_hash=6060265fa667b0528649e07d57992044d890c89b5c55743a08aa5f2db1265b40)': {}
 
-  '@readium/navigator@2.6.1(patch_hash=5f7c2e34692c5a6b48ea69b748539783b92f61c93b586ca6ae3132230861b00f)': {}
+  '@readium/navigator@2.6.1(patch_hash=cee781d4d5610f3c3037fcaf01acebfd9e09a2a76be606d5cb4bf52430361fa8)': {}
 
   '@readium/shared@2.2.3':
     dependencies:

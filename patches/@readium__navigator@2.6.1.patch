@@ -1,7 +1,7 @@
 diff --git a/dist/index.js b/dist/index.js
-index cbe2cfd23c35825905968387d3e227600f88b187..92bffe188edeb1ce6328a181e1e28eb0f836b91b 100644
+index cbe2cfd23c35825905968387d3e227600f88b187..5911ca0cf0287b953c6634ee641f955732285884 100644
 --- a/dist/index.js
-+++ b/dist/index.js	
++++ b/dist/index.js
 @@ -3973,8 +3973,23 @@ const ht = class ht extends kt {
        const n = e.getRangeAt(0)?.getClientRects();
        if (!n || n.length === 0)
@@ -36,7 +36,81 @@ index cbe2cfd23c35825905968387d3e227600f88b187..92bffe188edeb1ce6328a181e1e28eb0
        this.framePool.currentFrames[0].msg.send("go_progression", o, (h) => l(h));
      }) : i = !0, e(i);
    }
-@@ -9674,7 +9689,7 @@ class zn extends Pn {
+@@ -7885,8 +7900,12 @@ Overscroll: ${this.pan.overscrollX.toFixed(2)},${this.pan.overscrollY.toFixed(2)
+ var De = /* @__PURE__ */ ((r) => (r.auto = "auto", r.landscape = "landscape", r.portrait = "portrait", r))(De || {}), Ue = /* @__PURE__ */ ((r) => (r.auto = "auto", r.both = "both", r.none = "none", r.landscape = "landscape", r))(Ue || {});
+ class ao {
+   // TODO getter
+-  constructor(t) {
+-    this.shift = !0, this.spreads = [], this.nLandscape = 0, this.index(t), this.testShift(t), console.log(`Indexed ${this.spreads.length} spreads for ${t.readingOrder.items.length} items`);
++  constructor(t, r = !1) {
++    this.shift = !r, this.spreads = [], this.nLandscape = 0, this.index(t), this.testShift(t), console.log(`Indexed ${this.spreads.length} spreads for ${t.readingOrder.items.length} items`);
++  }
++  // CLAUDE-ADDED: see FXLFramePoolManager.setSpreadOffset
++  setSpreadOffset(t, r) {
++    this.shift = !r, this.index(t, !0), this.testShift(t);
+   }
+   index(t, e = !1) {
+     this.nLandscape = 0, t.readingOrder.items.forEach((i, n) => {
+@@ -7930,10 +7949,10 @@ class ao {
+ }
+ const $i = 8, Gi = 5, lo = 300, ho = 15e3, co = 250, uo = 150, po = 500;
+ class fo {
+-  constructor(t, e, i, n, s, o) {
++  constructor(t, e, i, n, s, o, a) {
+     if (this.pool = /* @__PURE__ */ new Map(), this.blobs = /* @__PURE__ */ new Map(), this.inprogress = /* @__PURE__ */ new Map(), this.delayedShow = /* @__PURE__ */ new Map(), this.delayedTimeout = /* @__PURE__ */ new Map(), this.previousFrames = [], this.injector = null, this.width = 0, this.height = 0, this.transform = "", this.currentSlide = 0, this.spread = !0, this.orientationInternal = -1, this.container = t, this.positions = e, this.pub = i, this.injector = n ?? null, this.contentProtectionConfig = s || {}, this.keyboardPeripheralsConfig = o || [], this.spreadPresentation = i.metadata.otherMetadata?.spread || Ue.auto, this.pub.metadata.effectiveReadingProgression !== I.rtl && this.pub.metadata.effectiveReadingProgression !== I.ltr)
+       throw Error("Unsupported reading progression for EPUB");
+-    this.spreader = new ao(this.pub), this.containerHeightCached = t.clientHeight, this.bookElement = document.createElement("div"), this.bookElement.ariaLabel = "Book", this.bookElement.tabIndex = -1, this.updateBookStyle(!0), this.spineElement = document.createElement("div"), this.spineElement.ariaLabel = "Spine", this.bookElement.appendChild(this.spineElement), this.container.appendChild(this.bookElement), this.updateSpineStyle(!0), this.peripherals = new oo(this), this.pub.readingOrder.items.forEach((a) => {
++    this.spreader = new ao(this.pub, !!a), this.containerHeightCached = t.clientHeight, this.bookElement = document.createElement("div"), this.bookElement.ariaLabel = "Book", this.bookElement.tabIndex = -1, this.updateBookStyle(!0), this.spineElement = document.createElement("div"), this.spineElement.ariaLabel = "Spine", this.bookElement.appendChild(this.spineElement), this.container.appendChild(this.bookElement), this.updateSpineStyle(!0), this.peripherals = new oo(this), this.pub.readingOrder.items.forEach((a) => {
+       const l = new eo(this.peripherals, this.pub.metadata.effectiveReadingProgression, a.href, this.contentProtectionConfig, this.keyboardPeripheralsConfig);
+       this.spineElement.appendChild(l.element), this.pool.set(a.href, l), l.width = 100 / this.length * (a.properties?.otherProperties.orientation === De.landscape || a.properties?.otherProperties.addBlank ? this.perPage : 1), l.height = this.height;
+     });
+@@ -8051,6 +8070,10 @@ class fo {
+   setPerPage(t) {
+     t === null ? this.spread = !0 : t === 1 ? this.spread = !1 : this.spread = !0, requestAnimationFrame(() => this.resizeHandler(!0));
+   }
++  // CLAUDE-ADDED: Live-toggles the spreadOffset preference without reconstructing the frame pool.
++  setSpreadOffset(t) {
++    this.spreader.setSpreadOffset(this.pub, t), requestAnimationFrame(() => this.resizeHandler(!0));
++  }
+   /**
+    * Moves sliders frame to position of currently active slide
+    */
+@@ -8253,7 +8276,7 @@ class fo {
+ }
+ class Ht {
+   constructor(t = {}) {
+-    this.backgroundColor = W(t.backgroundColor), this.blendFilter = E(t.blendFilter), this.constraint = w(t.constraint), this.columnCount = w(t.columnCount), this.darkenFilter = Ct(t.darkenFilter), this.deprecatedFontSize = E(t.deprecatedFontSize), this.fontFamily = W(t.fontFamily), this.fontSize = D(t.fontSize, Qt.range), this.fontSizeNormalize = E(t.fontSizeNormalize), this.fontOpticalSizing = E(t.fontOpticalSizing), this.fontWeight = D(t.fontWeight, at.range), this.fontWidth = D(t.fontWidth, te.range), this.hyphens = E(t.hyphens), this.invertFilter = Ct(t.invertFilter), this.invertGaijiFilter = Ct(t.invertGaijiFilter), this.iOSPatch = E(t.iOSPatch), this.iPadOSPatch = E(t.iPadOSPatch), this.letterSpacing = w(t.letterSpacing), this.ligatures = E(t.ligatures), this.lineHeight = w(t.lineHeight), this.linkColor = W(t.linkColor), this.noRuby = E(t.noRuby), this.pageGutter = w(t.pageGutter), this.paragraphIndent = w(t.paragraphIndent), this.paragraphSpacing = w(t.paragraphSpacing), this.scroll = E(t.scroll), this.scrollPaddingTop = w(t.scrollPaddingTop), this.scrollPaddingBottom = w(t.scrollPaddingBottom), this.scrollPaddingLeft = w(t.scrollPaddingLeft), this.scrollPaddingRight = w(t.scrollPaddingRight), this.selectionBackgroundColor = W(t.selectionBackgroundColor), this.selectionTextColor = W(t.selectionTextColor), this.textAlign = fe(t.textAlign, nt), this.textColor = W(t.textColor), this.textNormalization = E(t.textNormalization), this.visitedColor = W(t.visitedColor), this.wordSpacing = w(t.wordSpacing), this.optimalLineLength = w(t.optimalLineLength), this.maximalLineLength = w(t.maximalLineLength), this.minimalLineLength = w(t.minimalLineLength);
++    this.backgroundColor = W(t.backgroundColor), this.blendFilter = E(t.blendFilter), this.constraint = w(t.constraint), this.columnCount = w(t.columnCount), this.darkenFilter = Ct(t.darkenFilter), this.deprecatedFontSize = E(t.deprecatedFontSize), this.fontFamily = W(t.fontFamily), this.fontSize = D(t.fontSize, Qt.range), this.fontSizeNormalize = E(t.fontSizeNormalize), this.fontOpticalSizing = E(t.fontOpticalSizing), this.fontWeight = D(t.fontWeight, at.range), this.fontWidth = D(t.fontWidth, te.range), this.hyphens = E(t.hyphens), this.invertFilter = Ct(t.invertFilter), this.invertGaijiFilter = Ct(t.invertGaijiFilter), this.iOSPatch = E(t.iOSPatch), this.iPadOSPatch = E(t.iPadOSPatch), this.letterSpacing = w(t.letterSpacing), this.ligatures = E(t.ligatures), this.lineHeight = w(t.lineHeight), this.linkColor = W(t.linkColor), this.noRuby = E(t.noRuby), this.pageGutter = w(t.pageGutter), this.paragraphIndent = w(t.paragraphIndent), this.paragraphSpacing = w(t.paragraphSpacing), this.scroll = E(t.scroll), this.scrollPaddingTop = w(t.scrollPaddingTop), this.scrollPaddingBottom = w(t.scrollPaddingBottom), this.scrollPaddingLeft = w(t.scrollPaddingLeft), this.scrollPaddingRight = w(t.scrollPaddingRight), this.selectionBackgroundColor = W(t.selectionBackgroundColor), this.selectionTextColor = W(t.selectionTextColor), this.spreadOffset = E(t.spreadOffset), this.textAlign = fe(t.textAlign, nt), this.textColor = W(t.textColor), this.textNormalization = E(t.textNormalization), this.visitedColor = W(t.visitedColor), this.wordSpacing = w(t.wordSpacing), this.optimalLineLength = w(t.optimalLineLength), this.maximalLineLength = w(t.maximalLineLength), this.minimalLineLength = w(t.minimalLineLength);
+   }
+   static serialize(t) {
+     const { ...e } = t;
+@@ -9174,7 +9197,8 @@ class zn extends Pn {
+         this.pub,
+         this._injector,
+         this._contentProtection,
+-        this._keyboardPeripherals
++        this._keyboardPeripherals,
++        !!this._preferences.spreadOffset
+       ), this.framePool.listener = (t, e) => {
+         this.eventListener(t, e);
+       };
+@@ -9204,11 +9228,12 @@ class zn extends Pn {
+     return this._preferencesEditor === null && (this._preferencesEditor = new Xi(this._preferences, this.settings, this.pub.metadata)), this._preferencesEditor;
+   }
+   async submitPreferences(t) {
+-    this._preferences = this._preferences.merging(t), await this.applyPreferences();
++    const r = !!this._preferences.spreadOffset;
++    this._preferences = this._preferences.merging(t), await this.applyPreferences(r);
+   }
+-  async applyPreferences() {
++  async applyPreferences(r) {
+     const t = this._settings;
+-    this._settings = new Yi(this._preferences, this._defaults), this._preferencesEditor !== null && (this._preferencesEditor = new Xi(this._preferences, this.settings, this.pub.metadata)), this._layout === v.fixed ? this.handleFXLPrefs(t, this._settings) : await this.updateCSS(!0);
++    this._settings = new Yi(this._preferences, this._defaults), this._preferencesEditor !== null && (this._preferencesEditor = new Xi(this._preferences, this.settings, this.pub.metadata)), this._layout === v.fixed ? (this.handleFXLPrefs(t, this._settings), r !== void 0 && r !== !!this._preferences.spreadOffset && this.framePool.setSpreadOffset(!!this._preferences.spreadOffset)) : await this.updateCSS(!0);
+   }
+   // TODO: fit, etc.
+   handleFXLPrefs(t, e) {
+@@ -9674,7 +9699,7 @@ class zn extends Pn {
        return;
      }
      const o = t?.locations?.progression;
@@ -48,7 +122,7 @@ index cbe2cfd23c35825905968387d3e227600f88b187..92bffe188edeb1ce6328a181e1e28eb0
 diff --git a/dist/index.umd.cjs b/dist/index.umd.cjs
 index 716d3ff453140ef00de5b4fa93efbeab215cdb1a..e05f1f7f70f9d8f6bc273ff225bf8a58c5006589 100644
 --- a/dist/index.umd.cjs
-+++ b/dist/index.umd.cjs	
++++ b/dist/index.umd.cjs
 @@ -56,7 +56,7 @@
          body::-webkit-scrollbar {
              display: none; /* for Chrome, Safari, and Opera */
@@ -59,10 +133,49 @@ index 716d3ff453140ef00de5b4fa93efbeab215cdb1a..e05f1f7f70f9d8f6bc273ff225bf8a58
              text-size-adjust: none;
              -ms-text-size-adjust: none;
 diff --git a/src/epub/EpubNavigator.ts b/src/epub/EpubNavigator.ts
-index 3ed2cf3a939d17f667bf2a9b2d7b13bd3e494000..061a4819e8e4b25348ec043b4bb3268a8354b095 100644
+index 3ed2cf3a939d17f667bf2a9b2d7b13bd3e494000..ce686abdf07c94a140c70affc9fc5a8dd566ba37 100644
 --- a/src/epub/EpubNavigator.ts
-+++ b/src/epub/EpubNavigator.ts	
-@@ -1079,7 +1079,7 @@ export class EpubNavigator extends VisualNavigator implements Configurable<Confi
++++ b/src/epub/EpubNavigator.ts
+@@ -256,7 +256,8 @@ export class EpubNavigator extends VisualNavigator implements Configurable<Confi
+                 this.pub,
+                 this._injector,
+                 this._contentProtection,
+-                this._keyboardPeripherals
++                this._keyboardPeripherals,
++                !!this._preferences.spreadOffset
+             );
+             this.framePool.listener = (key: CommsEventKey | ManagerEventKey, data: unknown) => {
+                 this.eventListener(key, data);
+@@ -303,11 +304,15 @@ export class EpubNavigator extends VisualNavigator implements Configurable<Confi
+     }
+ 
+     public async submitPreferences(preferences: EpubPreferences) {
++        // CLAUDE-ADDED: spreadOffset lives directly on EpubPreferences, not EpubSettings (see
++        // FXLSpreader's doc comment), so its before/after has to be captured here rather than in
++        // applyPreferences' EpubSettings diff below.
++        const oldSpreadOffset = !!this._preferences.spreadOffset;
+         this._preferences = this._preferences.merging(preferences) as EpubPreferences;
+-        await this.applyPreferences();
++        await this.applyPreferences(oldSpreadOffset);
+     }
+ 
+-    private async applyPreferences() {
++    private async applyPreferences(oldSpreadOffset?: boolean) {
+         const oldSettings = this._settings;
+         this._settings = new EpubSettings(this._preferences, this._defaults);
+ 
+@@ -318,6 +323,10 @@ export class EpubNavigator extends VisualNavigator implements Configurable<Confi
+ 
+         if (this._layout === Layout.fixed) {
+             this.handleFXLPrefs(oldSettings, this._settings);
++            const newSpreadOffset = !!this._preferences.spreadOffset;
++            if (oldSpreadOffset !== undefined && oldSpreadOffset !== newSpreadOffset) {
++                (this.framePool as FXLFramePoolManager).setSpreadOffset(newSpreadOffset);
++            }
+         } else {
+             await this.updateCSS(true);
+         }
+@@ -1079,7 +1088,7 @@ export class EpubNavigator extends VisualNavigator implements Configurable<Confi
          }
  
          const progression = locator?.locations?.progression;
@@ -71,10 +184,111 @@ index 3ed2cf3a939d17f667bf2a9b2d7b13bd3e494000..061a4819e8e4b25348ec043b4bb3268a
          if(hasProgression)
              done = await new Promise<boolean>((res, _) => {
                  // Attempt to go to a progression in the resource
+diff --git a/src/epub/fxl/FXLFramePoolManager.ts b/src/epub/fxl/FXLFramePoolManager.ts
+index cc96a8afaf531cba80934779364964a973df3974..276913e12f8b4c05af963ff43faa0c0c8061b9ed 100644
+--- a/src/epub/fxl/FXLFramePoolManager.ts
++++ b/src/epub/fxl/FXLFramePoolManager.ts
+@@ -55,6 +55,8 @@ export class FXLFramePoolManager {
+         injector?: Injector | null,
+         contentProtectionConfig?: IContentProtectionConfig,
+         keyboardPeripheralsConfig?: IKeyboardPeripheralsConfig,
++        // CLAUDE-ADDED: see FXLSpreader's own spreadOffset doc comment.
++        spreadOffset?: boolean,
+     ) {
+         this.container = container;
+         this.positions = positions;
+@@ -69,7 +71,7 @@ export class FXLFramePoolManager {
+             throw Error("Unsupported reading progression for EPUB");
+ 
+         // NEW
+-        this.spreader = new FXLSpreader(this.pub);
++        this.spreader = new FXLSpreader(this.pub, !!spreadOffset);
+         this.containerHeightCached = container.clientHeight;
+ 
+         this.bookElement = document.createElement("div");
+@@ -277,6 +279,14 @@ export class FXLFramePoolManager {
+         requestAnimationFrame(() => this.resizeHandler(true));
+     }
+ 
++    // CLAUDE-ADDED: Live-toggles the spreadOffset preference (see FXLSpreader's doc comment)
++    // without reconstructing the whole frame pool -- re-indexes the spreader in place, then
++    // reflows the same way setPerPage does.
++    public setSpreadOffset(spreadOffset: boolean) {
++        this.spreader.setSpreadOffset(this.pub, spreadOffset);
++        requestAnimationFrame(() => this.resizeHandler(true));
++    }
++
+     /**
+      * Moves sliders frame to position of currently active slide
+      */
+diff --git a/src/epub/fxl/FXLSpreader.ts b/src/epub/fxl/FXLSpreader.ts
+index 95977b3e2d08cfcfa10353ef0cef448dadcc5d74..fdb69d75298e561168857575a8022b35691c78e1 100644
+--- a/src/epub/fxl/FXLSpreader.ts
++++ b/src/epub/fxl/FXLSpreader.ts
+@@ -18,12 +18,28 @@ export class FXLSpreader {
+     private spreads: Link[][] = [];
+     nLandscape: number = 0; // TODO getter
+ 
+-    constructor(publication: Publication) {
++    // CLAUDE-ADDED: [spreadOffset] is a manual user override for the auto-detected [shift] below --
++    // some scanned/ripped comics don't actually start their double-page spreads on the boundary
++    // the auto-heuristic assumes, which splits a two-page illustration's halves across the wrong
++    // spread. Forcing shift=false here makes the first page join the normal pairing instead of
++    // rendering alone, shifting every pair after it by one page so they land together again. Left
++    // false (the default), behavior is unchanged -- testShift's own heuristic still decides.
++    constructor(publication: Publication, spreadOffset = false) {
++        if (spreadOffset) this.shift = false;
+         this.index(publication);
+         this.testShift(publication);
+         console.log(`Indexed ${this.spreads.length} spreads for ${publication.readingOrder.items.length} items`);
+     }
+ 
++    // CLAUDE-ADDED: Re-indexes with a new forced [shift] value, for toggling the spreadOffset
++    // preference live without reconstructing the whole spreader (see FXLFramePoolManager.
++    // setSpreadOffset). Mirrors what the constructor above does, plus testShift's own re-index.
++    public setSpreadOffset(publication: Publication, spreadOffset: boolean) {
++        this.shift = !spreadOffset;
++        this.index(publication, true);
++        this.testShift(publication);
++    }
++
+     private index(publication: Publication, redo = false) {
+         this.nLandscape = 0;
+         publication.readingOrder.items.forEach((item, index) => {
+diff --git a/src/epub/preferences/EpubPreferences.ts b/src/epub/preferences/EpubPreferences.ts
+index e408100acd4c57d26a5ad62ff5dee891b46baf33..31700ec2a71b2e404665a03617eb9186baf219e8 100644
+--- a/src/epub/preferences/EpubPreferences.ts
++++ b/src/epub/preferences/EpubPreferences.ts
+@@ -52,6 +52,9 @@ export interface IEpubPreferences {
+   scrollPaddingRight?: number | null,
+   selectionBackgroundColor?: string | null,
+   selectionTextColor?: string | null,
++  // CLAUDE-ADDED: see FXLSpreader's own spreadOffset doc comment. Only meaningful for
++  // fixed-layout (comic/manga) publications.
++  spreadOffset?: boolean | null,
+   textAlign?: TextAlignment | null,
+   textColor?: string | null,
+   textNormalization?: boolean | null,
+@@ -95,6 +98,7 @@ export class EpubPreferences implements ConfigurablePreferences<EpubPreferences>
+   scrollPaddingRight?: number | null;
+   selectionBackgroundColor?: string | null;
+   selectionTextColor?: string | null;
++  spreadOffset?: boolean | null;
+   textAlign?: TextAlignment | null;
+   textColor?: string | null;
+   textNormalization?: boolean | null;
+@@ -134,6 +138,7 @@ export class EpubPreferences implements ConfigurablePreferences<EpubPreferences>
+     this.scrollPaddingRight = ensureNonNegative(preferences.scrollPaddingRight);
+     this.selectionBackgroundColor = ensureString(preferences.selectionBackgroundColor);
+     this.selectionTextColor = ensureString(preferences.selectionTextColor);
++    this.spreadOffset = ensureBoolean(preferences.spreadOffset);
+     this.textAlign = ensureEnumValue<TextAlignment>(preferences.textAlign, TextAlignment);
+     this.textColor = ensureString(preferences.textColor);
+     this.textNormalization = ensureBoolean(preferences.textNormalization);
 diff --git a/src/webpub/WebPubNavigator.ts b/src/webpub/WebPubNavigator.ts
 index 6710aa8946a1ed01afc1b5bcce40c9637f441fee..93a92fafef70c719d326416b82c0d95ae663596b 100644
 --- a/src/webpub/WebPubNavigator.ts
-+++ b/src/webpub/WebPubNavigator.ts	
++++ b/src/webpub/WebPubNavigator.ts
 @@ -709,7 +709,7 @@ export class WebPubNavigator extends VisualNavigator implements Configurable<Web
          }
  
@@ -84,3 +298,61 @@ index 6710aa8946a1ed01afc1b5bcce40c9637f441fee..93a92fafef70c719d326416b82c0d95a
          if(hasProgression)
              done = await new Promise<boolean>((res, _) => {
                  // Attempt to go to a progression in the resource
+diff --git a/types/src/epub/fxl/FXLFramePoolManager.d.ts b/types/src/epub/fxl/FXLFramePoolManager.d.ts
+index a4d61bb0bc06239a53d17e102f3f186b5ea37cd5..1d14d1ecc361ffb88f91169ae58abb0815cfa1fa 100644
+--- a/types/src/epub/fxl/FXLFramePoolManager.d.ts
++++ b/types/src/epub/fxl/FXLFramePoolManager.d.ts
+@@ -32,7 +32,7 @@ export declare class FXLFramePoolManager {
+     private containerHeightCached;
+     private resizeTimeout;
+     readonly peripherals: FXLPeripherals;
+-    constructor(container: HTMLElement, positions: Locator[], pub: Publication, injector?: Injector | null, contentProtectionConfig?: IContentProtectionConfig, keyboardPeripheralsConfig?: IKeyboardPeripheralsConfig);
++    constructor(container: HTMLElement, positions: Locator[], pub: Publication, injector?: Injector | null, contentProtectionConfig?: IContentProtectionConfig, keyboardPeripheralsConfig?: IKeyboardPeripheralsConfig, spreadOffset?: boolean);
+     private _listener;
+     set listener(listener: FrameCommsListener);
+     get listener(): FrameCommsListener;
+@@ -64,6 +64,7 @@ export declare class FXLFramePoolManager {
+     get shift(): boolean;
+     private get nLandscape();
+     setPerPage(perPage: number | null): void;
++    setSpreadOffset(spreadOffset: boolean): void;
+     /**
+      * Moves sliders frame to position of currently active slide
+      */
+diff --git a/types/src/epub/fxl/FXLSpreader.d.ts b/types/src/epub/fxl/FXLSpreader.d.ts
+index 280359c2fc40a27cbc7bb5fe608151c8b855dec5..4ff9460903411df8c53b631d3a22af77f1e4ef45 100644
+--- a/types/src/epub/fxl/FXLSpreader.d.ts
++++ b/types/src/epub/fxl/FXLSpreader.d.ts
+@@ -14,10 +14,11 @@ export declare class FXLSpreader {
+     shift: boolean;
+     private spreads;
+     nLandscape: number;
+-    constructor(publication: Publication);
++    constructor(publication: Publication, spreadOffset?: boolean);
+     private index;
+     private testShift;
+     private buildSpreads;
++    setSpreadOffset(publication: Publication, spreadOffset: boolean): void;
+     currentSpread(currentSlide: number, perPage: number): Link[];
+     findByLink(link: Link): Link[] | undefined;
+ }
+diff --git a/types/src/epub/preferences/EpubPreferences.d.ts b/types/src/epub/preferences/EpubPreferences.d.ts
+index def7706a654d8e6f0fe7a32b2bfa24a8b6615287..9937c4d784d6d6ad5b9577a7ed20f4308d42f365 100644
+--- a/types/src/epub/preferences/EpubPreferences.d.ts
++++ b/types/src/epub/preferences/EpubPreferences.d.ts
+@@ -36,6 +36,7 @@ export interface IEpubPreferences {
+     scrollPaddingRight?: number | null;
+     selectionBackgroundColor?: string | null;
+     selectionTextColor?: string | null;
++    spreadOffset?: boolean | null;
+     textAlign?: TextAlignment | null;
+     textColor?: string | null;
+     textNormalization?: boolean | null;
+@@ -78,6 +79,7 @@ export declare class EpubPreferences implements ConfigurablePreferences<EpubPref
+     scrollPaddingRight?: number | null;
+     selectionBackgroundColor?: string | null;
+     selectionTextColor?: string | null;
++    spreadOffset?: boolean | null;
+     textAlign?: TextAlignment | null;
+     textColor?: string | null;
+     textNormalization?: boolean | null;
