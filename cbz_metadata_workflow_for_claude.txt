@@ -1,0 +1,167 @@
+CBZ / COMIC METADATA TAGGING WORKFLOW
+=======================================
+Give this file to Claude in a fresh conversation, along with the CBZ
+volumes you want tagged, and ask it to follow this process. This
+documents the exact method used to tag Souboutei Must Be Destroyed
+(v01-25) and Hunter x Hunter (v01-38) with ComicInfo.xml metadata for
+Calibre.
+
+GOAL
+----
+For each uploaded CBZ volume, produce a "_tagged.cbz" copy with an
+embedded ComicInfo.xml containing: series metadata, a full table of
+contents (cover, each chapter, any ancillary content, back cover /
+credits), validated and packaged correctly, then delivered back to
+the user.
+
+STEP 1 — CORRUPTION CHECK (every volume, every time)
+-----------------------------------------------------
+Before anything else, open each CBZ with Python's zipfile module and
+call z.read() on every entry (not just testzip() — some corruption
+only surfaces on actual decompression). Report which volumes are
+clean vs. which have unreadable files.
+
+If a volume has corrupted entries:
+- Do NOT silently drop pages or guess replacement content.
+- Tell the user exactly which files are affected and how many.
+- If the user re-uploads, re-run the SAME full read-every-entry check
+  — do not assume a re-upload fixed it. If the corruption is
+  byte-identical to before, the problem is in the source file itself,
+  not the upload process — say so plainly.
+- Only proceed with a corrupted volume if the user explicitly says to
+  (e.g. skip the bad pages, or wait for a better copy).
+
+STEP 2 — STRUCTURE SCAN
+-------------------------
+List all files in the archive (sorted, since filename sort order
+determines reading order). Two cases:
+
+(a) Fan scanlation style: pages grouped into folders per chapter,
+    e.g. "Vol.01 Ch.0001 - Chapter Title (en) [Group]/01.png".
+    Detect chapter boundaries by tracking where the folder name
+    changes in the sorted file list.
+
+(b) Official digital release style: flat file list, page-level
+    metadata baked into each filename, e.g.
+    "Series - c001 (v01) - p000 [Cover] [dig] [Chapter Title] [Publisher] [Group].jpg"
+    Parse chapter number, page number, and bracketed tags ([Cover],
+    [ToC], [Characters], etc.) directly from each filename via regex.
+
+Either way, end up with: total page count, and a list of (page_index,
+chapter_number, chapter_title) for every chapter start.
+
+STEP 3 — VISUAL VERIFICATION (do not skip, do not assume)
+------------------------------------------------------------
+For EVERY volume:
+- Extract and actually view (not just infer) the first page. Confirm
+  it's a real cover and matches the expected volume number.
+- Extract and view the last page. Determine what it actually is:
+  genuine story ending, scanlation credits page, back cover, or
+  bonus/omake content. Do not assume the same pattern holds across
+  volumes or across scanlation groups within one series — groups
+  change conventions.
+- Check the second page (or the page immediately after any ToC/title
+  page) to confirm where Chapter 1's actual story content starts,
+  since front matter (title page, copyright page, author page, ToC)
+  often shares the same chapter-number tag as the real first chapter
+  and must not be bookmarked as if it were the chapter start.
+- If a filename or folder suggests something unusual (an "x1" suffix,
+  a tag with no title, a repeated chapter number across volumes,
+  etc.), stop and visually check it rather than guessing.
+- If something looks like a real data error (e.g. two volumes sharing
+  identical chapter numbers with completely different content/titles),
+  verify against an authoritative external source (official publisher
+  product pages, a reputable wiki like Hunterpedia) before deciding
+  whether to correct it. If you do correct something, document the
+  correction clearly in both the XML comments and the Notes field, and
+  say so plainly to the user — never silently "fix" and stay quiet
+  about it.
+
+STEP 4 — BUILD THE BOOKMARK / TOC STRUCTURE
+-----------------------------------------------
+Bookmarks to include per volume, each with a bookmark label and a
+ComicInfo <Page> Type attribute:
+- Page 0: Type="FrontCover", Bookmark="Cover"
+- Any table-of-contents page: Type="Other", Bookmark="Table of
+  Contents" (only if present/detectable)
+- Any character-intro / story-so-far page: Type="Other",
+  Bookmark="Characters" (only if present/detectable)
+- First page of each real chapter: Type="Story", Bookmark="Chapter N:
+  Title" — ALWAYS use a colon + single space as the separator (e.g.
+  "Chapter 12: The Long Road Home"). Do not use a dash or any other
+  separator, and do not mix formats within a series or across
+  volumes. If a chapter has no discernible title (title-less
+  one-shots, filler numbering, etc.), use "Chapter N" with no
+  trailing colon rather than inventing a title.
+- Any bonus/omake content: Type="Other", Bookmark="Bonus Content"
+- Scanlation credits page (if present): Type="Editorial",
+  Bookmark="Scanlation Credits"
+- Last page, if it's a genuine publisher back cover (official
+  releases only): Type="BackCover", Bookmark="Back Cover"
+
+STEP 5 — GENERATE ComicInfo.xml PER VOLUME
+----------------------------------------------
+Include these fields at minimum: Series, Title (e.g. "Volume N"),
+Volume, Number, Summary (volume-specific if possible — see Step 7 —
+otherwise a general series synopsis), Writer/Penciller/Inker/
+CoverArtist, Publisher, Imprint (watch for imprint changes across a
+long-running series — verify visually rather than assuming it's
+constant), Year, Genre, LanguageISO, Manga (YesAndRightToLeft for
+manga), AgeRating, BlackAndWhite, PageCount, the full <Pages> block
+from Step 4, and Notes.
+
+CRITICAL XML FORMATTING RULE: use exactly ONE <!-- --> comment block
+per section. Never nest a second <!-- comment --> inside text that is
+still inside an outer unclosed comment — this breaks the XML (the
+parser closes on the first --> it finds, corrupting everything after).
+If you need to add an explanatory note to an existing comment block,
+merge the text into the SAME comment rather than appending a new one.
+
+STEP 6 — VALIDATE
+-------------------
+Before packaging, parse every generated ComicInfo.xml with
+xml.etree.ElementTree to confirm it's well-formed, and confirm
+PageCount matches the actual number of <Page> elements. Fix and
+re-validate before moving on — never package unvalidated XML.
+
+STEP 7 — VOLUME-SPECIFIC SUMMARIES (if requested or if easy to get)
+------------------------------------------------------------------------
+Official releases (VIZ, etc.) usually have real per-volume back-cover
+synopses obtainable via web search (search
+"<Publisher> '<Series>, Vol. N' free preview synopsis site:<publisher
+domain>" works well for VIZ). Paraphrase these rather than quoting
+directly — copyright limits apply to publisher marketing copy same as
+anything else (max ~15-word direct quotes, one quote per source).
+
+Unlicensed / fan-scanlated series typically have NO per-volume
+descriptions anywhere (check MangaUpdates, AniList, Wikipedia,
+fan wikis, Anime-Planet, TV Tropes) — only one series-level synopsis
+reused everywhere. Don't invent per-volume ones; say so and use the
+series-level synopsis with the volume's chapter range appended.
+
+STEP 8 — PACKAGE AND DELIVER
+-------------------------------
+For each volume: copy every original zip entry unchanged into a new
+zip, add ComicInfo.xml at the root, run a final integrity check
+(zipfile testzip() and re-open confirming ComicInfo.xml is present),
+then present the finished "_tagged.cbz" files to the user via the
+file-sharing mechanism.
+
+OPERATIONAL NOTES
+-------------------
+- Disk space: uploaded volumes can be large (100-300MB each) and
+  processing doubles that (source + tagged copy). Check available
+  disk space before large batches; clean up already-delivered source
+  files if space runs low, but never delete anything before its
+  tagged output has been successfully verified and presented.
+- Mount/connection drops: file mounts can disconnect mid-batch. If
+  this happens, wait and retry reads; when reconnected, verify EXACTLY
+  which outputs actually made it to the delivery location (don't trust
+  an earlier "OK" log from before the disconnect) before continuing
+  or re-doing work.
+- When re-uploading a file to fix a previous corruption or truncation
+  issue, verify the new file's byte size matches the original/expected
+  size before re-running the corruption check.
+- Always tell the user plainly about any data problems found (source
+  corruption, wrong chapter numbers, missing volumes) rather than
+  quietly working around them.
