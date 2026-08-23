@@ -77,6 +77,31 @@ For EVERY volume:
   say so plainly to the user — never silently "fix" and stay quiet
   about it.
 
+STEP 3B — VALIDATE CHAPTER TITLES AGAINST AN EXTERNAL SOURCE
+------------------------------------------------------------------
+Do not trust chapter titles parsed from filenames/folder names
+(Step 2) as final — scanlation group naming is inconsistent, titles
+are sometimes machine-translated, abbreviated, missing punctuation,
+or just wrong, and official digital releases can still have typos in
+the filename metadata.
+
+For every chapter, look up the official chapter title from an
+authoritative source before it goes into a bookmark:
+- Official/licensed series: publisher site, VIZ/official reader page,
+  or the print volume's own table of contents if visible on a page.
+- Unlicensed/fan-scanlated series: a reputable tracker or wiki
+  (MangaUpdates, a series-specific wiki like Hunterpedia, AniList,
+  Wikipedia's chapter/volume list) — cross-check two sources if the
+  first one seems inconsistent with the others.
+
+If the looked-up title differs from what was parsed from the
+filename, use the looked-up title in the bookmark and note the
+discrepancy (parsed vs. official) in the Notes field, same as any
+other correction from Step 3. If no authoritative title can be found
+for a chapter, fall back to the parsed filename title rather than
+inventing one, and say so to the user rather than presenting it as
+verified.
+
 STEP 4 — BUILD THE BOOKMARK / TOC STRUCTURE
 -----------------------------------------------
 Bookmarks to include per volume, each with a bookmark label and a
@@ -131,6 +156,29 @@ Before packaging, parse every generated ComicInfo.xml with
 xml.etree.ElementTree to confirm it's well-formed, and confirm
 PageCount matches the actual number of <Page> elements. Fix and
 re-validate before moving on — never package unvalidated XML.
+
+STEP 6B — CHECK TOC / BOOKMARK NAMING CONSISTENCY
+------------------------------------------------------
+The <Page> Bookmark values from Step 4 are what populate the
+table-of-contents / navigation list a reader (e.g. Calibre's viewer)
+shows for the book, so their formatting matters as much as the Title
+field from Step 5.
+
+Before packaging, walk every <Page> element with a chapter-start
+Bookmark and confirm each one matches the pattern "Chapter N: Title"
+(or bare "Chapter N" for the title-less case from Step 4) exactly —
+colon + single space, no dash, no other separator, no stray
+whitespace. Do this programmatically with a regex check rather than
+eyeballing it, across every volume in the batch, since a format drift
+in one volume (e.g. one scanlation group's chapter-numbering habits
+leaking through) is easy to miss by inspection alone. Non-chapter
+bookmarks (Cover, Table of Contents, Characters, Bonus Content,
+Scanlation Credits, Back Cover) are exempt from this pattern and keep
+their fixed labels from Step 4.
+
+If any bookmark fails the check, fix the ComicInfo.xml and re-run
+both this check and the Step 6 XML validation before moving on —
+never package a volume with inconsistent TOC formatting.
 
 STEP 7 — VOLUME-SPECIFIC SUMMARIES (if requested or if easy to get)
 ------------------------------------------------------------------------
