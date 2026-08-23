@@ -101,8 +101,16 @@ ComicInfo <Page> Type attribute:
 
 STEP 5 — GENERATE ComicInfo.xml PER VOLUME
 ----------------------------------------------
-Include these fields at minimum: Series, Title (e.g. "Volume N"),
-Volume, Number, Summary (volume-specific if possible — see Step 7 —
+Include these fields at minimum: Series, Title, Volume, Number,
+Summary (volume-specific if possible — see Step 7 —
+
+TITLE FORMAT: the <Title> field is what Calibre displays as the book
+title on import, so it must stand on its own — never just "Volume N"
+or "N". Always format it as "<Series Title> Vol. N" (e.g. "Hunter x
+Hunter Vol. 14"), using the same series name as the <Series> field
+and zero-padding N only if the series' own volume numbering elsewhere
+is zero-padded. Keep this format consistent across every volume in
+the batch.
 otherwise a general series synopsis), Writer/Penciller/Inker/
 CoverArtist, Publisher, Imprint (watch for imprint changes across a
 long-running series — verify visually rather than assuming it's
