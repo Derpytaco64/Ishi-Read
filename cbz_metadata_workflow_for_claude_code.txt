@@ -244,11 +244,28 @@ series-level synopsis with the volume's chapter range appended.
 
 STEP 8 — PACKAGE AND DELIVER
 -------------------------------
-For each volume: copy every original zip entry unchanged into a new
-zip, add ComicInfo.xml at the root, run a final integrity check
-(zipfile testzip() and re-open confirming ComicInfo.xml is present),
-then present the finished "_tagged.cbz" files to the user via the
-file-sharing mechanism.
+RENAME IMAGE FILES TO MATCH THE PAGE ORDER — do not just copy the
+original scanlation/release filenames through unchanged. The <Page
+Image="N"> indices in ComicInfo.xml refer to position in reading
+order, but some readers don't resolve that index against sort order —
+they need the actual image filenames to be a clean, gapless sequence.
+Read every image entry (excluding ComicInfo.xml) in the verified
+correct reading order from Step 2/3, then rename each one to a
+zero-padded sequential number preserving its original extension
+(e.g. "000.jpg", "001.png", ... "186.jpg"). Zero-pad to at least 3
+digits (more if a volume has 1000+ pages). Do this as a script, not
+by hand.
+
+For each volume: read all image bytes in correct order BEFORE writing
+anything, build the new zip with ComicInfo.xml at the root followed by
+the renamed sequential images, then run a final integrity check
+(zipfile testzip(), confirm ComicInfo.xml is present, confirm the
+renamed entry count equals <PageCount>, and confirm each renamed
+entry's bytes are byte-for-byte identical to what was read from the
+original file in the same order — this catches any accidental
+reordering introduced by the rename step). Only replace/deliver the
+original once this validation passes. Then present the finished
+"_tagged.cbz" files to the user via the file-sharing mechanism.
 
 OPERATIONAL NOTES
 -------------------
